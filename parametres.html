@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Paramètres de l'agence COLIS EXPRESS.">
+  <title>Paramètres — COLIS EXPRESS</title>
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body class="agency-page">
+  <div class="app-shell">
+    <div id="sidebarMount"></div>
+    <main class="agency-main">
+      <div id="topbarMount"></div>
+      <div class="agency-content">
+        <header class="desktop-page-heading"><div><h1>Paramètres de l'agence</h1><p>Mettez à jour les informations visibles par les autres agences du réseau.</p></div></header>
+        <div class="page-heading-mobile"><h1>Paramètres</h1><p>Gérez les informations de votre agence.</p></div>
+        <div class="page-message" id="pageMessage" hidden role="alert"></div>
+        <section class="settings-card">
+          <div class="settings-summary"><span class="avatar" data-agency-initial>A</span><div><h2 data-agency-name>Mon agence</h2><p data-agency-city>Ville non renseignée</p></div></div>
+          <form id="agencyForm" class="form-stack" novalidate>
+            <div class="field"><label for="settingsName">Nom de l'agence <span class="required">*</span></label><input id="settingsName" name="name" type="text" autocomplete="organization" required></div>
+            <div class="form-grid">
+              <div class="field"><label for="settingsCity">Ville <span class="required">*</span></label><input id="settingsCity" name="city" type="text" autocomplete="address-level2" required></div>
+              <div class="field"><label for="settingsPhone">Téléphone <span class="required">*</span></label><input id="settingsPhone" name="phone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="0700000000" required><small class="field-help">Format ivoirien : 10 chiffres.</small></div>
+            </div>
+            <div class="field"><label for="settingsEmail">E-mail de connexion</label><input id="settingsEmail" name="email" type="email" disabled><small class="field-help">L'e-mail de connexion est géré dans Firebase Authentication.</small></div>
+            <div class="form-footer"><button class="button button-primary" id="saveAgencyButton" type="submit">Enregistrer les modifications</button></div>
+          </form>
+        </section>
+      </div>
+    </main>
+  </div>
+  <script type="module" src="js/parametres.js"></script>
+</body>
+</html>

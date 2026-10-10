@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Créez l'espace de votre agence COLIS EXPRESS.">
+  <title>Créer une agence — COLIS EXPRESS</title>
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body class="auth-page">
+  <main class="auth-shell">
+    <section class="auth-presentation">
+      <a class="brand" href="index.html"><span class="brand-mark">CE</span><span>COLIS <em>EXPRESS</em></span></a>
+      <div class="auth-presentation-content">
+        <p class="eyebrow">Réseau multi-agences</p>
+        <h1>Faites circuler vos colis avec confiance.</h1>
+        <p>Créez l'espace de votre agence et pilotez chaque envoi jusqu'au retrait par le destinataire.</p>
+        <ul class="auth-benefits"><li>Codes de suivi uniques</li><li>Suivi public en temps réel</li><li>Données de colis réservées aux agences concernées</li></ul>
+      </div>
+    </section>
+    <section class="auth-panel">
+      <div class="auth-panel-inner">
+        <a class="brand" href="index.html"><span class="brand-mark">CE</span><span>COLIS <em>EXPRESS</em></span></a>
+        <div class="auth-heading"><h1>Créer une agence</h1><p>Renseignez les informations de votre point d'activité.</p></div>
+        <div class="page-message" id="formMessage" hidden role="alert"></div>
+        <form id="signupForm" class="form-stack" novalidate>
+          <div class="field"><label for="agencyName">Nom de l'agence <span class="required">*</span></label><input id="agencyName" name="name" type="text" autocomplete="organization" placeholder="Ex. COLIS EXPRESS Yopougon" required></div>
+          <div class="form-grid">
+            <div class="field"><label for="agencyCity">Ville <span class="required">*</span></label><input id="agencyCity" name="city" type="text" autocomplete="address-level2" placeholder="Ex. Abidjan" required></div>
+            <div class="field"><label for="agencyPhone">Téléphone <span class="required">*</span></label><input id="agencyPhone" name="phone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="0700000000" required><small class="field-help">Format ivoirien : 10 chiffres.</small></div>
+          </div>
+          <div class="field"><label for="agencyEmail">E-mail <span class="required">*</span></label><input id="agencyEmail" name="email" type="email" autocomplete="email" placeholder="agence@exemple.ci" required></div>
+          <div class="form-grid">
+            <div class="field"><label for="password">Mot de passe <span class="required">*</span></label><input id="password" name="password" type="password" autocomplete="new-password" minlength="6" placeholder="6 caractères minimum" required></div>
+            <div class="field"><label for="confirmPassword">Confirmer le mot de passe <span class="required">*</span></label><input id="confirmPassword" name="confirmPassword" type="password" autocomplete="new-password" minlength="6" placeholder="Répétez le mot de passe" required></div>
+          </div>
+          <button class="button button-primary" id="signupButton" type="submit">Créer mon espace agence</button>
+        </form>
+        <p class="auth-switch">Votre agence a déjà un compte ? <a href="connexion.html">Se connecter</a></p>
+        <p class="auth-credit">Conçu par <strong>Shopin30</strong> · <a href="https://wa.me/2250501303343" target="_blank" rel="noopener noreferrer">WhatsApp : +225 0501303343</a></p>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="js/inscription.js"></script>
+</body>
+</html>

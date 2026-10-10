@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Tableau de bord agence COLIS EXPRESS.">
+  <title>Tableau de bord — COLIS EXPRESS</title>
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body class="agency-page">
+  <div class="app-shell">
+    <div id="sidebarMount"></div>
+    <main class="agency-main">
+      <div id="topbarMount"></div>
+      <div class="agency-content">
+        <header class="desktop-page-heading">
+          <div><h1>Tableau de bord</h1><p>Suivez l'activité de <strong data-agency-name>votre agence</strong>.</p></div>
+          <a class="button button-orange" href="nouveau-colis.html">＋ Nouveau colis</a>
+        </header>
+        <div class="page-message" id="pageMessage" hidden role="alert"></div>
+        <section class="stats-grid" aria-label="Statistiques des colis">
+          <article class="stat-card"><div class="stat-card-top"><small>Enregistrés aujourd'hui</small><span class="stat-icon" aria-hidden="true">▣</span></div><strong class="stat-number" id="statToday">—</strong></article>
+          <article class="stat-card"><div class="stat-card-top"><small>En transit</small><span class="stat-icon" aria-hidden="true">↗</span></div><strong class="stat-number" id="statTransit">—</strong></article>
+          <article class="stat-card"><div class="stat-card-top"><small>À retirer</small><span class="stat-icon" aria-hidden="true">⌖</span></div><strong class="stat-number" id="statWaiting">—</strong></article>
+          <article class="stat-card"><div class="stat-card-top"><small>Retirés</small><span class="stat-icon" aria-hidden="true">✓</span></div><strong class="stat-number" id="statPickedUp">—</strong></article>
+        </section>
+
+        <section class="panel-card filter-panel">
+          <form id="dashboardFilters" class="filter-grid" autocomplete="off">
+            <div class="field"><label for="searchParcel">Rechercher</label><input id="searchParcel" type="search" placeholder="Code, expéditeur ou destinataire"></div>
+            <div class="field"><label for="statusFilter">Statut</label><select id="statusFilter"><option value="">Tous les statuts</option><option>Enregistré</option><option>Expédié</option><option>En transit</option><option>Arrivé à l'agence de destination</option><option>Retiré</option></select></div>
+            <div class="field"><label for="cityFilter">Ville</label><input id="cityFilter" type="text" placeholder="Départ ou arrivée"></div>
+            <div class="field"><label for="dateFilter">Date</label><input id="dateFilter" type="date"></div>
+            <div class="filter-actions"><button class="button button-outline" id="clearFilters" type="button">Effacer</button></div>
+          </form>
+        </section>
+
+        <section class="panel-card parcels-panel">
+          <div class="panel-title-row"><h2>Derniers colis</h2><span id="listCount">0 colis</span></div>
+          <div id="parcelsList"><div class="loading-state">Chargement des colis…</div></div>
+        </section>
+      </div>
+    </main>
+  </div>
+  <script type="module" src="js/dashboard.js"></script>
+</body>
+</html>

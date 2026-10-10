@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="COLIS EXPRESS — Envoi et suivi de colis entre agences, en Côte d'Ivoire.">
+  <title>COLIS EXPRESS — Envoyez et suivez vos colis</title>
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="index.html" aria-label="COLIS EXPRESS, accueil"><span class="brand-mark" aria-hidden="true">CE</span><span>COLIS <em>EXPRESS</em></span></a>
+    <nav class="public-nav" aria-label="Navigation principale">
+      <a href="#comment-ca-marche">Comment ça marche</a>
+      <a href="#pourquoi">Pourquoi COLIS EXPRESS</a>
+      <a href="suivi.html">Suivre un colis</a>
+    </nav>
+    <div class="header-actions">
+      <a class="button button-ghost header-login" href="connexion.html">Connexion</a>
+      <a class="button button-orange button-small" href="connexion.html">Espace agence</a>
+    </div>
+  </header>
+
+  <main class="public-main">
+    <section class="hero">
+      <div class="hero-content">
+        <div class="hero-copy">
+          <p class="eyebrow">Logistique inter-agences simplifiée</p>
+          <h1>Envoyez. Suivez. <strong>Livrez.</strong></h1>
+          <p class="hero-text">COLIS EXPRESS aide les agences à gérer chaque colis de l'enregistrement au retrait, avec un suivi public disponible à tout moment.</p>
+        </div>
+        <form class="tracking-search" id="trackingHomeForm" novalidate>
+          <label for="trackingCode">Suivre mon colis</label>
+          <div class="tracking-search-row">
+            <input id="trackingCode" name="trackingCode" type="text" autocomplete="off" placeholder="Ex. CLI-8F3K2A" maxlength="10" aria-describedby="trackingMessage">
+            <button class="button button-orange" type="submit">Suivre</button>
+          </div>
+          <div class="page-message" id="trackingMessage" hidden role="alert"></div>
+        </form>
+        <p class="hero-assurance"><span>Suivi en temps réel</span><span>Réseau multi-agences</span><span>Données protégées</span></p>
+      </div>
+    </section>
+
+    <section class="home-section" id="comment-ca-marche">
+      <div class="section-heading">
+        <p class="eyebrow">Simple pour tous</p>
+        <h2>Un colis, un code, une visibilité complète.</h2>
+        <p>Les agences gardent la maîtrise de leurs opérations, tandis que le client suit l'acheminement sans créer de compte.</p>
+      </div>
+      <div class="steps-grid">
+        <article class="step-card"><span class="step-number">1</span><h3>Enregistrez</h3><p>L'agence renseigne les informations du colis et génère instantanément un code de suivi unique.</p></article>
+        <article class="step-card"><span class="step-number">2</span><h3>Acheminez</h3><p>Chaque étape, de l'expédition à l'arrivée, est enregistrée dans l'historique du colis.</p></article>
+        <article class="step-card"><span class="step-number">3</span><h3>Suivez et retirez</h3><p>Le destinataire consulte l'avancement avec son code et retire son colis auprès de l'agence.</p></article>
+      </div>
+    </section>
+
+    <section class="feature-band" id="pourquoi">
+      <div class="home-section">
+        <div class="section-heading">
+          <p class="eyebrow">Pensé pour les agences</p>
+          <h2>Une gestion claire, même en déplacement.</h2>
+        </div>
+        <div class="feature-grid">
+          <article class="feature-card"><span class="feature-icon" aria-hidden="true">⌁</span><h3>Multi-agences</h3><p>Envoyez vers une agence partenaire et gardez les informations utiles au bon endroit.</p></article>
+          <article class="feature-card"><span class="feature-icon" aria-hidden="true">◷</span><h3>Mises à jour instantanées</h3><p>Le suivi public reflète les changements de statut en temps réel.</p></article>
+          <article class="feature-card"><span class="feature-icon" aria-hidden="true">⌾</span><h3>Respect de la confidentialité</h3><p>Le suivi public ne dévoile jamais les noms, téléphones ou pièces d'identité.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="home-section">
+      <div class="home-cta">
+        <div><h2>Votre agence est prête à expédier ?</h2><p>Créez votre espace agence pour enregistrer vos colis et rejoindre le réseau COLIS EXPRESS.</p></div>
+        <a class="button" href="inscription.html">Créer mon agence</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer"><div class="footer-content"><a class="brand" href="index.html"><span class="brand-mark">CE</span><span>COLIS <em>EXPRESS</em></span></a><span>Gestion d'envoi et de réception de colis.</span><div class="footer-links"><a href="suivi.html">Suivi</a><a href="connexion.html">Espace agence</a></div><div class="footer-credit">Conçu par <strong>Shopin30</strong> · <a href="https://wa.me/2250501303343" target="_blank" rel="noopener noreferrer">WhatsApp : +225 0501303343</a></div></div></footer>
+  <script type="module" src="js/public.js"></script>
+</body>
+</html>

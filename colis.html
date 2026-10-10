@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Détail et mise à jour d'un colis COLIS EXPRESS.">
+  <title>Détail du colis — COLIS EXPRESS</title>
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body class="agency-page">
+  <div class="app-shell">
+    <div id="sidebarMount"></div>
+    <main class="agency-main">
+      <div id="topbarMount"></div>
+      <div class="agency-content">
+        <div class="page-message" id="pageMessage" hidden role="alert"></div>
+        <div id="parcelDetail"><div class="loading-state">Chargement du colis…</div></div>
+      </div>
+    </main>
+  </div>
+
+  <div class="modal-backdrop" id="collectionModal" hidden role="dialog" aria-modal="true" aria-labelledby="collectionTitle">
+    <div class="modal-card">
+      <div class="modal-heading"><div><h2 id="collectionTitle">Confirmer le retrait</h2><p>Vérifiez l'identité de la personne qui récupère le colis.</p></div><button class="modal-close" id="closeCollection" type="button" aria-label="Fermer">×</button></div>
+      <div class="page-message" id="collectionMessage" hidden role="alert"></div>
+      <form id="collectionForm" class="form-stack" novalidate>
+        <div class="field"><label for="collectorName">Nom complet de la personne <span class="required">*</span></label><input id="collectorName" name="collectorName" type="text" autocomplete="name" required></div>
+        <div class="field"><label for="collectorCni">Numéro CNI présenté <span class="required">*</span></label><input id="collectorCni" name="collectorCni" type="text" autocomplete="off" placeholder="Ex. CI12345678" required><small class="field-help">8 à 25 caractères, avec au moins un chiffre.</small></div>
+        <div class="modal-actions"><button class="button button-outline" id="cancelCollection" type="button">Annuler</button><button class="button button-primary" type="submit">Confirmer le retrait</button></div>
+      </form>
+    </div>
+  </div>
+  <script type="module" src="js/colis.js"></script>
+</body>
+</html>

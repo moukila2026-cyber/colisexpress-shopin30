@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Connexion à l'espace agence COLIS EXPRESS.">
+  <title>Connexion agence — COLIS EXPRESS</title>
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body class="auth-page">
+  <main class="auth-shell">
+    <section class="auth-presentation">
+      <a class="brand" href="index.html"><span class="brand-mark">CE</span><span>COLIS <em>EXPRESS</em></span></a>
+      <div class="auth-presentation-content">
+        <p class="eyebrow">Espace agence sécurisé</p>
+        <h1>Pilotez vos colis, où que vous soyez.</h1>
+        <p>Retrouvez les envois de votre agence, mettez à jour leur statut et gardez votre réseau informé en temps réel.</p>
+        <ul class="auth-benefits"><li>Tableau de bord opérationnel</li><li>Recherche et filtres par statut</li><li>Réception sécurisée avec CNI</li></ul>
+      </div>
+    </section>
+    <section class="auth-panel">
+      <div class="auth-panel-inner">
+        <a class="brand" href="index.html"><span class="brand-mark">CE</span><span>COLIS <em>EXPRESS</em></span></a>
+        <div class="auth-heading"><h1>Bon retour</h1><p>Connectez-vous à votre espace agence.</p></div>
+        <div class="page-message" id="formMessage" hidden role="alert"></div>
+        <form id="loginForm" class="form-stack" novalidate>
+          <div class="field"><label for="loginEmail">E-mail</label><input id="loginEmail" name="email" type="email" autocomplete="email" placeholder="agence@exemple.ci" required></div>
+          <div class="field"><label for="loginPassword">Mot de passe</label><input id="loginPassword" name="password" type="password" autocomplete="current-password" placeholder="Votre mot de passe" required></div>
+          <div><button class="forgot-button" id="forgotButton" type="button">Mot de passe oublié ?</button></div>
+          <button class="button button-primary" id="loginButton" type="submit">Se connecter</button>
+        </form>
+        <section class="forgot-panel" id="forgotPanel" hidden aria-label="Réinitialiser le mot de passe">
+          <p>Indiquez votre e-mail. Un lien de réinitialisation vous sera envoyé.</p>
+          <div class="page-message" id="resetMessage" hidden role="alert"></div>
+          <form id="resetForm" class="form-stack" novalidate>
+            <div class="field"><label for="resetEmail">E-mail</label><input id="resetEmail" name="resetEmail" type="email" autocomplete="email" placeholder="agence@exemple.ci" required></div>
+            <button class="button button-outline" type="submit">Envoyer le lien</button>
+          </form>
+        </section>
+        <p class="auth-switch">Nouvelle agence ? <a href="inscription.html">Créer un compte</a></p>
+        <p class="auth-credit">Conçu par <strong>Shopin30</strong> · <a href="https://wa.me/2250501303343" target="_blank" rel="noopener noreferrer">WhatsApp : +225 0501303343</a></p>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="js/connexion.js"></script>
+</body>
+</html>

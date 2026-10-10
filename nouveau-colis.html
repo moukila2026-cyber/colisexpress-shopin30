@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Enregistrer un nouveau colis dans COLIS EXPRESS.">
+  <title>Nouveau colis — COLIS EXPRESS</title>
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body class="agency-page">
+  <div class="app-shell">
+    <div id="sidebarMount"></div>
+    <main class="agency-main">
+      <div id="topbarMount"></div>
+      <div class="agency-content">
+        <header class="desktop-page-heading"><div><h1>Nouveau colis</h1><p>Enregistrez un envoi et obtenez un code de suivi unique.</p></div></header>
+        <div class="page-heading-mobile"><h1>Nouveau colis</h1><p>Enregistrez un envoi et obtenez un code de suivi unique.</p></div>
+        <div class="page-message" id="pageMessage" hidden role="alert"></div>
+        <p class="notice-box" id="noDestinationAgency" hidden>Aucune autre agence n'est encore disponible. Une agence de destination doit avoir créé son compte avant de pouvoir recevoir un colis.</p>
+
+        <form class="parcel-form-card" id="parcelForm" novalidate>
+          <section class="form-section">
+            <h2 class="form-section-heading"><span aria-hidden="true">1</span> Expéditeur</h2>
+            <div class="form-grid">
+              <div class="field"><label for="senderFirstName">Prénom <span class="required">*</span></label><input id="senderFirstName" name="senderFirstName" type="text" autocomplete="given-name" required></div>
+              <div class="field"><label for="senderLastName">Nom <span class="required">*</span></label><input id="senderLastName" name="senderLastName" type="text" autocomplete="family-name" required></div>
+              <div class="field"><label for="senderPhone">Téléphone <span class="required">*</span></label><input id="senderPhone" name="senderPhone" type="tel" inputmode="numeric" placeholder="0700000000" required><small class="field-help">Format ivoirien, 10 chiffres.</small></div>
+              <div class="field"><label for="senderCni">Numéro CNI <span class="required">*</span></label><input id="senderCni" name="senderCni" type="text" autocomplete="off" placeholder="Ex. CI12345678" required><small class="field-help">8 à 25 caractères, avec au moins un chiffre.</small></div>
+            </div>
+          </section>
+
+          <section class="form-section">
+            <h2 class="form-section-heading"><span aria-hidden="true">2</span> Destinataire</h2>
+            <div class="form-grid">
+              <div class="field"><label for="recipientFirstName">Prénom <span class="required">*</span></label><input id="recipientFirstName" name="recipientFirstName" type="text" autocomplete="given-name" required></div>
+              <div class="field"><label for="recipientLastName">Nom <span class="required">*</span></label><input id="recipientLastName" name="recipientLastName" type="text" autocomplete="family-name" required></div>
+              <div class="field field-full"><label for="recipientPhone">Téléphone <span class="required">*</span></label><input id="recipientPhone" name="recipientPhone" type="tel" inputmode="numeric" placeholder="0700000000" required><small class="field-help">Utilisé uniquement par les agences concernées et pour l'alerte WhatsApp à l'arrivée.</small></div>
+            </div>
+          </section>
+
+          <section class="form-section">
+            <h2 class="form-section-heading"><span aria-hidden="true">3</span> Colis et acheminement</h2>
+            <div class="form-grid">
+              <div class="field field-full"><label for="packageNature">Nature du colis <span class="required">*</span></label><input id="packageNature" name="packageNature" type="text" placeholder="Ex. Vêtements, documents, appareil…" required></div>
+              <div class="field"><label for="weightKg">Poids (kg) <span class="required">*</span></label><input id="weightKg" name="weightKg" type="number" inputmode="decimal" min="0.01" step="0.01" placeholder="0,5" required></div>
+              <div class="field"><label for="priceFCFA">Prix (FCFA) <span class="required">*</span></label><input id="priceFCFA" name="priceFCFA" type="number" inputmode="numeric" min="0" step="1" placeholder="0" required></div>
+              <div class="field"><label for="originCity">Ville de départ <span class="required">*</span></label><input id="originCity" name="originCity" type="text" required></div>
+              <div class="field"><label for="destinationCity">Ville de destination <span class="required">*</span></label><input id="destinationCity" name="destinationCity" type="text" required></div>
+              <div class="field field-full"><label for="destinationAgencyId">Agence de destination <span class="required">*</span></label><select id="destinationAgencyId" name="destinationAgencyId" required><option value="">Chargement des agences…</option></select><small class="field-help">Seules les agences connectées au réseau apparaissent ici.</small></div>
+            </div>
+          </section>
+          <div class="form-footer"><a class="button button-outline" href="dashboard.html">Annuler</a><button class="button button-primary" id="saveParcelButton" type="submit">Enregistrer et générer le reçu</button></div>
+        </form>
+      </div>
+    </main>
+  </div>
+
+  <div class="modal-backdrop" id="receiptModal" hidden role="dialog" aria-modal="true" aria-labelledby="receiptTitle">
+    <div class="modal-card receipt-modal">
+      <div class="modal-heading"><div><h2 id="receiptTitle">Colis enregistré</h2><p>Remettez ce reçu à l'expéditeur.</p></div><button class="modal-close" id="closeReceipt" type="button" aria-label="Fermer">×</button></div>
+      <div class="receipt" id="receiptContent"></div>
+      <div class="modal-actions"><button class="button button-outline" id="printReceipt" type="button">Imprimer le reçu</button><button class="button button-primary" id="viewSavedParcel" type="button">Voir le colis</button></div>
+    </div>
+  </div>
+  <script type="module" src="js/nouveau-colis.js"></script>
+</body>
+</html>

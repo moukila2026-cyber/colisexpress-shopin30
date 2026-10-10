@@ -1,0 +1,89 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function canReadParcel(data) {
+      return signedIn() && (
+        data.ownerId == request.auth.uid ||
+        data.destinationAgencyId == request.auth.uid
+      );
+    }
+
+    /*
+     * Le document de suivi public est autorisé seulement s'il reflète exactement
+     * le colis privé correspondant après l'opération (getAfter autorise le batch
+     * de création et les transactions qui mettent à jour les deux documents).
+     */
+    function isValidPublicTracking(data, code) {
+      return data.keys().hasOnly([
+        'code', 'colisId', 'status', 'history', 'originCity',
+        'destinationCity', 'lastUpdatedAtISO'
+      ]) &&
+      data.code == code &&
+      data.colisId is string &&
+      data.status is string &&
+      data.history is list &&
+      data.originCity is string &&
+      data.destinationCity is string &&
+      data.lastUpdatedAtISO is string;
+    }
+
+    function trackingMatchesParcel(data, code) {
+      let parcel = getAfter(/databases/$(database)/documents/colis/$(data.colisId));
+      return data.colisId is string &&
+        parcel.data.trackingCode == code &&
+        parcel.data.status == data.status &&
+        parcel.data.history == data.history &&
+        parcel.data.originCity == data.originCity &&
+        parcel.data.destinationCity == data.destinationCity &&
+        (parcel.data.ownerId == request.auth.uid ||
+          parcel.data.destinationAgencyId == request.auth.uid);
+    }
+
+    // Annuaire interne : nécessaire aux agences connectées pour choisir une destination.
+    match /agences/{agencyId} {
+      allow create: if signedIn() && request.auth.uid == agencyId;
+      allow get, list: if signedIn();
+      allow update: if signedIn() && request.auth.uid == agencyId &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['name', 'city', 'phone']);
+      allow delete: if false;
+    }
+
+    // Les informations sensibles (CNI, téléphones) restent ici, jamais dans /suivis.
+    match /colis/{parcelId} {
+      allow create: if signedIn() &&
+        request.resource.data.ownerId == request.auth.uid &&
+        request.resource.data.destinationAgencyId is string &&
+        exists(/databases/$(database)/documents/agences/$(request.resource.data.destinationAgencyId));
+
+      allow get, list: if canReadParcel(resource.data);
+
+      allow update: if canReadParcel(resource.data) &&
+        request.resource.data.ownerId == resource.data.ownerId &&
+        request.resource.data.destinationAgencyId == resource.data.destinationAgencyId &&
+        request.resource.data.trackingCode == resource.data.trackingCode &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'history', 'updatedAt', 'collectedBy']);
+
+      allow delete: if false;
+    }
+
+    // Le suivi est public, mais les agences ne peuvent écrire qu'un suivi fidèle à leur colis.
+    match /suivis/{code} {
+      allow read: if true;
+      allow create: if signedIn() &&
+        isValidPublicTracking(request.resource.data, code) &&
+        trackingMatchesParcel(request.resource.data, code);
+      allow update: if signedIn() &&
+        resource.data.colisId == request.resource.data.colisId &&
+        isValidPublicTracking(request.resource.data, code) &&
+        trackingMatchesParcel(request.resource.data, code);
+      allow delete: if false;
+    }
+  }
+}

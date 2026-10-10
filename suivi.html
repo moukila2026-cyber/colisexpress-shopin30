@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Suivez votre colis COLIS EXPRESS en temps réel.">
+  <title>Suivre un colis — COLIS EXPRESS</title>
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body class="tracking-page">
+  <section class="tracking-hero">
+    <div class="tracking-hero-inner">
+      <a class="brand" href="index.html"><span class="brand-mark">CE</span><span>COLIS <em>EXPRESS</em></span></a>
+      <h1>Suivez votre colis</h1>
+      <p>Saisissez le code indiqué sur votre reçu pour voir l'état de votre envoi en direct.</p>
+      <form class="tracking-search" id="trackingForm" novalidate>
+        <label for="trackingCode">Code de suivi</label>
+        <div class="tracking-search-row">
+          <input id="trackingCode" name="trackingCode" type="text" autocomplete="off" placeholder="Ex. CLI-8F3K2A" maxlength="10" aria-describedby="trackingMessage">
+          <button class="button button-orange" type="submit">Rechercher</button>
+        </div>
+      </form>
+    </div>
+  </section>
+  <main class="tracking-main">
+    <div class="page-message" id="trackingMessage" hidden role="alert"></div>
+    <div class="loading-state" id="trackingLoading" hidden>Recherche du colis…</div>
+    <div id="trackingResult" hidden></div>
+  </main>
+  <footer class="site-footer"><div class="footer-content"><a class="brand" href="index.html"><span class="brand-mark">CE</span><span>COLIS <em>EXPRESS</em></span></a><span>Suivi public sécurisé : aucune donnée personnelle n'est affichée.</span><div class="footer-links"><a href="index.html">Accueil</a><a href="connexion.html">Espace agence</a></div><div class="footer-credit">Conçu par <strong>Shopin30</strong> · <a href="https://wa.me/2250501303343" target="_blank" rel="noopener noreferrer">WhatsApp : +225 0501303343</a></div></div></footer>
+  <script type="module" src="js/suivi.js"></script>
+</body>
+</html>
