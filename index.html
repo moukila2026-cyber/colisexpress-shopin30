@@ -5,24 +5,33 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="COLIS EXPRESS — Envoi et suivi de colis entre agences, en Côte d'Ivoire.">
   <title>COLIS EXPRESS — Envoyez et suivez vos colis</title>
+  <meta name="theme-color" content="#073b31">
+  <meta property="og:title" content="COLIS EXPRESS — Envoyez et suivez vos colis">
+  <meta property="og:description" content="Envoi et suivi de colis entre agences, avec un code de suivi unique pour chaque colis.">
+  <meta property="og:image" content="assets/img/hero-accueil.jpg">
+  <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="assets/css/style.css">
 </head>
 <body>
+  <a class="skip-link" href="#contenu">Aller au contenu</a>
   <header class="site-header">
     <a class="brand" href="index.html" aria-label="COLIS EXPRESS, accueil"><span class="brand-mark" aria-hidden="true">CE</span><span>COLIS <em>EXPRESS</em></span></a>
-    <nav class="public-nav" aria-label="Navigation principale">
+    <nav class="public-nav" id="publicNav" aria-label="Navigation principale">
       <a href="#comment-ca-marche">Comment ça marche</a>
       <a href="#pourquoi">Pourquoi COLIS EXPRESS</a>
+      <a href="#questions">Questions fréquentes</a>
       <a href="suivi.html">Suivre un colis</a>
+      <a class="nav-login-mobile" href="connexion.html">Connexion agence</a>
     </nav>
     <div class="header-actions">
+      <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="publicNav" aria-label="Ouvrir le menu"><span aria-hidden="true"></span></button>
       <a class="button button-ghost header-login" href="connexion.html">Connexion</a>
       <a class="header-track" href="suivi.html">Suivre</a>
       <a class="button button-orange button-small" href="connexion.html">Espace agence</a>
     </div>
   </header>
 
-  <main class="public-main">
+  <main class="public-main" id="contenu">
     <section class="hero">
       <img class="hero-media" src="assets/img/hero-accueil.jpg" alt="" width="1600" height="700" fetchpriority="high">
       <div class="hero-content">
@@ -91,6 +100,23 @@
       </figure>
     </section>
 
+    <section class="home-section faq-section" id="questions">
+      <div class="section-heading">
+        <p class="eyebrow">Aide</p>
+        <h2>Questions fréquentes</h2>
+        <p>Les réponses aux questions les plus courantes. Pour toute autre demande, écrivez-nous sur WhatsApp.</p>
+      </div>
+      <div class="faq-list">
+        <details class="faq-item" open><summary>Comment obtenir le code de suivi de mon colis ?</summary><p>L'agence expéditrice génère un code unique au format <strong>CLI-XXXXXX</strong> lors de l'enregistrement. Il figure sur le reçu, avec un QR code qui ouvre directement le suivi.</p></details>
+        <details class="faq-item"><summary>Quelles sont les étapes de mon colis ?</summary><p>Enregistré, Expédié, En transit, Arrivé à l'agence de destination, puis Retiré. Chaque étape est horodatée dans l'historique visible sur le suivi.</p></details>
+        <details class="faq-item"><summary>Mes informations personnelles sont-elles visibles ?</summary><p>Non. Le suivi public n'affiche ni nom, ni téléphone, ni numéro de pièce d'identité. Ces informations ne sont accessibles qu'aux agences concernées par le colis.</p></details>
+        <details class="faq-item"><summary>Que dois-je apporter pour retirer mon colis ?</summary><p>Votre pièce d'identité (CNI) et votre code de suivi. L'agence enregistre le retrait avec le nom et le numéro de la pièce présentée.</p></details>
+        <details class="faq-item"><summary>Combien coûte l'envoi ?</summary><p>Le prix est fixé par l'agence expéditrice au moment de l'enregistrement, en FCFA, selon la nature et le poids du colis. Pour un devis, contactez l'agence ou notre équipe sur WhatsApp.</p></details>
+        <details class="faq-item"><summary>Comment rejoindre le réseau COLIS EXPRESS ?</summary><p>Créez un compte d'agence en quelques minutes. Pour envoyer un colis vers une autre ville, il faut qu'une agence de destination soit inscrite dans le réseau.</p></details>
+        <details class="faq-item"><summary>J'ai oublié mon mot de passe agence.</summary><p>Sur la page de connexion, cliquez sur « Mot de passe oublié ? ». Un lien de réinitialisation vous est envoyé par e-mail.</p></details>
+      </div>
+    </section>
+
     <section class="home-section">
       <div class="home-cta">
         <div><h2>Votre agence est prête à expédier ?</h2><p>Créez votre espace agence pour enregistrer vos colis et rejoindre le réseau COLIS EXPRESS.</p></div>
@@ -99,7 +125,7 @@
     </section>
   </main>
 
-  <footer class="site-footer"><div class="footer-content"><a class="brand" href="index.html"><span class="brand-mark">CE</span><span>COLIS <em>EXPRESS</em></span></a><span>Gestion d'envoi et de réception de colis.</span><div class="footer-links"><a href="suivi.html">Suivi</a><a href="connexion.html">Espace agence</a></div><div class="footer-credit">Conçu par <strong>Shopin30</strong> · <a href="https://wa.me/2250501303343" target="_blank" rel="noopener noreferrer">WhatsApp : +225 0501303343</a></div></div></footer>
+  <footer class="site-footer"><div class="footer-content"><a class="brand" href="index.html"><span class="brand-mark">CE</span><span>COLIS <em>EXPRESS</em></span></a><span>Gestion d'envoi et de réception de colis.</span><div class="footer-links"><a href="suivi.html">Suivi</a><a href="connexion.html">Espace agence</a><a href="conditions.html">Conditions d'utilisation</a><a href="confidentialite.html">Confidentialité</a></div><div class="footer-credit">Conçu par <strong>Shopin30</strong> · <a href="https://wa.me/2250501303343" target="_blank" rel="noopener noreferrer">WhatsApp : +225 0501303343</a></div></div></footer>
   <script type="module" src="js/public.js"></script>
 </body>
 </html>

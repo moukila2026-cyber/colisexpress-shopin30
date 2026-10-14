@@ -6,6 +6,10 @@ Application web statique, **100 % en français**, de gestion d'envoi et de réce
 - Montants en **FCFA**
 - Suivi public en temps réel avec code `CLI-XXXXXX`
 - Données privées (téléphone, CNI) séparées du suivi public
+- Visuels (accueil, suivi, espace agence, connexion) dans `assets/img/`
+- Menu mobile, FAQ, états vides guidés, QR code sur le reçu
+- Partage du suivi par WhatsApp (destinataire et expéditeur)
+- Pages Conditions d'utilisation, Confidentialité et 404
 - Déploiement direct sur GitHub Pages ou Vercel (instructions Vercel ci-dessous)
 
 ## Arborescence
@@ -26,7 +30,12 @@ colis-express/
 │   ├── dashboard.js
 │   ├── nouveau-colis.js
 │   ├── colis.js
-│   └── parametres.js
+│   ├── parametres.js
+│   └── vendor/qrcode-generator.js   # génération du QR code (MIT, Kazuhiko Arase)
+├── assets/img/                # visuels du site et favicon
+├── conditions.html            # conditions d'utilisation
+├── confidentialite.html       # politique de confidentialité
+├── 404.html                   # page introuvable
 ├── index.html
 ├── suivi.html
 ├── inscription.html
@@ -43,7 +52,7 @@ colis-express/
 
 1. Ouvrez [Firebase Console](https://console.firebase.google.com/) puis **Ajouter un projet**.
 2. Dans ce projet, cliquez sur l'icône **Web** (`</>`) et enregistrez une application Web, par exemple `colis-express-web`.
-3. Firebase affiche un objet `firebaseConfig`. Ouvrez `js/firebase-config.js` et remplacez **toutes** les valeurs `REMPLACEZ_…` par les valeurs de cet objet.
+3. Firebase affiche un objet `firebaseConfig`. Ouvrez `js/firebase-config.js` et, si ce n'est pas déjà fait, remplacez les valeurs `REMPLACEZ_…` par celles de cet objet. Le projet de production est déjà configuré.
 
    ```js
    export const firebaseConfig = {
@@ -125,6 +134,17 @@ Avant un dépôt public, vérifiez que `js/firebase-config.js` ne contient que l
 6. Ouvrez le site Vercel et testez inscription, connexion, création de colis, suivi public et changement de statut.
 
 Le fichier `vercel.json` active les URL propres et ajoute des en-têtes de sécurité adaptés au site statique.
+
+## Améliorations de l'expérience
+
+- **Accueil** : menu mobile accessible au clavier (Échap pour fermer), FAQ, section retrait et lien d'évitement pour les lecteurs d'écran.
+- **Reçu** : QR code vers la page de suivi, boutons « Envoyer le code au destinataire » et « à l'expéditeur » (WhatsApp, numéro pré-rempli), impression sans les boutons.
+- **Fiche colis** : partage du lien de suivi aux deux parties à tout moment.
+- **Suivi public** : barre de progression des cinq étapes et lien d'aide WhatsApp.
+- **Tableau de bord** : états vides distincts (aucun colis / aucun résultat de filtre) avec action directe.
+- **Messages d'erreur** : formulés en langage courant pour les erreurs Firebase fréquentes (connexion, réseau, droits d'accès).
+
+Pour modifier les visuels, remplacez les fichiers de `assets/img/` en conservant leurs noms.
 
 ## Modèle de données Firestore
 

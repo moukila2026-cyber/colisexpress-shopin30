@@ -1,6 +1,7 @@
 import { doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 import { db, firebaseIsConfigured } from "./firebase.js";
 import {
+  STATUTS,
   clearPageMessage,
   errorMessage,
   escapeHTML,
@@ -24,6 +25,14 @@ function hideResult() {
   result.innerHTML = "";
 }
 
+function progressHtml(status) {
+  const current = STATUTS.indexOf(status);
+  return `<ol class="public-progress" aria-label="Étapes du colis">${STATUTS.map((step, index) => {
+    const state = index < current || (index === current && status === "Retiré") ? "done" : index === current ? "current" : "todo";
+    return `<li class="public-progress-step is-${state}"><span aria-hidden="true">${state === "done" ? "✓" : index + 1}</span><small>${escapeHTML(step)}</small></li>`;
+  }).join("")}</ol>`;
+}
+
 function showResult(tracking) {
   result.innerHTML = `
     <article class="tracking-card">
@@ -34,6 +43,7 @@ function showResult(tracking) {
         </div>
         ${statusBadge(tracking.status)}
       </div>
+      ${progressHtml(tracking.status)}
       <div class="route-display" aria-label="Itinéraire">
         <div><span class="route-dot route-start"></span><small>Départ</small><strong>${escapeHTML(tracking.originCity)}</strong></div>
         <span class="route-line" aria-hidden="true"></span>
@@ -43,6 +53,7 @@ function showResult(tracking) {
         <h3>Historique de l'acheminement</h3>
         ${renderHistory(tracking.history, { publicView: true })}
       </div>
+      <p class="tracking-help">Une question sur votre colis ? <a href="https://wa.me/2250501303343" target="_blank" rel="noopener noreferrer">Contactez-nous sur WhatsApp</a>.</p>
       <p class="privacy-note">Pour protéger les expéditeurs et destinataires, aucune donnée personnelle n'est affichée ici.</p>
     </article>`;
   result.hidden = false;

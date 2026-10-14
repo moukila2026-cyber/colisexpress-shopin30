@@ -19,7 +19,9 @@ import {
   isValidIvorianPhone,
   normalizeIvorianPhone,
   setButtonLoading,
-  showPageMessage
+  publicTrackingUrl,
+  showPageMessage,
+  whatsappShareLink
 } from "./utils.js";
 
 const form = document.getElementById("parcelForm");
@@ -72,12 +74,36 @@ function validate(values) {
   return null;
 }
 
+function qrCodeSvg(text) {
+  if (typeof window.qrcode !== "function") return "";
+  const qr = window.qrcode(0, "M");
+  qr.addData(text);
+  qr.make();
+  return qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+}
+
+function renderReceiptShare(parcel) {
+  const link = publicTrackingUrl(parcel.trackingCode);
+  const share = document.getElementById("receiptShare");
+  const links = [];
+  if (parcel.recipient?.phone) {
+    const text = `Bonjour ${parcel.recipient.firstName}, votre colis COLIS EXPRESS est enregistré. Code de suivi : ${parcel.trackingCode}. Suivez-le ici : ${link}`;
+    links.push(`<a class="button button-whatsapp" target="_blank" rel="noopener noreferrer" href="${escapeHTML(whatsappShareLink(parcel.recipient.phone, text))}">Envoyer le code au destinataire</a>`);
+  }
+  if (parcel.sender?.phone) {
+    const text = `Bonjour ${parcel.sender.firstName}, votre colis ${parcel.trackingCode} est enregistré. Suivez-le ici : ${link}`;
+    links.push(`<a class="button button-whatsapp" target="_blank" rel="noopener noreferrer" href="${escapeHTML(whatsappShareLink(parcel.sender.phone, text))}">Envoyer le code à l'expéditeur</a>`);
+  }
+  share.innerHTML = links.join("");
+}
+
 function showReceipt(parcel) {
   receiptContent.innerHTML = `
     <div class="receipt-brand"><span class="brand-mark">CE</span><strong>COLIS <em>EXPRESS</em></strong></div>
     <p class="receipt-title">Reçu d'enregistrement</p>
     <div class="receipt-code">${escapeHTML(parcel.trackingCode)}</div>
-    <p class="receipt-help">Conservez ce code pour suivre votre colis sur COLIS EXPRESS.</p>
+    <p class="receipt-help">Conservez ce code pour suivre votre colis sur COLIS EXPRESS, ou scannez le QR code ci-dessous.</p>
+    <div class="receipt-qr" aria-label="QR code de suivi">${qrCodeSvg(publicTrackingUrl(parcel.trackingCode))}</div>
     <div class="receipt-grid">
       <div><small>Expéditeur</small><strong>${escapeHTML(`${parcel.sender.firstName} ${parcel.sender.lastName}`)}</strong><span>${escapeHTML(parcel.sender.phone)}</span></div>
       <div><small>Destinataire</small><strong>${escapeHTML(`${parcel.recipient.firstName} ${parcel.recipient.lastName}`)}</strong><span>${escapeHTML(parcel.recipient.phone)}</span></div>
@@ -85,6 +111,7 @@ function showReceipt(parcel) {
       <div><small>Colis</small><strong>${escapeHTML(parcel.packageNature)}</strong><span>${escapeHTML(String(parcel.weightKg))} kg · ${escapeHTML(formatFCFA(parcel.priceFCFA))}</span></div>
     </div>
     <p class="receipt-date">Enregistré le ${escapeHTML(new Intl.DateTimeFormat("fr-CI", { dateStyle: "long", timeStyle: "short" }).format(new Date()))}</p>`;
+  renderReceiptShare(parcel);
   receiptModal.dataset.parcelId = parcel.id;
   receiptModal.hidden = false;
   document.body.classList.add("modal-open");

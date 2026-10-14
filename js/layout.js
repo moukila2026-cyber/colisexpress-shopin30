@@ -45,7 +45,7 @@ export async function initAgencyLayout(user, activePage) {
     if (!document.getElementById("agencyCredit")) {
       document.querySelector(".agency-content")?.insertAdjacentHTML(
         "beforeend",
-        '<footer class="agency-credit" id="agencyCredit">Conçu par <strong>Shopin30</strong> <span>·</span> <a href="https://wa.me/2250501303343" target="_blank" rel="noopener noreferrer">WhatsApp : +225 0501303343</a></footer>'
+        '<footer class="agency-credit" id="agencyCredit"><a href="conditions.html">Conditions</a> <span>·</span> <a href="confidentialite.html">Confidentialité</a> <span>·</span> Conçu par <strong>Shopin30</strong> <span>·</span> <a href="https://wa.me/2250501303343" target="_blank" rel="noopener noreferrer">WhatsApp : +225 0501303343</a></footer>'
       );
     }
     return agency;
