@@ -6,7 +6,7 @@ import {
   serverTimestamp,
   runTransaction
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { db } from "./firebase.js";
+import { auth, db } from "./firebase.js";
 import { enregistrerColisAtomiquement } from "./persistance-colis.js";
 import { requireAgency } from "./auth.js";
 import { agencySidebar, initAgencyLayout, mobileAgencyHeader } from "./layout.js";
@@ -160,9 +160,12 @@ function showReceipt(parcel) {
   document.body.classList.add("modal-open");
 }
 
+let savePhase = "validation";
+
 async function saveParcel(event) {
   event.preventDefault();
   clearPageMessage(message);
+  savePhase = "validation";
   const values = Object.fromEntries(new FormData(form));
   const invalidMessage = validate(values);
   if (invalidMessage) {
@@ -172,7 +175,7 @@ async function saveParcel(event) {
   const resolution = resoudreDestination({
     values,
     agencies,
-    currentAgencyId: currentAgency.id,
+    currentAgencyId: currentAgency?.id,
     agencyNotRegistered: agencyMode()
   });
   if (!resolution.ok) {
@@ -180,11 +183,21 @@ async function saveParcel(event) {
     return;
   }
 
+  // Vérification de session avant toute écriture : l'uid Firebase doit
+  // correspondre à l'agence chargée dans la page.
+  savePhase = "session";
+  if (!auth?.currentUser || !currentAgency || auth.currentUser.uid !== currentAgency.id) {
+    showPageMessage(message, "Votre session agence est invalide ou expirée. Reconnectez-vous à votre espace agence.");
+    return;
+  }
+
   setButtonLoading(submitButton, true, "Enregistrement…");
   try {
+    savePhase = "lecture-suivi";
     const trackingCode = await createUniqueCode();
     const parcelRef = doc(collection(db, "colis"));
     const now = new Date().toISOString();
+    savePhase = "construction";
     const built = construireColis({
       values,
       currentAgency,
@@ -198,6 +211,7 @@ async function saveParcel(event) {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     };
+    savePhase = "transaction-colis-suivi";
     await enregistrerColisAtomiquement({
       runTransaction,
       db,
@@ -211,7 +225,10 @@ async function saveParcel(event) {
     syncDestinationMode();
     showReceipt(parcel);
   } catch (error) {
-    console.error(error);
+    const code = error?.code || "unknown";
+    // Diagnostic minimal et sûr : code d'erreur, phase et projet uniquement.
+    // Aucun nom, téléphone, CNI, jeton ni document complet n'est journalisé.
+    console.error("[COLIS EXPRESS][diagnostic]", { code, phase: savePhase, projectId: "colisexpress-shopin30" });
     showPageMessage(message, errorMessage(error));
   } finally {
     setButtonLoading(submitButton, false);
@@ -227,7 +244,7 @@ async function boot() {
   document.getElementById("originCity").value = currentAgency.city || "";
 
   onSnapshot(collection(db, "agences"), (snapshot) => {
-    agencies = snapshot.docs.map((agencyDoc) => ({ id: agencyDoc.id, ...agencyDoc.data() }));
+    agencies = snapshot.docs.map((agencyDoc) => ({ ...agencyDoc.data(), id: agencyDoc.id }));
     renderDestinationAgencies();
   }, (error) => showPageMessage(message, errorMessage(error)));
 

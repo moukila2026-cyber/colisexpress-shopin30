@@ -188,7 +188,7 @@ export function errorMessage(error) {
     "auth/too-many-requests": "Trop de tentatives. Patientez quelques minutes avant de réessayer.",
     "auth/network-request-failed": "Connexion internet instable. Vérifiez votre réseau puis réessayez.",
     "auth/requires-recent-login": "Pour des raisons de sécurité, reconnectez-vous puis recommencez.",
-    "permission-denied": "Vous n'êtes pas autorisé à effectuer cette action. Reconnectez-vous à votre espace agence.",
+    "permission-denied": "Vous n'êtes pas autorisé à effectuer cette action. Vérifiez votre session et vos droits d'accès, puis réessayez. Si le refus persiste, notez le code d'erreur et la phase affichés dans la console du navigateur.",
     "unauthenticated": "Votre session a expiré. Reconnectez-vous pour continuer.",
     "not-found": "L'élément demandé est introuvable. Actualisez la page puis réessayez.",
     "unavailable": "Le service est momentanément indisponible. Vérifiez votre connexion internet et réessayez.",

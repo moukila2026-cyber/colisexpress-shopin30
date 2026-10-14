@@ -340,3 +340,9 @@ test("le suivi public reconstruit à partir des changements reste fidèle au col
   assert.equal(suivi.history.length, 1);
   assert.equal(suivi.colisId, "colis-1");
 });
+
+test("les villes de départ et de destination sont validées sur 2 à 60 caractères", () => {
+  assert.match(validerColis({ values: valeurs({ originCity: "A" }) }), /villes de départ et de destination/);
+  assert.match(validerColis({ values: valeurs({ destinationCity: "" }) }), /villes de départ et de destination/);
+  assert.equal(validerColis({ values: valeurs({ originCity: "  Abidjan  ", destinationCity: "Bouaké" }) }), null);
+});

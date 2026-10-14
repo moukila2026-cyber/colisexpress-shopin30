@@ -415,7 +415,7 @@ async function boot() {
 
   // Annuaire des agences : nécessaire pour proposer un rattachement.
   onSnapshot(collection(db, "agences"), (snapshot) => {
-    agencies = snapshot.docs.map((agencyDoc) => ({ id: agencyDoc.id, ...agencyDoc.data() }));
+    agencies = snapshot.docs.map((agencyDoc) => ({ ...agencyDoc.data(), id: agencyDoc.id }));
     if (currentParcel) renderDetail(currentParcel);
   }, (error) => console.error(error));
 
@@ -426,7 +426,7 @@ async function boot() {
       return;
     }
     clearPageMessage(message);
-    currentParcel = { id: snapshot.id, ...snapshot.data() };
+    currentParcel = { ...snapshot.data(), id: snapshot.id };
     renderDetail(currentParcel);
   }, (error) => {
     showPageMessage(message, errorMessage(error));

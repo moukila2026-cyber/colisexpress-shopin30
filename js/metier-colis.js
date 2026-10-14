@@ -75,8 +75,10 @@ export function validerColis({ values, agencyNotRegistered = false }) {
   if (!Number.isFinite(Number(values.priceFCFA)) || Number(values.priceFCFA) < 0) {
     return "Le prix doit être un montant valide.";
   }
-  if (!textePropre(values.originCity) || !textePropre(values.destinationCity)) {
-    return "Indiquez les villes de départ et de destination.";
+  const originCity = textePropre(values.originCity);
+  const destinationCity = textePropre(values.destinationCity);
+  if (!dansLimite(originCity, VILLE) || !dansLimite(destinationCity, VILLE)) {
+    return "Indiquez les villes de départ et de destination (2 à 60 caractères).";
   }
 
   if (agencyNotRegistered) {
