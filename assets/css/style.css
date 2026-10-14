@@ -424,3 +424,64 @@ dd { margin: 4px 0 0; color: var(--ink); overflow-wrap: anywhere; font-size: .88
   #receiptModal .modal-heading, #receiptModal .modal-actions { display: none !important; }
   #receiptContent { padding: 25px !important; }
 }
+
+/* ===== Visuels et améliorations (v2) ===== */
+
+/* Accueil : photo de fond avec superposition pour garder un texte lisible */
+.hero { overflow: hidden; }
+.hero-media { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 70% center; z-index: -2; opacity: .42; }
+.hero::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(180deg, rgba(6,44,37,.82) 0%, rgba(6,44,37,.55) 55%, rgba(6,44,37,.92) 100%); }
+.hero-content { position: relative; }
+.header-track { display: inline-flex; align-items: center; min-height: 36px; padding: 0 8px; color: var(--green-900); font-size: .86rem; font-weight: 750; }
+.header-track:hover { color: var(--orange); }
+
+.story-figure { margin: 0 0 30px; }
+.story-figure img { display: block; width: 100%; aspect-ratio: 16 / 8; object-fit: cover; border-radius: var(--radius); box-shadow: var(--shadow); }
+.story-figure figcaption { margin-top: 11px; color: var(--muted); font-size: .85rem; text-align: center; }
+
+.split-section { display: grid; gap: 30px; align-items: center; }
+.split-copy h2 { margin: 0; color: var(--green-950); font-size: clamp(1.7rem, 5vw, 2.4rem); letter-spacing: -.04em; line-height: 1.12; }
+.split-copy > p:not(.eyebrow) { color: var(--muted); line-height: 1.65; }
+.split-media { margin: 0; }
+.split-media img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--radius); box-shadow: var(--shadow); }
+.check-list { margin: 20px 0 26px; padding: 0; list-style: none; color: #35463f; }
+.check-list li { position: relative; padding: 7px 0 7px 30px; line-height: 1.5; }
+.check-list li::before { content: "✓"; position: absolute; left: 0; top: 7px; width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%; background: var(--green-100); color: var(--success); font-size: .75rem; font-weight: 900; }
+
+/* Suivi public */
+.tracking-hero { position: relative; overflow: hidden; isolation: isolate; }
+.tracking-media { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 60%; z-index: -2; opacity: .38; }
+.tracking-hero::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(180deg, rgba(6,44,37,.6), rgba(6,44,37,.95)); }
+
+/* Authentification : photo de fond dans le panneau latéral */
+.auth-presentation { isolation: isolate; }
+.auth-media { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: -2; opacity: .3; }
+.auth-presentation::before { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(160deg, rgba(6,44,37,.75), rgba(6,44,37,.95)); }
+
+/* Espace agence : bandeau visuel */
+.page-banner { position: relative; height: 150px; margin: -4px 0 20px; overflow: hidden; border-radius: var(--radius); box-shadow: var(--shadow); background: var(--green-900); }
+.page-banner img { width: 100%; height: 100%; object-fit: cover; object-position: center 40%; display: block; }
+.page-banner::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(6,44,37,.55), rgba(6,44,37,.1)); }
+.page-banner-short img { object-position: center 35%; }
+.page-banner-short { height: 120px; }
+
+/* Focus clavier et réduction des animations */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+}
+
+@media (min-width: 620px) {
+  .hero-media { opacity: .5; }
+  .page-banner { height: 190px; }
+  .page-banner-short { height: 150px; }
+  .story-figure img { aspect-ratio: 16 / 7; }
+}
+
+@media (min-width: 900px) {
+  .split-section { grid-template-columns: 1fr 1fr; gap: 56px; }
+  .split-media img { aspect-ratio: 5 / 4; }
+  .hero::after { background: linear-gradient(90deg, rgba(6,44,37,.95) 0%, rgba(6,44,37,.7) 45%, rgba(6,44,37,.15) 100%); }
+  .auth-media { opacity: .35; }
+  .header-track { display: none; }
+}
