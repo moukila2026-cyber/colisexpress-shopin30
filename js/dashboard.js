@@ -1,10 +1,4 @@
-import {
-  collection,
-  onSnapshot,
-  query,
-  where
-} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { db } from "./firebase.js";
+import { api } from "./api.js";
 import { requireAgency } from "./auth.js";
 import { agencySidebar, initAgencyLayout, mobileAgencyHeader } from "./layout.js";
 import {
@@ -27,8 +21,6 @@ const EMPTY_ILLUSTRATION = `<svg class="empty-art" viewBox="0 0 120 90" aria-hid
 </svg>`;
 
 const state = {
-  owner: new Map(),
-  destination: new Map(),
   parcels: []
 };
 
@@ -42,15 +34,6 @@ function mountLayout() {
     "Tableau de bord",
     '<a class="button button-small button-orange" href="nouveau-colis.html">＋ <span>Nouveau</span></a>'
   );
-}
-
-function mergeParcels() {
-  const map = new Map([...state.owner, ...state.destination]);
-  state.parcels = [...map.values()].sort((a, b) => {
-    const dateA = new Date(a.createdAtISO || 0).getTime();
-    const dateB = new Date(b.createdAtISO || 0).getTime();
-    return dateB - dateA;
-  });
 }
 
 function filteredParcels() {
@@ -128,16 +111,23 @@ function renderList() {
 }
 
 function renderAll() {
-  mergeParcels();
   renderStats();
   renderList();
 }
 
-function updateMap(target, snapshot) {
-  target.clear();
-  snapshot.forEach((docSnapshot) => target.set(docSnapshot.id, { ...docSnapshot.data(), id: docSnapshot.id }));
-  clearPageMessage(dashboardMessage);
-  renderAll();
+async function charger() {
+  try {
+    const { parcels } = await api("/api/colis");
+    state.parcels = parcels.sort((a, b) => {
+      const dateA = new Date(a.createdAtISO || 0).getTime();
+      const dateB = new Date(b.createdAtISO || 0).getTime();
+      return dateB - dateA;
+    });
+    clearPageMessage(dashboardMessage);
+    renderAll();
+  } catch (error) {
+    showPageMessage(dashboardMessage, errorMessage(error));
+  }
 }
 
 async function boot() {
@@ -156,15 +146,12 @@ async function boot() {
     renderList();
   });
 
-  const ownerQuery = query(collection(db, "colis"), where("ownerId", "==", user.uid));
-  const destinationQuery = query(collection(db, "colis"), where("destinationAgencyId", "==", user.uid));
-
-  onSnapshot(ownerQuery, (snapshot) => updateMap(state.owner, snapshot), (error) => {
-    showPageMessage(dashboardMessage, errorMessage(error));
-  });
-  onSnapshot(destinationQuery, (snapshot) => updateMap(state.destination, snapshot), (error) => {
-    showPageMessage(dashboardMessage, errorMessage(error));
-  });
+  renderAll();
+  await charger();
+  // Les autres agences font avancer les colis : rafraîchissement périodique.
+  window.setInterval(() => {
+    if (document.visibilityState === "visible") charger();
+  }, 20000);
 }
 
 boot();

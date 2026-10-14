@@ -1,9 +1,9 @@
 /*
  * Intégrité statique de l'application : syntaxe, imports/exports entre modules
  * locaux, identifiants DOM réellement présents dans les pages, liens internes et
- * version du SDK Firebase. Ces vérifications remplacent ce que le navigateur
- * refuserait de faire (module introuvable, export mal orthographié, getElementById
- * qui renvoie null) dans un sandbox sans Firebase.
+ * absence de toute dépendance Firebase. Ces vérifications remplacent ce que le
+ * navigateur refuserait de faire (module introuvable, export mal orthographié,
+ * getElementById qui renvoie null) dans un sandbox sans base externe.
  */
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -81,13 +81,21 @@ test("tous les modules JS sont syntaxiquement valides en ES modules", () => {
   }
 });
 
-test("les modules du vendor et le SDK Firebase sont cohérents", () => {
-  const versions = new Set();
-  for (const fichier of fichiersJs()) {
-    for (const match of lire(fichier).matchAll(/gstatic\.com\/firebasejs\/([^/]+)\//g)) versions.add(match[1]);
+test("aucune trace de Firebase ne subsiste et le vendor QR code est présent", () => {
+  for (const fichier of [...fichiersJs(), ...readdirSync(RACINE).filter((n) => n.endsWith(".html")).map((n) => n)]) {
+    const source = lire(fichier);
+    assert.doesNotMatch(source, /gstatic\.com\/firebasejs|firebase-config|firebase\.js|firestore/i, `${fichier} référence encore Firebase`);
   }
-  assert.equal(versions.size, 1, "toutes les pages doivent charger la même version du SDK");
-  assert.match([...versions][0], /^\d+\.\d+\.\d+$/);
+  const dossiers = [".", "lib", "db", "api"];
+  for (const dossier of dossiers) {
+    const chemin = path.join(RACINE, dossier);
+    if (!existsSync(chemin)) continue;
+    for (const nom of readdirSync(chemin)) {
+      if (!/\.(js|mjs|sql|json)$/.test(nom)) continue;
+      const source = readFileSync(path.join(chemin, nom), "utf8");
+      assert.doesNotMatch(source, /gstatic\.com\/firebasejs/i, `${dossier}/${nom} référence encore le SDK Firebase`);
+    }
+  }
   assert.ok(existsSync(path.join(DOSSIER_JS, "vendor/qrcode-generator.js")), "le générateur de QR code est requis par le reçu");
 });
 
@@ -166,8 +174,13 @@ test("le mode « agence non inscrite » est câblé de bout en bout", () => {
   assert.match(script, /agencyNotRegistered/);
   assert.match(script, /resoudreDestination/);
   assert.match(script, /unregisteredDestinationAgency/);
-  assert.match(lire("js/colis.js"), /changementsRattachement/);
+  // Le rattachement est exécuté par l'API, qui applique les mêmes règles métier.
+  assert.match(lire("js/colis.js"), /\/attach/);
   assert.match(lire("js/colis.js"), /Agence de destination à rattacher/);
+  const api = lire("lib/app.js");
+  assert.match(api, /changementsRattachement/);
+  assert.match(api, /peutRattacher/);
+  assert.match(api, /prochaineEtape/);
 });
 
 test("tous les liens internes des pages pointent vers un fichier du dépôt", () => {
@@ -210,7 +223,8 @@ test("chaque page a un script et un titre, et le HTML reste équilibré", () => 
 
 test("les règles de protection sont rappelées dans le README", () => {
   const readme = lire("README.md");
-  assert.match(readme, /firestore\.rules/);
-  assert.match(readme, /Republish|republier/i);
+  assert.match(readme, /DATABASE_URL/);
+  assert.match(readme, /Neon/i);
   assert.match(readme, /rattachement/i);
+  assert.match(readme, /npm test|npm run test/);
 });

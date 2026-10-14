@@ -1,11 +1,4 @@
-import {
-  collection,
-  doc,
-  onSnapshot,
-  runTransaction,
-  serverTimestamp
-} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { db } from "./firebase.js";
+import { api } from "./api.js";
 import { requireAgency } from "./auth.js";
 import { agencySidebar, initAgencyLayout, mobileAgencyHeader } from "./layout.js";
 import {
@@ -30,8 +23,6 @@ import {
 import {
   agenceDeclaree,
   agencesRattachables,
-  changementsRattachement,
-  construireSuiviPublic,
   etapeValideeParExpediteur,
   peutRattacher,
   prochaineEtape,
@@ -48,6 +39,7 @@ let currentParcel = null;
 let agencies = [];
 let updateInProgress = false;
 let attachInProgress = false;
+let refreshTimer = null;
 
 function mountLayout() {
   document.getElementById("sidebarMount").innerHTML = agencySidebar();
@@ -189,33 +181,12 @@ async function rattacherAgence(agencyId, destinationCity) {
   const button = document.getElementById("attachButton");
   setButtonLoading(button, true, "Rattachement…");
   try {
-    await runTransaction(db, async (transaction) => {
-      const parcelRef = doc(db, "colis", parcelId);
-      const snapshot = await transaction.get(parcelRef);
-      if (!snapshot.exists()) throw new Error("Ce colis n'existe plus.");
-      const parcel = { id: snapshot.id, ...snapshot.data() };
-      if (!peutRattacher({ parcel, agencyId: currentAgency.id })) {
-        throw new Error("Ce colis a déjà une agence de destination, ou vous n'êtes pas l'agence expéditrice.");
-      }
-      const agencySnapshot = await transaction.get(doc(db, "agences", agencyId));
-      if (!agencySnapshot.exists()) {
-        throw new Error("Cette agence n'est pas inscrite : demandez-lui de créer son compte avant de la rattacher.");
-      }
-      const agency = { id: agencySnapshot.id, ...agencySnapshot.data() };
-      const now = new Date().toISOString();
-      const changes = changementsRattachement({
-        parcel,
-        agency,
-        ownerAgency: currentAgency,
-        now,
-        destinationCity
-      });
-      transaction.update(parcelRef, { ...changes, updatedAt: serverTimestamp() });
-      transaction.set(
-        doc(db, "suivis", parcel.trackingCode),
-        construireSuiviPublic({ id: parcel.id, ...changes, trackingCode: parcel.trackingCode, status: parcel.status, originCity: parcel.originCity }, now)
-      );
+    const { parcel } = await api(`/api/colis/${encodeURIComponent(parcelId)}/attach`, {
+      method: "POST",
+      body: { agencyId, destinationCity }
     });
+    currentParcel = parcel;
+    renderDetail(parcel);
     showToast("Agence de destination rattachée. Elle voit désormais ce colis.");
   } catch (error) {
     console.error(error);
@@ -332,36 +303,14 @@ async function updateStatus(nextStatus, collectedBy = null) {
   setButtonLoading(trigger, true, "Mise à jour…");
 
   try {
-    const parcelRef = doc(db, "colis", parcelId);
-    await runTransaction(db, async (transaction) => {
-      const snapshot = await transaction.get(parcelRef);
-      if (!snapshot.exists()) throw new Error("Ce colis n'existe plus.");
-      const parcel = { id: snapshot.id, ...snapshot.data() };
-      const allowedNext = canMoveToNext(parcel);
-      if (allowedNext !== nextStatus) throw new Error("Le statut a changé ou cette action n'est pas autorisée pour votre agence.");
-
-      const now = new Date().toISOString();
-      const history = Array.isArray(parcel.history) ? [...parcel.history] : [];
-      history.push({
-        status: nextStatus,
-        date: now,
-        agencyName: currentAgency.name,
-        city: currentAgency.city
-      });
-      const changes = {
-        status: nextStatus,
-        history,
-        updatedAt: serverTimestamp()
-      };
-      if (collectedBy) changes.collectedBy = { ...collectedBy, date: now };
-      transaction.update(parcelRef, changes);
-      // transaction.set() crée le document s'il manque : le suivi public se
-      // répare donc tout seul s'il a été supprimé.
-      transaction.set(doc(db, "suivis", parcel.trackingCode), construireSuiviPublic(
-        { ...parcel, status: nextStatus, history },
-        now
-      ));
+    const attendu = canMoveToNext(currentParcel);
+    if (attendu !== nextStatus) throw new Error("Le statut a changé ou cette action n'est pas autorisée pour votre agence.");
+    const { parcel } = await api(`/api/colis/${encodeURIComponent(parcelId)}/progress`, {
+      method: "POST",
+      body: collectedBy ? { collectedBy } : {}
     });
+    currentParcel = parcel;
+    renderDetail(parcel);
     collectionModal.hidden = true;
     document.body.classList.remove("modal-open");
     collectionForm.reset();
@@ -400,6 +349,23 @@ function bindCollectionForm() {
   document.getElementById("cancelCollection")?.addEventListener("click", closeModal);
 }
 
+async function chargerColis({ silencieux = false } = {}) {
+  try {
+    const { parcel } = await api(`/api/colis/${encodeURIComponent(parcelId)}`);
+    clearPageMessage(message);
+    currentParcel = parcel;
+    renderDetail(parcel);
+  } catch (error) {
+    if (silencieux) return;
+    target.innerHTML = "";
+    if (error.status === 404) {
+      showPageMessage(message, "Colis introuvable ou accès non autorisé.");
+    } else {
+      showPageMessage(message, errorMessage(error));
+    }
+  }
+}
+
 async function boot() {
   mountLayout();
   parcelId = getQueryParam("id");
@@ -414,23 +380,21 @@ async function boot() {
   bindCollectionForm();
 
   // Annuaire des agences : nécessaire pour proposer un rattachement.
-  onSnapshot(collection(db, "agences"), (snapshot) => {
-    agencies = snapshot.docs.map((agencyDoc) => ({ ...agencyDoc.data(), id: agencyDoc.id }));
-    if (currentParcel) renderDetail(currentParcel);
-  }, (error) => console.error(error));
+  try {
+    const data = await api("/api/agences");
+    agencies = data.agencies;
+  } catch (error) {
+    console.error(error);
+  }
 
-  onSnapshot(doc(db, "colis", parcelId), (snapshot) => {
-    if (!snapshot.exists()) {
-      target.innerHTML = "";
-      showPageMessage(message, "Colis introuvable ou accès non autorisé.");
-      return;
-    }
-    clearPageMessage(message);
-    currentParcel = { ...snapshot.data(), id: snapshot.id };
-    renderDetail(currentParcel);
-  }, (error) => {
-    showPageMessage(message, errorMessage(error));
-  });
+  await chargerColis();
+  refreshTimer = window.setInterval(() => {
+    if (document.visibilityState === "visible") chargerColis({ silencieux: true });
+  }, 15000);
 }
+
+window.addEventListener("beforeunload", () => {
+  if (refreshTimer) clearInterval(refreshTimer);
+});
 
 boot();

@@ -1,9 +1,11 @@
-import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { db } from "./firebase.js";
 import { logout } from "./auth.js";
-import { errorMessage, escapeHTML, showToast } from "./utils.js";
+import { escapeHTML, showToast } from "./utils.js";
 
-export async function initAgencyLayout(user, activePage) {
+/**
+ * Habillage des pages agence : barre latérale, identité affichée, déconnexion.
+ * `agency` est le profil renvoyé par requireAgency() (API /api/me).
+ */
+export async function initAgencyLayout(agency, activePage) {
   const menuButton = document.querySelector("[data-menu-toggle]");
   const sidebar = document.getElementById("agencySidebar");
   const backdrop = document.getElementById("sidebarBackdrop");
@@ -27,12 +29,10 @@ export async function initAgencyLayout(user, activePage) {
   });
 
   try {
-    const agencySnapshot = await getDoc(doc(db, "agences", user.uid));
-    if (!agencySnapshot.exists()) {
+    if (!agency?.id) {
       showToast("Profil d'agence introuvable. Contactez l'administrateur.", "error");
       return null;
     }
-    const agency = { ...agencySnapshot.data(), id: agencySnapshot.id };
     document.querySelectorAll("[data-agency-name]").forEach((element) => {
       element.textContent = agency.name || "Mon agence";
     });
@@ -51,7 +51,7 @@ export async function initAgencyLayout(user, activePage) {
     return agency;
   } catch (error) {
     console.error(error);
-    showToast(errorMessage(error), "error");
+    showToast(error.message, "error");
     return null;
   }
 }

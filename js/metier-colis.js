@@ -2,7 +2,7 @@
  * Règles de gestion des colis : validation, construction du document, étapes
  * de progression et rattachement d'une agence de destination.
  *
- * Aucun import de DOM ni du SDK Firebase ici : ce module est volontairement
+ * Aucun import de DOM ni d'accès réseau ici : ce module est volontairement
  * testable avec `node --test tests/`. Les fonctions renvoient toujours de
  * nouvelles données (elles ne modifient jamais l'objet reçu).
  */
@@ -102,7 +102,7 @@ export function validerColis({ values, agencyNotRegistered = false }) {
 }
 
 /**
- * Détermine les champs de destination du document Firestore.
+ * Détermine les champs de destination du colis.
  *
  * - Agence inscrite : `destinationAgencyId` = uid de l'agence (contrôlé par les règles).
  * - Agence non inscrite : `destinationAgencyId` = `null` et les coordonnées
@@ -146,7 +146,7 @@ export function resoudreDestination({ values, agencies = [], currentAgencyId = n
   };
 }
 
-/** Document public de suivi : exactement les 7 champs autorisés par firestore.rules. */
+/** Document public de suivi : exactement les 7 champs exposés par l'API (aucune donnée personnelle). */
 export function construireSuiviPublic(parcel, nowISO) {
   return {
     code: parcel.trackingCode,
@@ -161,8 +161,7 @@ export function construireSuiviPublic(parcel, nowISO) {
 
 /**
  * Construit le document `colis` et son document public `suivis/{code}`.
- * Les horodatages serveur (`createdAt`, `updatedAt`) sont ajoutés par l'appelant,
- * seul le SDK Firebase sait les produire.
+ * Les horodatages serveur (`created_at`, `updated_at`) sont gérés par la base.
  */
 export function construireColis({ values, currentAgency, destination, parcelId, trackingCode, nowISO }) {
   const originCity = textePropre(values.originCity);

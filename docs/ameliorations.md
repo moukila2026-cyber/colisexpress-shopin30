@@ -5,7 +5,7 @@ interurbain, agence de destination, retrait au comptoir) et lister les évolutio
 par impact sur la perte de colis et effort de réalisation.
 
 Méthode : chaque idée est décrite en trois lignes — *problème de terrain*, *ce que ferait l'outil*, *impact sur la perte*.
-Rien ici n'impose un framework ou un backend : tout reste compatible avec une application statique + Firebase.
+Rien ici n'impose un framework ou un backend : tout reste compatible avec l'API Node + Postgres (Neon) du dépôt.
 
 ---
 
@@ -18,7 +18,7 @@ Rien ici n'impose un framework ou un backend : tout reste compatible avec une ap
 | Progression | 5 étapes verrouillées par rôle : `Enregistré → Expédié → En transit → Arrivé à l'agence de destination → Retiré` |
 | Preuve de retrait | Nom + numéro CNI de la personne qui récupère, conservés côté privé |
 | Ouverture du réseau | Enregistrement possible vers une **agence non inscrite** (nom, ville, téléphone), rattachement ensuite par l'expéditeur |
-| Cloisonnement | Suivi public sans donnée personnelle, écriture contrainte par `firestore.rules` à être fidèle au colis privé |
+| Cloisonnement | Suivi public sans donnée personnelle, écriture contrainte par l'API à rester fidèle au colis privé |
 | Temps réel | `onSnapshot` partout : l'agence et le client voient la mise à jour sans rafraîchir |
 
 **Ce qui manque pour la majorité des pertes :** tout ce qui se passe **entre deux agences** (le bag, le car, le dépotage),
@@ -125,7 +125,7 @@ seul dans la nature : il appartient à un lot qui a un accusé de réception.
 4. Un écart crée **automatiquement un incident** (4.3) sur chaque colis manquant, visible chez A et chez B, avec le
    bordereau en preuve.
 
-**Règles Firestore.** `bordereaux/{id}` : création par l'agence émettrice, lecture aux deux agences, mise à jour limitée
+**Règles d'accès (API).** `bordereaux/{id}` : création par l'agence émettrice, lecture aux deux agences, mise à jour limitée (contrôles dans `lib/app.js`)
 aux champs d'émargement ; `fromAgencyId`/`parcelIds` immuables après remise ; un colis ne peut être ajouté à un
 bordereau que par son agence expéditrice, et `bordereauId` ne peut être écrit que par la même transaction qui crée
 l'entrée d'historique. Aucun `delete`.
@@ -135,7 +135,7 @@ l'entrée d'historique. Aucun `delete`.
 
 ### 4.2 Photos à la prise en charge et à l'arrivée
 
-Firebase **Storage**, règles calquées sur Firestore (accès limité aux deux agences + lecture publique *aucune*).
+Stockage de fichiers (ex. Neon + object storage), accès limité aux deux agences, aucune lecture publique.
 
 ```js
 colis.photoRefs: { intake: ["colis/{id}/photos/prise-en-charge-1.jpg"], arrival: [...] }
@@ -208,7 +208,7 @@ doit appeler l'agence, pas l'inverse.**
 ## 5. Feuille de route proposée
 
 **Phase 1 — 2 semaines : fiabiliser la saisie réelle.**
-Mode hors-ligne (file d'attente Firestore + `waitUntilReady`) · recherche par téléphone/CNI + export CSV ·
+Mode hors-ligne (file d'attente locale + rejeu des requêtes) · recherche par téléphone/CNI + export CSV ·
 macaron « sans mouvement depuis 48 h » et cartes « À traiter » · tolérance de saisie du code dans le suivi public ·
 comptes agents rattachés (sans changer l'UI existante).
 
@@ -227,7 +227,7 @@ date de création de l'incident moins la date d'arrivée du bordereau.
 
 ## 6. Garde-fous : ce qu'il ne faut pas faire
 
-- **Ne pas affaiblir `firestore.rules` au fil de l'eau.** Chaque nouvelle collection part du même socle : lecture aux seules
+- **Ne pas affaiblir les contrôles de `lib/app.js` au fil de l'eau.** Chaque nouvelle ressource part du même socle : lecture aux seules
   agences concernées, écriture contrainte au propriétaire, pas de suppression, aucun champ personnel dans une collection publique.
 - **Ne pas empiler les champs obligatoires au guichet.** Chaque champ requis en plus = moins de colis saisis = plus de colis
   invisibles. Exemple concret appliqué ici : le sélecteur d'agence de destination est devenu *optionnel* grâce à la saisie
@@ -267,5 +267,5 @@ date de création de l'incident moins la date d'arrivée du bordereau.
 - La logique de vérification est sortie du DOM dans `js/metier-colis.js` : les règles de progression, de garde et de
   rattachement sont désormais testables (`node --test`) — utile pour les évolutions de cette note, qui touchent toutes à
   la garde des écritures.
-- Le contrat client ↔ `firestore.rules` est couvert par les tests : ajouter une collection (bordereaux, photos, incidents)
+- Le contrat client ↔ API est couvert par les tests : ajouter une ressource (bordereaux, photos, incidents)
   se fera avec le même niveau de preuve.
