@@ -172,6 +172,11 @@ code d'erreur Firebase, la phase (`session`, `lecture-suivi`, `construction` ou
 `transaction-colis-suivi`) et le `projectId`. Voir `docs/diagnostic-permission-denied.md`.
 Aucun nom, téléphone, CNI, jeton ni document complet n'est journalisé.
 
+Si l'échec est `permission-denied` même sur un document conforme, les règles
+publiées ne sont pas celles du dépôt : suivez la procédure pas à pas de
+`docs/resolution-permission-denied.md` (diagnostic S1-S3, publication Console
+ou CLI, recette).
+
 ## 3 bis. Tests automatisés
 
 Aucune dépendance npm : les tests utilisent le moteur `node:test` de Node 20+.
