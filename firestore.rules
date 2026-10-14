@@ -6,12 +6,6 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    /*
-     * Un colis peut être enregistré alors que l'agence de destination n'a pas
-     * encore de compte : `destinationAgencyId` vaut alors `null` et les
-     * coordonnées déclarées sont stockées dans `unregisteredDestinationAgency`.
-     * L'accès au colis reste réservé à l'expéditeur jusqu'au rattachement.
-     */
     function destinationIdOf(data) {
       return 'destinationAgencyId' in data ? data.destinationAgencyId : null;
     }
@@ -21,7 +15,6 @@ service cloud.firestore {
         exists(/databases/$(database)/documents/agences/$(agencyId));
     }
 
-    // Coordonnées d'une agence non inscrite, saisies par l'agence expéditrice.
     function isValidDeclaredAgency(agency) {
       return agency is map &&
         agency.name is string && size(agency.name) >= 2 && size(agency.name) <= 120 &&
@@ -36,11 +29,6 @@ service cloud.firestore {
       );
     }
 
-    /*
-     * Le document de suivi public est autorisé seulement s'il reflète exactement
-     * le colis privé correspondant après l'opération (getAfter autorise le batch
-     * de création et les transactions qui mettent à jour les deux documents).
-     */
     function isValidPublicTracking(data, code) {
       return data.keys().hasOnly([
         'code', 'colisId', 'status', 'history', 'originCity',
@@ -67,7 +55,6 @@ service cloud.firestore {
           destinationIdOf(parcel.data) == request.auth.uid);
     }
 
-    // Annuaire interne : nécessaire aux agences connectées pour choisir une destination.
     match /agences/{agencyId} {
       allow create: if signedIn() && request.auth.uid == agencyId;
       allow get, list: if signedIn();
@@ -77,13 +64,7 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Les informations sensibles (CNI, téléphones) restent ici, jamais dans /suivis.
     match /colis/{parcelId} {
-      /*
-       * Rattachement de l'agence de destination : réservé à l'agence expéditrice,
-       * une seule fois, uniquement vers une agence inscrite dans l'annuaire,
-       * jamais vers elle-même, et sans changer le statut du colis.
-       */
       function isAttachmentUpdate(before, after) {
         return before.ownerId == request.auth.uid &&
           destinationIdOf(before) == null &&
@@ -104,7 +85,6 @@ service cloud.firestore {
           ]);
       }
 
-      // Progression normale : statut, historique et retrait, sans toucher aux propriétaires.
       function isProgressUpdate(before, after) {
         return after.diff(before).affectedKeys().hasOnly(['status', 'history', 'updatedAt', 'collectedBy']) &&
           after.ownerId == before.ownerId &&
@@ -126,14 +106,12 @@ service cloud.firestore {
         size(request.resource.data.originCity) >= 2 && size(request.resource.data.originCity) <= 60 &&
         size(request.resource.data.destinationCity) >= 2 && size(request.resource.data.destinationCity) <= 60 &&
         (
-          // Agence de destination inscrite : elle doit exister dans l'annuaire.
           (
             agencyExists(request.resource.data.destinationAgencyId) &&
             request.resource.data.destinationAgencyId != request.auth.uid &&
             !('unregisteredDestinationAgency' in request.resource.data)
           )
           ||
-          // Agence de destination non inscrite : nom, ville et téléphone déclarés.
           (
             request.resource.data.destinationAgencyId == null &&
             isValidDeclaredAgency(request.resource.data.unregisteredDestinationAgency)
@@ -149,7 +127,6 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Le suivi est public, mais les agences ne peuvent écrire qu'un suivi fidèle à leur colis.
     match /suivis/{code} {
       allow read: if true;
       allow create: if signedIn() &&
