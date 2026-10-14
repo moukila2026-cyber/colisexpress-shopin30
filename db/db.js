@@ -29,6 +29,13 @@ async function creerDriver() {
     });
     return { query: (text, params) => pool.query(text, params), kind: "postgres" };
   }
+  if (process.env.VERCEL) {
+    // Sur Vercel, PGlite serait éphémère (données perdues à chaque instance) :
+    // mieux vaut un message d'explicite qu'une démo silencieuse.
+    throw new Error(
+      "Base de données non configurée : ajoutez DATABASE_URL (connection string Neon) dans Vercel → Settings → Environment Variables, puis redéployez."
+    );
+  }
   const { PGlite } = await import("@electric-sql/pglite");
   const db = new PGlite();
   return {
