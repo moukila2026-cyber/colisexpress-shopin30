@@ -1,0 +1,20 @@
+{
+  "name": "colisexpress-shopin30",
+  "version": "1.0.0",
+  "description": "COLIS EXPRESS — enregistrement et suivi de colis (API Node + Postgres Neon)",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "init-db": "node db/init-db.js",
+    "test": "node --test 'tests/**/*.test.mjs'"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.3.14",
+    "express": "^5.1.0",
+    "pg": "^8.16.3"
+  }
+}

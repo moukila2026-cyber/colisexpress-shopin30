@@ -173,32 +173,8 @@ export function setButtonLoading(button, loading, loadingLabel = "Chargement…"
 }
 
 export function errorMessage(error) {
-  const code = error?.code || "";
-  const messages = {
-    "auth/email-already-in-use": "Cette adresse e-mail est déjà utilisée. Connectez-vous ou utilisez une autre adresse.",
-    "auth/invalid-email": "L'adresse e-mail saisie n'est pas valide. Vérifiez-la (exemple : agence@exemple.ci).",
-    "auth/weak-password": "Votre mot de passe est trop court. Utilisez au moins 6 caractères.",
-    "auth/missing-password": "Saisissez votre mot de passe.",
-    "auth/invalid-credential": "E-mail ou mot de passe incorrect. Vérifiez vos saisies ou réinitialisez votre mot de passe.",
-    "auth/invalid-login-credentials": "E-mail ou mot de passe incorrect. Vérifiez vos saisies ou réinitialisez votre mot de passe.",
-    "auth/user-not-found": "Aucun compte ne correspond à cette adresse e-mail.",
-    "auth/wrong-password": "E-mail ou mot de passe incorrect. Vérifiez vos saisies ou réinitialisez votre mot de passe.",
-    "auth/user-disabled": "Ce compte a été désactivé. Contactez l'équipe COLIS EXPRESS.",
-    "auth/operation-not-allowed": "La connexion par e-mail n'est pas activée. Contactez l'administrateur du site.",
-    "auth/too-many-requests": "Trop de tentatives. Patientez quelques minutes avant de réessayer.",
-    "auth/network-request-failed": "Connexion internet instable. Vérifiez votre réseau puis réessayez.",
-    "auth/requires-recent-login": "Pour des raisons de sécurité, reconnectez-vous puis recommencez.",
-    "permission-denied": "Vous n'êtes pas autorisé à effectuer cette action. Vérifiez votre session et vos droits d'accès, puis réessayez. Si le refus persiste, notez le code d'erreur et la phase affichés dans la console du navigateur.",
-    "unauthenticated": "Votre session a expiré. Reconnectez-vous pour continuer.",
-    "not-found": "L'élément demandé est introuvable. Actualisez la page puis réessayez.",
-    "unavailable": "Le service est momentanément indisponible. Vérifiez votre connexion internet et réessayez.",
-    "deadline-exceeded": "La demande a pris trop de temps. Vérifiez votre connexion puis réessayez.",
-    "resource-exhausted": "Le service est très sollicité. Réessayez dans quelques instants.",
-    "already-exists": "Ce colis existe déjà. Actualisez la page.",
-    "aborted": "Une autre modification est en cours sur ce colis. Actualisez la page puis réessayez."
-  };
-  if (messages[code]) return messages[code];
-  if (error?.message && /[a-zéèàêçù]/i.test(error.message) && !/firebase|firestore|FirebaseError|undefined|null/i.test(error.message)) {
+  // L'API renvoie déjà un message français prêt à afficher dans `error`.
+  if (error?.message && typeof error.message === "string" && error.message.trim()) {
     return error.message;
   }
   return "Une erreur inattendue est survenue. Réessayez, et si le problème persiste, contactez l'équipe COLIS EXPRESS.";

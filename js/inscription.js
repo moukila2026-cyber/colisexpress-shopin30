@@ -1,7 +1,4 @@
-import { createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-import { doc, serverTimestamp, setDoc } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { auth, db, firebaseIsConfigured } from "./firebase.js";
-import { firebaseSetupError } from "./auth.js";
+import { api } from "./api.js";
 import {
   clearPageMessage,
   errorMessage,
@@ -18,10 +15,6 @@ const submitButton = document.getElementById("signupButton");
 form?.addEventListener("submit", async (event) => {
   event.preventDefault();
   clearPageMessage(message);
-  if (!firebaseIsConfigured || !auth || !db) {
-    firebaseSetupError(message);
-    return;
-  }
 
   const values = Object.fromEntries(new FormData(form));
   const name = values.name.trim();
@@ -53,14 +46,9 @@ form?.addEventListener("submit", async (event) => {
 
   setButtonLoading(submitButton, true, "Création…");
   try {
-    const credential = await createUserWithEmailAndPassword(auth, email, password);
-    await setDoc(doc(db, "agences", credential.user.uid), {
-      name,
-      city,
-      phone,
-      email,
-      createdAt: serverTimestamp(),
-      createdAtISO: new Date().toISOString()
+    await api("/api/register", {
+      method: "POST",
+      body: { name, city, phone, email, password }
     });
     window.location.href = "dashboard.html";
   } catch (error) {

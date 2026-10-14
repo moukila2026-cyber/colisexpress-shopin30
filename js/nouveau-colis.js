@@ -1,17 +1,7 @@
-import {
-  collection,
-  doc,
-  getDoc,
-  onSnapshot,
-  serverTimestamp,
-  runTransaction
-} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { auth, db } from "./firebase.js";
-import { enregistrerColisAtomiquement } from "./persistance-colis.js";
+import { api } from "./api.js";
 import { requireAgency } from "./auth.js";
 import { agencySidebar, initAgencyLayout, mobileAgencyHeader } from "./layout.js";
 import {
-  construireColis,
   resoudreDestination,
   validerColis
 } from "./metier-colis.js";
@@ -20,7 +10,6 @@ import {
   errorMessage,
   escapeHTML,
   formatFCFA,
-  generateTrackingCode,
   isValidIvorianPhone,
   setButtonLoading,
   publicTrackingUrl,
@@ -94,15 +83,6 @@ function updateInviteLink() {
   link.setAttribute("aria-disabled", href ? "false" : "true");
 }
 
-async function createUniqueCode() {
-  for (let attempts = 0; attempts < 8; attempts += 1) {
-    const code = generateTrackingCode();
-    const trackingSnapshot = await getDoc(doc(db, "suivis", code));
-    if (!trackingSnapshot.exists()) return code;
-  }
-  throw new Error("Impossible de générer un code de suivi unique. Réessayez.");
-}
-
 function validate(values) {
   return validerColis({ values, agencyNotRegistered: agencyMode() });
 }
@@ -125,7 +105,7 @@ function renderReceiptShare(parcel) {
   }
   if (parcel.sender?.phone) {
     const text = `Bonjour ${parcel.sender.firstName}, votre colis ${parcel.trackingCode} est enregistré. Suivez-le ici : ${link}`;
-    links.push(`<a class="button button-whatsapp" target="_blank" rel="noopener noreferrer" href="${escapeHTML(whatsappShareLink(parcel.sender.phone, text))}">Envoyer le code à l'expéditeur</a>`);
+    links.push(`<a class="button button-outline" target="_blank" rel="noopener noreferrer" href="${escapeHTML(whatsappShareLink(parcel.sender.phone, text))}">Envoyer le code à l'expéditeur</a>`);
   }
   const declared = parcel.unregisteredDestinationAgency;
   if (declared?.phone) {
@@ -160,12 +140,9 @@ function showReceipt(parcel) {
   document.body.classList.add("modal-open");
 }
 
-let savePhase = "validation";
-
 async function saveParcel(event) {
   event.preventDefault();
   clearPageMessage(message);
-  savePhase = "validation";
   const values = Object.fromEntries(new FormData(form));
   const invalidMessage = validate(values);
   if (invalidMessage) {
@@ -183,52 +160,17 @@ async function saveParcel(event) {
     return;
   }
 
-  // Vérification de session avant toute écriture : l'uid Firebase doit
-  // correspondre à l'agence chargée dans la page.
-  savePhase = "session";
-  if (!auth?.currentUser || !currentAgency || auth.currentUser.uid !== currentAgency.id) {
-    showPageMessage(message, "Votre session agence est invalide ou expirée. Reconnectez-vous à votre espace agence.");
-    return;
-  }
-
   setButtonLoading(submitButton, true, "Enregistrement…");
   try {
-    savePhase = "lecture-suivi";
-    const trackingCode = await createUniqueCode();
-    const parcelRef = doc(collection(db, "colis"));
-    const now = new Date().toISOString();
-    savePhase = "construction";
-    const built = construireColis({
-      values,
-      currentAgency,
-      destination: resolution.destination,
-      parcelId: parcelRef.id,
-      trackingCode,
-      nowISO: now
-    });
-    const parcel = {
-      ...built.parcel,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    };
-    savePhase = "transaction-colis-suivi";
-    await enregistrerColisAtomiquement({
-      runTransaction,
-      db,
-      parcelRef,
-      trackingRef: doc(db, "suivis", trackingCode),
-      parcel,
-      publicTracking: built.publicTracking
+    const { parcel } = await api("/api/colis", {
+      method: "POST",
+      body: { values, agencyNotRegistered: agencyMode() }
     });
     form.reset();
     document.getElementById("originCity").value = currentAgency.city || "";
     syncDestinationMode();
     showReceipt(parcel);
   } catch (error) {
-    const code = error?.code || "unknown";
-    // Diagnostic minimal et sûr : code d'erreur, phase et projet uniquement.
-    // Aucun nom, téléphone, CNI, jeton ni document complet n'est journalisé.
-    console.error("[COLIS EXPRESS][diagnostic]", { code, phase: savePhase, projectId: "colisexpress-shopin30" });
     showPageMessage(message, errorMessage(error));
   } finally {
     setButtonLoading(submitButton, false);
@@ -243,10 +185,13 @@ async function boot() {
   if (!currentAgency) return;
   document.getElementById("originCity").value = currentAgency.city || "";
 
-  onSnapshot(collection(db, "agences"), (snapshot) => {
-    agencies = snapshot.docs.map((agencyDoc) => ({ ...agencyDoc.data(), id: agencyDoc.id }));
+  try {
+    const data = await api("/api/agences");
+    agencies = data.agencies;
     renderDestinationAgencies();
-  }, (error) => showPageMessage(message, errorMessage(error)));
+  } catch (error) {
+    showPageMessage(message, errorMessage(error));
+  }
 
   destinationSelect.addEventListener("change", () => {
     const agency = agencies.find((item) => item.id === destinationSelect.value);

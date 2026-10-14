@@ -1,5 +1,4 @@
-import { doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { db } from "./firebase.js";
+import { api } from "./api.js";
 import { requireAgency } from "./auth.js";
 import { agencySidebar, initAgencyLayout, mobileAgencyHeader } from "./layout.js";
 import {
@@ -14,7 +13,6 @@ import {
 
 const form = document.getElementById("agencyForm");
 const message = document.getElementById("pageMessage");
-let user = null;
 
 function mountLayout() {
   document.getElementById("sidebarMount").innerHTML = agencySidebar();
@@ -23,7 +21,7 @@ function mountLayout() {
 
 async function boot() {
   mountLayout();
-  user = await requireAgency();
+  const user = await requireAgency();
   if (!user) return;
   const agency = await initAgencyLayout(user, "parametres");
   if (!agency) return;
@@ -31,7 +29,7 @@ async function boot() {
   form.elements.name.value = agency.name || "";
   form.elements.city.value = agency.city || "";
   form.elements.phone.value = agency.phone || "";
-  form.elements.email.value = agency.email || user.email || "";
+  form.elements.email.value = agency.email || "";
 
   form.addEventListener("submit", saveAgency);
 }
@@ -55,7 +53,7 @@ async function saveAgency(event) {
   const button = document.getElementById("saveAgencyButton");
   setButtonLoading(button, true, "Enregistrement…");
   try {
-    await updateDoc(doc(db, "agences", user.uid), { name, city, phone });
+    await api("/api/me", { method: "PATCH", body: { name, city, phone } });
     document.querySelectorAll("[data-agency-name]").forEach((element) => { element.textContent = name; });
     document.querySelectorAll("[data-agency-city]").forEach((element) => { element.textContent = city; });
     document.querySelectorAll("[data-agency-initial]").forEach((element) => { element.textContent = name.charAt(0).toUpperCase(); });

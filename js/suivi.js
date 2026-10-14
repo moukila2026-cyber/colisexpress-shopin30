@@ -1,5 +1,4 @@
-import { doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { db, firebaseIsConfigured } from "./firebase.js";
+import { api } from "./api.js";
 import {
   STATUTS,
   clearPageMessage,
@@ -18,7 +17,7 @@ const input = document.getElementById("trackingCode");
 const message = document.getElementById("trackingMessage");
 const result = document.getElementById("trackingResult");
 const loading = document.getElementById("trackingLoading");
-let unsubscribe = null;
+let suiviTimer = null;
 
 function hideResult() {
   result.hidden = true;
@@ -59,30 +58,31 @@ function showResult(tracking) {
   result.hidden = false;
 }
 
-function launchTracking(code) {
-  clearPageMessage(message);
-  hideResult();
-  if (unsubscribe) unsubscribe();
-  if (!firebaseIsConfigured || !db) {
-    showPageMessage(message, "Le suivi est indisponible tant que Firebase n'est pas configuré.");
-    return;
+async function chargerSuivi(code, { silencieux = false } = {}) {
+  if (!silencieux) {
+    clearPageMessage(message);
+    hideResult();
+    loading.hidden = false;
   }
-  loading.hidden = false;
-  unsubscribe = onSnapshot(
-    doc(db, "suivis", code),
-    (snapshot) => {
-      loading.hidden = true;
-      if (!snapshot.exists()) {
-        showPageMessage(message, "Aucun colis ne correspond à ce code. Vérifiez les caractères saisis.", "info");
-        return;
-      }
-      showResult(snapshot.data());
-    },
-    (error) => {
-      loading.hidden = true;
+  try {
+    const { tracking } = await api(`/api/suivi/${encodeURIComponent(code)}`);
+    loading.hidden = true;
+    clearPageMessage(message);
+    showResult(tracking);
+    if (suiviTimer) clearInterval(suiviTimer);
+    // Rafraîchissement doux pendant que le résultat est affiché.
+    suiviTimer = window.setInterval(() => {
+      if (document.visibilityState === "visible") chargerSuivi(code, { silencieux: true });
+    }, 15000);
+  } catch (error) {
+    loading.hidden = true;
+    if (silencieux && error.status === 404) return;
+    if (error.status === 404) {
+      showPageMessage(message, "Aucun colis ne correspond à ce code. Vérifiez les caractères saisis.", "info");
+    } else {
       showPageMessage(message, errorMessage(error));
     }
-  );
+  }
 }
 
 form?.addEventListener("submit", (event) => {
@@ -98,7 +98,7 @@ form?.addEventListener("submit", (event) => {
   const url = new URL(window.location.href);
   url.searchParams.set("code", code);
   window.history.replaceState({}, "", url);
-  launchTracking(code);
+  chargerSuivi(code);
 });
 
 input?.addEventListener("input", () => {
@@ -108,8 +108,10 @@ input?.addEventListener("input", () => {
 const codeFromUrl = normalizeTrackingCode(getQueryParam("code") || "");
 if (codeFromUrl) {
   input.value = codeFromUrl;
-  if (isTrackingCodeValid(codeFromUrl)) launchTracking(codeFromUrl);
+  if (isTrackingCodeValid(codeFromUrl)) chargerSuivi(codeFromUrl);
   else showPageMessage(message, "Le code dans le lien n'est pas valide.");
 }
 
-window.addEventListener("beforeunload", () => unsubscribe?.());
+window.addEventListener("beforeunload", () => {
+  if (suiviTimer) clearInterval(suiviTimer);
+});
