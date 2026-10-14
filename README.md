@@ -23,6 +23,7 @@ colis-express/
 │   ├── auth.js
 │   ├── layout.js
 │   ├── utils.js
+│   ├── metier-colis.js        # validation, construction du colis, rattachement (testable sans Firebase)
 │   ├── public.js
 │   ├── suivi.js
 │   ├── inscription.js
@@ -44,6 +45,9 @@ colis-express/
 ├── nouveau-colis.html
 ├── colis.html
 ├── parametres.html
+├── firestore.rules
+├── tests/                     # tests Node (npm n'est pas nécessaire) : node --test 'tests/**/*.test.mjs'
+├── docs/ameliorations.md      # note stratégique : besoins des agences, pistes anti-perte de colis
 ├── firestore.rules
 └── vercel.json
 ```
@@ -82,11 +86,25 @@ colis-express/
 Les règles fournies appliquent notamment les protections suivantes :
 
 - `/colis/{id}` est lisible seulement par l'agence expéditrice ou l'agence de destination.
+- Un colis peut être enregistré **sans agence de destination inscrite** (`destinationAgencyId == null`) à condition que le nom, la ville et le téléphone de cette agence soient déclarés et valides.
+- Le **rattachement** ultérieur d'une agence de destination n'est possible que pour l'agence expéditrice, **une seule fois**, uniquement vers une agence existant dans `/agences`, jamais vers elle-même, et sans changer le statut du colis.
+- Un colis non rattaché reste invisible aux autres agences : la visibilité de l'agence de destination naît du rattachement.
 - Les CNI et téléphones restent dans `/colis`, donc ne sont jamais accessibles depuis le suivi public.
 - `/suivis/{code}` est lisible publiquement, mais son écriture exige une agence connectée et un contenu fidèle au colis privé associé.
 - L'annuaire `/agences` est disponible uniquement aux agences connectées : il sert à sélectionner l'agence de destination.
 
 > **Important :** le fichier de règles doit impérativement être publié avant d'utiliser l'application. Ne laissez pas les règles de test Firebase en production.
+
+### ⚠️ Après la fusion « agence de destination non inscrite » : republier les règles
+
+Les règles de ce dépôt ne sont **pas** déployées automatiquement (Vercel ne publie pas `firestore.rules`, et aucun outil CLI n'est nécessaire) :
+
+1. Firebase Console → projet `colisexpress-shopin30` → **Firestore Database** → onglet **Rules**.
+2. Copiez **tout** le contenu de [`firestore.rules`](firestore.rules) dans l'éditeur.
+3. Cliquez sur **Publish**.
+4. Vérifiez dans **Firestore Database → Documents** qu'un test d'enregistrement sans agence de destination aboutit (voir le parcours de test ci-dessous).
+
+Tant que cette étape n'est pas faite, l'enregistrement d'un colis vers une agence non inscrite échoue avec `permission-denied`, et le rattachement depuis la fiche colis est refusé aussi.
 
 ## 2. Exécuter localement
 
@@ -107,6 +125,39 @@ Puis ouvrez `http://localhost:8080`. Évitez de double-cliquer directement sur l
 4. Les étapes respectent la chaîne :
    `Enregistré → Expédié → En transit → Arrivé à l'agence de destination → Retiré`.
 5. À l'arrivée, l'agence de destination obtient un lien WhatsApp pré-rempli. Lors du retrait, le nom et la CNI de la personne qui récupère le colis sont demandés et restent privés.
+
+### Enregistrer vers une agence de destination non inscrite
+
+1. **Nouveau colis** → section « Colis et acheminement » → cochez **« Mon agence de destination n'est pas encore inscrite »**.
+   Le sélecteur se désactive et trois champs apparaissent : **nom**, **ville** et **téléphone** de l'agence. Le bouton
+   « Inviter l'agence par WhatsApp » prépare un message d'inscription pré-rempli au numéro saisi.
+2. Enregistrez : le colis est créé avec `destinationAgencyId = null`. Le reçu mentionne l'agence « à confirmer »,
+   et le tableau de bord affiche un macaron **Agence à rattacher** sur la ligne du colis.
+3. Le colis reste lisible uniquement par votre agence. Faute d'agence de destination inscrite, **c'est l'agence
+   expéditrice qui valide l'arrivée et le retrait** (sinon le colis resterait bloqué « En transit ») ; un encart le rappelle sur la fiche.
+4. Une fois l'agence partenaire inscrite (`inscription.html`), ouvrez la fiche du colis : la carte
+   **« Agence de destination à rattacher »** liste les agences inscrites, signale une ville divergente, permet de corriger
+   la ville de retrait puis de valider. L'opération est atomique : le colis privé et le suivi public sont écrits ensemble.
+5. Après rattachement, l'agence de destination voit le colis dans son tableau de bord (`where destinationAgencyId == uid`)
+   et peut valider les étapes qui la concernent. L'historique conserve l'événement « Agence de retrait confirmée »,
+   et la déclaration d'origine reste consultable en cas de litige.
+
+## 3 bis. Tests automatisés
+
+Aucune dépendance npm : les tests utilisent le moteur `node:test` de Node 20+.
+
+```bash
+node --test 'tests/**/*.test.mjs'
+```
+
+- `tests/metier-colis.test.mjs` : validation du formulaire, coordonnées d'agence déclarée, matrice des étapes, rattachement.
+- `tests/regles-firestore.test.mjs` : invariants de `firestore.rules`, concordance des clés écrites par l'application avec les
+  listes `hasOnly`/`hasAll` du fichier, et oracle refusant les écritures abusives (usurpation d'expéditeur, rattachement double,
+  destination hors annuaire, fuite de CNI dans le suivi public…).
+- `tests/integration-page.test.mjs` : syntaxe des modules, imports/exports, identifiants DOM réellement présents, liens internes.
+
+Ces tests valident le **contrat** client ↔ règles ; l'exécution réelle des règles par Firestore doit être vérifiée dans
+Firebase Console (règles publiées) ou avec l'émulateur `firebase emulators:execute` côté poste de développement.
 
 ## 4. Pousser sur GitHub
 
@@ -146,6 +197,9 @@ Le fichier `vercel.json` active les URL propres et ajoute des en-têtes de sécu
 
 Pour modifier les visuels, remplacez les fichiers de `assets/img/` en conservant leurs noms.
 
+Les pistes d'évolution priorisées (besoins terrain des agences, lutte contre la perte de colis) sont détaillées dans
+[`docs/ameliorations.md`](docs/ameliorations.md).
+
 ## Modèle de données Firestore
 
 ### `agences/{uid}`
@@ -160,6 +214,15 @@ Pour modifier les visuels, remplacez les fichiers de `assets/img/` en conservant
 ### `colis/{id}` — privé
 
 Contient les agences concernées, expéditeur (avec CNI), destinataire, nature, poids, prix FCFA, statut, historique et éventuellement les informations de la personne ayant retiré le colis.
+
+Champs liés à l'agence de destination :
+
+| Champ | Contenu |
+| --- | --- |
+| `destinationAgencyId` | `uid` du compte agence, ou **`null`** si l'agence n'est pas encore inscrite |
+| `destinationAgencyName`, `destinationAgencyCity` | Libellés affichés (agence inscrite ou déclaration manuelle) |
+| `unregisteredDestinationAgency` | `{ name, city, phone }` saisis à la main, conservés même après rattachement (trace) |
+| `destinationAgencyAttachedAt`, `destinationAgencyAttachedBy` | Date ISO et nom de l'agence expéditrice au moment du rattachement |
 
 ### `suivis/{code}` — public
 

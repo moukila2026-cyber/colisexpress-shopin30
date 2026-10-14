@@ -229,6 +229,7 @@ export function renderHistory(history = [], { publicView = false } = {}) {
           <div class="timeline-head">${statusBadge(item.status || "Mise à jour")}</div>
           <strong>${escapeHTML(item.city || "Ville non renseignée")}</strong>
           <p>${escapeHTML(item.agencyName || "Agence COLIS EXPRESS")} · ${escapeHTML(formatDateTime(item.date))}</p>
+          ${item.note ? `<p class="timeline-note">${escapeHTML(item.note)}</p>` : ""}
         </div>
       </li>`
     )

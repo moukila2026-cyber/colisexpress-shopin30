@@ -118,7 +118,7 @@ function renderList() {
     <thead><tr><th>Code</th><th>Itinéraire</th><th>Destinataire</th><th>Statut</th><th>Créé le</th><th></th></tr></thead>
     <tbody>${parcels.map((parcel) => `<tr>
       <td><strong class="tracking-code">${escapeHTML(parcel.trackingCode)}</strong></td>
-      <td><span class="route-cell">${escapeHTML(parcel.originCity)} <span>→</span> ${escapeHTML(parcel.destinationCity)}</span></td>
+      <td><span class="route-cell">${escapeHTML(parcel.originCity)} <span>→</span> ${escapeHTML(parcel.destinationCity)}</span>${parcel.destinationAgencyId ? "" : '<span class="attach-flag attach-flag-list">Agence à rattacher</span>'}</td>
       <td>${escapeHTML(`${parcel.recipient?.firstName || ""} ${parcel.recipient?.lastName || ""}`.trim() || "—")}</td>
       <td>${statusBadge(parcel.status)}</td>
       <td>${escapeHTML(formatDateTime(parcel.createdAtISO))}</td>

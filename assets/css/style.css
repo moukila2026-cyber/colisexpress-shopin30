@@ -273,6 +273,16 @@ img { max-width: 100%; }
 .form-footer .button { width: 100%; }
 .notice-box { margin: 0 0 16px; padding: 12px; border: 1px solid #bfdfd2; border-radius: 10px; color: #22634e; background: var(--green-50); font-size: .81rem; line-height: 1.5; }
 .notice-box a { color: var(--orange-dark); font-weight: 750; }
+/* Agence de destination non inscrite */
+.field .switch-field { display: flex; align-items: flex-start; gap: 9px; margin-top: 2px; color: #34473f; font-size: .82rem; font-weight: 750; line-height: 1.4; cursor: pointer; }
+.field .switch-field input { width: 18px; height: 18px; min-height: 18px; flex: 0 0 auto; margin: 1px 0 0; padding: 0; border: 1px solid #cbdad3; border-radius: 5px; background: #fff; accent-color: var(--green-700); cursor: pointer; }
+.field .switch-field input:focus-visible { outline: 3px solid rgba(242, 118, 34, .35); outline-offset: 2px; }
+.declared-agency { display: grid; gap: 13px; margin-top: 15px; padding: 14px; border: 1px dashed #eab98d; border-radius: var(--radius-sm); background: var(--orange-light); }
+.declared-agency .field input { background: #fff; }
+.declared-agency-note { margin: 0; color: #6f451f; font-size: .79rem; line-height: 1.5; }
+.declared-agency-actions { display: flex; flex-wrap: wrap; gap: 9px; }
+.declared-agency-actions .button.is-disabled { opacity: .55; }
+
 .settings-card { max-width: 650px; }
 .settings-summary { display: flex; align-items: center; gap: 13px; padding: 0 0 20px; margin-bottom: 22px; border-bottom: 1px solid var(--line); }
 .settings-summary .avatar { width: 47px; height: 47px; color: #fff; background: var(--green-800); font-size: 1.05rem; }
@@ -309,6 +319,24 @@ img { max-width: 100%; }
 dt { color: var(--muted); font-size: .7rem; }
 dd { margin: 4px 0 0; color: var(--ink); overflow-wrap: anywhere; font-size: .88rem; font-weight: 700; }
 .collected-card { border-color: #c2e0d0; background: #f6fbf8; }
+/* Rattachement de l'agence de destination */
+.attach-flag { display: inline-flex; align-items: center; margin-left: 8px; padding: 3px 8px; border-radius: 20px; color: #8a4b13; background: #fff0de; font-size: .68rem; font-weight: 820; line-height: 1.2; vertical-align: middle; }
+.attach-flag-list { display: inline-flex; margin: 6px 0 0; }
+.attach-card { border-color: #f0c8a4; background: linear-gradient(110deg, #fff, #fff9f3); }
+.attach-card h2 { color: #8a4b13; }
+.attach-intro { margin: 0 0 14px; color: var(--muted); font-size: .84rem; line-height: 1.5; }
+.attach-declared { margin: 0 0 15px; padding: 12px; border: 1px solid #f1ddca; border-radius: var(--radius-sm); background: #fffdfb; }
+.attach-form { display: grid; gap: 13px; }
+.attach-actions { display: flex; flex-wrap: wrap; gap: 9px; }
+.attach-actions .button { flex: 1 1 210px; }
+.attach-hint-warning { color: var(--danger); font-weight: 700; }
+.attach-empty { padding: 12px; border: 1px dashed #eab98d; border-radius: var(--radius-sm); color: #6f451f; background: #fff; font-size: .82rem; line-height: 1.5; }
+.attach-footnote { margin: 2px 0 0; color: var(--muted); font-size: .74rem; line-height: 1.45; }
+.attached-note { margin: 0 0 15px; color: #22634e; font-size: .78rem; }
+.action-note { margin: 9px 0 0; padding: 10px 12px; border-radius: 10px; color: #6f451f; background: var(--orange-light); font-size: .8rem; line-height: 1.45; }
+.receipt-warning { margin: 14px 0 0; padding: 10px 11px; border: 1px dashed #eab98d; border-radius: 9px; color: #6f451f; background: #fff6ec; font-size: .76rem; line-height: 1.45; }
+.timeline-note { margin: 3px 0 0 !important; color: var(--green-800) !important; font-size: .74rem !important; font-weight: 700; }
+
 .action-card { display: grid; gap: 17px; margin: 15px 0; background: linear-gradient(110deg, #fff, #f2faf6); }
 .action-card .eyebrow { margin-bottom: 5px; }
 .action-card h2 { margin-bottom: 5px; }

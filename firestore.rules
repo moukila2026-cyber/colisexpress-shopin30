@@ -6,10 +6,33 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    /*
+     * Un colis peut être enregistré alors que l'agence de destination n'a pas
+     * encore de compte : `destinationAgencyId` vaut alors `null` et les
+     * coordonnées déclarées sont stockées dans `unregisteredDestinationAgency`.
+     * L'accès au colis reste réservé à l'expéditeur jusqu'au rattachement.
+     */
+    function destinationIdOf(data) {
+      return 'destinationAgencyId' in data ? data.destinationAgencyId : null;
+    }
+
+    function agencyExists(agencyId) {
+      return agencyId is string && agencyId != '' &&
+        exists(/databases/$(database)/documents/agences/$(agencyId));
+    }
+
+    // Coordonnées d'une agence non inscrite, saisies par l'agence expéditrice.
+    function isValidDeclaredAgency(agency) {
+      return agency is map &&
+        agency.name is string && size(agency.name) >= 2 && size(agency.name) <= 120 &&
+        agency.city is string && size(agency.city) >= 2 && size(agency.city) <= 60 &&
+        agency.phone is string && agency.phone.matches('^0[1-9][0-9]{8}$');
+    }
+
     function canReadParcel(data) {
       return signedIn() && (
         data.ownerId == request.auth.uid ||
-        data.destinationAgencyId == request.auth.uid
+        (destinationIdOf(data) != null && destinationIdOf(data) == request.auth.uid)
       );
     }
 
@@ -41,7 +64,7 @@ service cloud.firestore {
         parcel.data.originCity == data.originCity &&
         parcel.data.destinationCity == data.destinationCity &&
         (parcel.data.ownerId == request.auth.uid ||
-          parcel.data.destinationAgencyId == request.auth.uid);
+          destinationIdOf(parcel.data) == request.auth.uid);
     }
 
     // Annuaire interne : nécessaire aux agences connectées pour choisir une destination.
@@ -56,19 +79,72 @@ service cloud.firestore {
 
     // Les informations sensibles (CNI, téléphones) restent ici, jamais dans /suivis.
     match /colis/{parcelId} {
+      /*
+       * Rattachement de l'agence de destination : réservé à l'agence expéditrice,
+       * une seule fois, uniquement vers une agence inscrite dans l'annuaire,
+       * jamais vers elle-même, et sans changer le statut du colis.
+       */
+      function isAttachmentUpdate(before, after) {
+        return before.ownerId == request.auth.uid &&
+          destinationIdOf(before) == null &&
+          agencyExists(after.destinationAgencyId) &&
+          after.destinationAgencyId != request.auth.uid &&
+          after.destinationAgencyName is string &&
+          after.destinationAgencyCity is string &&
+          after.status == before.status &&
+          after.ownerId == before.ownerId &&
+          after.trackingCode == before.trackingCode &&
+          after.unregisteredDestinationAgency == before.unregisteredDestinationAgency &&
+          after.destinationCity is string &&
+          size(after.destinationCity) >= 2 && size(after.destinationCity) <= 60 &&
+          after.diff(before).affectedKeys().hasOnly([
+            'destinationAgencyId', 'destinationAgencyName', 'destinationAgencyCity',
+            'destinationAgencyAttachedAt', 'destinationAgencyAttachedBy',
+            'destinationCity', 'history', 'updatedAt'
+          ]);
+      }
+
+      // Progression normale : statut, historique et retrait, sans toucher aux propriétaires.
+      function isProgressUpdate(before, after) {
+        return after.diff(before).affectedKeys().hasOnly(['status', 'history', 'updatedAt', 'collectedBy']) &&
+          after.ownerId == before.ownerId &&
+          after.trackingCode == before.trackingCode &&
+          destinationIdOf(after) == destinationIdOf(before);
+      }
+
       allow create: if signedIn() &&
+        request.resource.data.keys().hasAll([
+          'trackingCode', 'ownerId', 'destinationAgencyId', 'destinationAgencyName',
+          'destinationAgencyCity', 'originCity', 'destinationCity', 'status', 'history'
+        ]) &&
         request.resource.data.ownerId == request.auth.uid &&
-        request.resource.data.destinationAgencyId is string &&
-        exists(/databases/$(database)/documents/agences/$(request.resource.data.destinationAgencyId));
+        request.resource.data.trackingCode is string &&
+        request.resource.data.destinationAgencyName is string &&
+        request.resource.data.destinationAgencyCity is string &&
+        request.resource.data.status == 'Enregistré' &&
+        request.resource.data.history is list && size(request.resource.data.history) >= 1 &&
+        size(request.resource.data.originCity) >= 2 && size(request.resource.data.originCity) <= 60 &&
+        size(request.resource.data.destinationCity) >= 2 && size(request.resource.data.destinationCity) <= 60 &&
+        (
+          // Agence de destination inscrite : elle doit exister dans l'annuaire.
+          (
+            agencyExists(request.resource.data.destinationAgencyId) &&
+            request.resource.data.destinationAgencyId != request.auth.uid &&
+            !('unregisteredDestinationAgency' in request.resource.data)
+          )
+          ||
+          // Agence de destination non inscrite : nom, ville et téléphone déclarés.
+          (
+            request.resource.data.destinationAgencyId == null &&
+            isValidDeclaredAgency(request.resource.data.unregisteredDestinationAgency)
+          )
+        );
 
       allow get, list: if canReadParcel(resource.data);
 
       allow update: if canReadParcel(resource.data) &&
-        request.resource.data.ownerId == resource.data.ownerId &&
-        request.resource.data.destinationAgencyId == resource.data.destinationAgencyId &&
-        request.resource.data.trackingCode == resource.data.trackingCode &&
-        request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['status', 'history', 'updatedAt', 'collectedBy']);
+        (isProgressUpdate(resource.data, request.resource.data) ||
+          isAttachmentUpdate(resource.data, request.resource.data));
 
       allow delete: if false;
     }
