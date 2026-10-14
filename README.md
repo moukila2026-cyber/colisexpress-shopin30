@@ -142,6 +142,29 @@ Puis ouvrez `http://localhost:8080`. Évitez de double-cliquer directement sur l
    et peut valider les étapes qui la concernent. L'historique conserve l'événement « Agence de retrait confirmée »,
    et la déclaration d'origine reste consultable en cas de litige.
 
+### Recette du correctif d'enregistrement (SDK Web)
+
+La création utilise désormais une transaction `runTransaction` avec `transaction.set` :
+`WriteBatch.create` n'existe pas dans le SDK Web. Le code de suivi est relu **dans la
+transaction**, avant les deux écritures, pour refuser une collision concurrente sans
+écraser de suivi. En cas de collision, l'utilisateur est invité à réessayer (nouveau
+code). Le modèle de données et les règles Firestore sont inchangés.
+
+Après déploiement, avec des données fictives :
+- [ ] Recharger `nouveau-colis.html` sans cache et créer un colis vers une agence non inscrite.
+- [ ] Vérifier le reçu, le colis dans le dashboard et son suivi public sans données personnelles.
+- [ ] Créer aussi un colis vers une agence inscrite ; vérifier reçu et suivi.
+- [ ] Inscrire l'agence B, rattacher depuis A, puis vérifier la visibilité chez B.
+- [ ] Vérifier les refus de double rattachement, changement de code et écriture tierce
+      via le SDK client authentifié (pas via une écriture administrateur en Console).
+
+**Testé localement :** protocole de transaction avec un double du SDK (deux destinations,
+collision, rejeu simulé, propagation d'échec), intégrité statique et tests métier/règles.
+**Non testé ici :** SDK distant dans le navigateur, exécution réelle des règles, concurrence
+réelle et parcours Firebase/Vercel. La publication des règles a été confirmée par
+l'utilisateur ; la recette de l'issue #3 reste à terminer. Aucun changement de règles
+n'est requis pour ce correctif.
+
 ## 3 bis. Tests automatisés
 
 Aucune dépendance npm : les tests utilisent le moteur `node:test` de Node 20+.

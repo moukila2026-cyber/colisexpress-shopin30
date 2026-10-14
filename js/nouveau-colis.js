@@ -4,9 +4,10 @@ import {
   getDoc,
   onSnapshot,
   serverTimestamp,
-  writeBatch
+  runTransaction
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 import { db } from "./firebase.js";
+import { enregistrerColisAtomiquement } from "./persistance-colis.js";
 import { requireAgency } from "./auth.js";
 import { agencySidebar, initAgencyLayout, mobileAgencyHeader } from "./layout.js";
 import {
@@ -197,11 +198,14 @@ async function saveParcel(event) {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     };
-    const batch = writeBatch(db);
-    // create() évite tout écrasement accidentel en cas de collision de code.
-    batch.create(parcelRef, parcel);
-    batch.create(doc(db, "suivis", trackingCode), built.publicTracking);
-    await batch.commit();
+    await enregistrerColisAtomiquement({
+      runTransaction,
+      db,
+      parcelRef,
+      trackingRef: doc(db, "suivis", trackingCode),
+      parcel,
+      publicTracking: built.publicTracking
+    });
     form.reset();
     document.getElementById("originCity").value = currentAgency.city || "";
     syncDestinationMode();
