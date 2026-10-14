@@ -165,6 +165,13 @@ réelle et parcours Firebase/Vercel. La publication des règles a été confirm�
 l'utilisateur ; la recette de l'issue #3 reste à terminer. Aucun changement de règles
 n'est requis pour ce correctif.
 
+### Diagnostic permission-denied
+
+La page `nouveau-colis.html` journalise désormais, en cas d'échec, uniquement le
+code d'erreur Firebase, la phase (`session`, `lecture-suivi`, `construction` ou
+`transaction-colis-suivi`) et le `projectId`. Voir `docs/diagnostic-permission-denied.md`.
+Aucun nom, téléphone, CNI, jeton ni document complet n'est journalisé.
+
 ## 3 bis. Tests automatisés
 
 Aucune dépendance npm : les tests utilisent le moteur `node:test` de Node 20+.

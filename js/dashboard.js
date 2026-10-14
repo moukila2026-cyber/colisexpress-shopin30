@@ -135,7 +135,7 @@ function renderAll() {
 
 function updateMap(target, snapshot) {
   target.clear();
-  snapshot.forEach((docSnapshot) => target.set(docSnapshot.id, { id: docSnapshot.id, ...docSnapshot.data() }));
+  snapshot.forEach((docSnapshot) => target.set(docSnapshot.id, { ...docSnapshot.data(), id: docSnapshot.id }));
   clearPageMessage(dashboardMessage);
   renderAll();
 }

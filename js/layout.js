@@ -32,7 +32,7 @@ export async function initAgencyLayout(user, activePage) {
       showToast("Profil d'agence introuvable. Contactez l'administrateur.", "error");
       return null;
     }
-    const agency = { id: agencySnapshot.id, ...agencySnapshot.data() };
+    const agency = { ...agencySnapshot.data(), id: agencySnapshot.id };
     document.querySelectorAll("[data-agency-name]").forEach((element) => {
       element.textContent = agency.name || "Mon agence";
     });
