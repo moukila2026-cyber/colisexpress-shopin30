@@ -1,4 +1,5 @@
 import {
+  collection,
   doc,
   onSnapshot,
   runTransaction,
@@ -26,6 +27,16 @@ import {
   toWhatsAppNumber,
   whatsappShareLink
 } from "./utils.js";
+import {
+  agenceDeclaree,
+  agencesRattachables,
+  changementsRattachement,
+  construireSuiviPublic,
+  etapeValideeParExpediteur,
+  peutRattacher,
+  prochaineEtape,
+  villeDivergente
+} from "./metier-colis.js";
 
 const message = document.getElementById("pageMessage");
 const target = document.getElementById("parcelDetail");
@@ -34,7 +45,9 @@ const collectionForm = document.getElementById("collectionForm");
 let currentAgency = null;
 let parcelId = null;
 let currentParcel = null;
+let agencies = [];
 let updateInProgress = false;
+let attachInProgress = false;
 
 function mountLayout() {
   document.getElementById("sidebarMount").innerHTML = agencySidebar();
@@ -45,15 +58,23 @@ function mountLayout() {
 }
 
 function canMoveToNext(parcel) {
-  const index = STATUTS.indexOf(parcel.status);
-  const nextStatus = STATUTS[index + 1];
-  if (!nextStatus || !currentAgency) return null;
-  const isOwner = parcel.ownerId === currentAgency.id;
-  const isDestination = parcel.destinationAgencyId === currentAgency.id;
-  const ownerStep = ["Expédié", "En transit"].includes(nextStatus);
-  const destinationStep = ["Arrivé à l'agence de destination", "Retiré"].includes(nextStatus);
-  if ((ownerStep && isOwner) || (destinationStep && isDestination)) return nextStatus;
-  return null;
+  return prochaineEtape({ parcel, agencyId: currentAgency?.id });
+}
+
+/** Libellé de l'agence de retrait : compte inscrit ou agence déclarée à la main. */
+function destinationLabel(parcel) {
+  const declared = agenceDeclaree(parcel);
+  if (!declared) return parcel.destinationAgencyName || "—";
+  return `${declared.name || parcel.destinationAgencyName || "—"} · non inscrite`;
+}
+
+function inscriptionUrl() {
+  return new URL("inscription.html", window.location.href).href;
+}
+
+function relanceTexte(parcel) {
+  const declared = agenceDeclaree(parcel) || {};
+  return `Bonjour${declared.name ? ` ${declared.name}` : ""}, le colis ${parcel.trackingCode} (${parcel.originCity} → ${parcel.destinationCity}) vous est destiné sur COLIS EXPRESS. Créez votre compte agence pour le prendre en charge et être alertée à chaque étape : ${inscriptionUrl()}`;
 }
 
 function whatsappLink(parcel) {
@@ -76,10 +97,145 @@ function shareLinks(parcel) {
   return links.join("");
 }
 
+/* ------------------------------------------------------------------ */
+/* Rattachement de l'agence de destination                             */
+/* ------------------------------------------------------------------ */
+
+function attachCardHtml(parcel) {
+  if (!peutRattacher({ parcel, agencyId: currentAgency?.id })) return "";
+  const declared = agenceDeclaree(parcel) || {};
+  const rattachables = agencesRattachables({ parcel, agencies, currentAgencyId: currentAgency.id });
+  const options = rattachables
+    .map((agency) => `<option value="${escapeHTML(agency.id)}">${escapeHTML(agency.name)} — ${escapeHTML(agency.city || "")}</option>`)
+    .join("");
+  const relance = declared.phone
+    ? `<a class="button button-outline" target="_blank" rel="noopener noreferrer" href="${escapeHTML(whatsappShareLink(declared.phone, relanceTexte(parcel)))}">◉ Relancer l'agence sur WhatsApp</a>`
+    : "";
+  return `
+    <section class="info-card attach-card" aria-labelledby="attachTitle">
+      <h2 id="attachTitle">Agence de destination à rattacher</h2>
+      <p class="attach-intro">Ce colis a été enregistré pour une agence sans compte. Rattachez-la dès qu'elle est inscrite : elle verra le colis dans son tableau de bord et recevra les alertes.</p>
+      <dl class="person-data attach-declared">
+        <div><dt>Agence déclarée</dt><dd>${escapeHTML(declared.name || "—")}</dd></div>
+        <div><dt>Ville déclarée</dt><dd>${escapeHTML(declared.city || "—")}</dd></div>
+        <div><dt>Téléphone déclaré</dt><dd>${escapeHTML(declared.phone || "—")}</dd></div>
+        <div><dt>Déclaré le</dt><dd>${escapeHTML(formatDateTime(parcel.createdAtISO))}</dd></div>
+      </dl>
+      ${rattachables.length
+        ? `<form id="attachForm" class="attach-form" autocomplete="off">
+          <div class="field"><label for="attachAgencyId">Agence inscrite <span class="required">*</span></label>
+            <select id="attachAgencyId" required>${options}</select>
+            <small class="field-help" id="attachHint">Seules les agences inscrites peuvent être rattachées.</small>
+          </div>
+          <div class="field"><label for="attachCity">Ville de retrait</label>
+            <input id="attachCity" type="text" value="${escapeHTML(parcel.destinationCity || "")}" maxlength="60">
+            <small class="field-help">À corriger seulement si la ville saisie à l'enregistrement est fausse.</small>
+          </div>
+          <div class="attach-actions">
+            <button class="button button-primary" id="attachButton" type="submit">Rattacher cette agence</button>
+            ${relance}
+          </div>
+          <p class="attach-footnote">Le rattachement est définitif : une agence rattachée ne peut plus être remplacée en ligne, contactez l'équipe COLIS EXPRESS en cas d'erreur.</p>
+        </form>`
+        : `<div class="attach-empty">Aucune autre agence inscrite pour le moment. Le reste du colis continue normalement : vous pouvez confirmer vous-même l'arrivée et le retrait.</div>
+          <div class="attach-actions">${relance}</div>`}
+    </section>`;
+}
+
+function selectedAgency() {
+  const select = document.getElementById("attachAgencyId");
+  if (!select) return null;
+  return agencies.find((agency) => agency.id === select.value) || null;
+}
+
+function refreshAttachHint() {
+  const hint = document.getElementById("attachHint");
+  if (!hint || !currentParcel) return;
+  const agency = selectedAgency();
+  if (!agency) {
+    hint.textContent = "Seules les agences inscrites peuvent être rattachées.";
+    hint.classList.remove("attach-hint-warning");
+    return;
+  }
+  if (villeDivergente({ parcel: currentParcel, agency })) {
+    hint.textContent = `Attention : la ville du colis est « ${currentParcel.destinationCity || "—"} » alors que ce compte est à « ${agency.city || "—"} ». Vérifiez avant de valider.`;
+    hint.classList.add("attach-hint-warning");
+    return;
+  }
+  hint.textContent = `${agency.name} recevra le colis et pourra valider l'arrivée puis le retrait.`;
+  hint.classList.remove("attach-hint-warning");
+}
+
+function bindAttachForm() {
+  const form = document.getElementById("attachForm");
+  if (!form) return;
+  refreshAttachHint();
+  form.addEventListener("change", refreshAttachHint);
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const agency = selectedAgency();
+    if (!agency) {
+      showPageMessage(message, "Choisissez l'agence inscrite à rattacher.");
+      return;
+    }
+    rattacherAgence(agency.id, document.getElementById("attachCity").value);
+  });
+}
+
+async function rattacherAgence(agencyId, destinationCity) {
+  if (attachInProgress || !currentParcel || !currentAgency) return;
+  attachInProgress = true;
+  clearPageMessage(message);
+  const button = document.getElementById("attachButton");
+  setButtonLoading(button, true, "Rattachement…");
+  try {
+    await runTransaction(db, async (transaction) => {
+      const parcelRef = doc(db, "colis", parcelId);
+      const snapshot = await transaction.get(parcelRef);
+      if (!snapshot.exists()) throw new Error("Ce colis n'existe plus.");
+      const parcel = { id: snapshot.id, ...snapshot.data() };
+      if (!peutRattacher({ parcel, agencyId: currentAgency.id })) {
+        throw new Error("Ce colis a déjà une agence de destination, ou vous n'êtes pas l'agence expéditrice.");
+      }
+      const agencySnapshot = await transaction.get(doc(db, "agences", agencyId));
+      if (!agencySnapshot.exists()) {
+        throw new Error("Cette agence n'est pas inscrite : demandez-lui de créer son compte avant de la rattacher.");
+      }
+      const agency = { id: agencySnapshot.id, ...agencySnapshot.data() };
+      const now = new Date().toISOString();
+      const changes = changementsRattachement({
+        parcel,
+        agency,
+        ownerAgency: currentAgency,
+        now,
+        destinationCity
+      });
+      transaction.update(parcelRef, { ...changes, updatedAt: serverTimestamp() });
+      transaction.set(
+        doc(db, "suivis", parcel.trackingCode),
+        construireSuiviPublic({ id: parcel.id, ...changes, trackingCode: parcel.trackingCode, status: parcel.status, originCity: parcel.originCity }, now)
+      );
+    });
+    showToast("Agence de destination rattachée. Elle voit désormais ce colis.");
+  } catch (error) {
+    console.error(error);
+    showPageMessage(message, errorMessage(error));
+  } finally {
+    attachInProgress = false;
+    setButtonLoading(document.getElementById("attachButton"), false);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+
 function renderDetail(parcel) {
   const nextStatus = canMoveToNext(parcel);
   const canNotify = whatsappLink(parcel);
   const statusIndex = STATUTS.indexOf(parcel.status);
+  const pending = peutRattacher({ parcel, agencyId: currentAgency?.id });
+  const exceptionNote = etapeValideeParExpediteur({ parcel, agencyId: currentAgency?.id, nextStatus })
+    ? `<p class="action-note">Agence de destination non encore inscrite : c'est votre agence qui valide cette étape. Rattachez l'agence ci-dessous pour qu'elle prenne le relais.</p>`
+    : "";
   target.innerHTML = `
     <div class="detail-heading">
       <div>
@@ -87,7 +243,7 @@ function renderDetail(parcel) {
         <p class="eyebrow">Code de suivi</p>
         <h1 class="detail-code">${escapeHTML(parcel.trackingCode)}</h1>
       </div>
-      <div class="detail-status">${statusBadge(parcel.status)}</div>
+      <div class="detail-status">${statusBadge(parcel.status)}${pending ? '<span class="attach-flag">Agence à rattacher</span>' : ""}</div>
     </div>
 
     <section class="progress-card" aria-label="Progression du colis">
@@ -104,8 +260,9 @@ function renderDetail(parcel) {
         <div class="route-display route-display-detail">
           <div><span class="route-dot route-start"></span><small>Départ</small><strong>${escapeHTML(parcel.originCity)}</strong><p>${escapeHTML(parcel.ownerAgencyName || "")}</p></div>
           <span class="route-line" aria-hidden="true"></span>
-          <div><span class="route-dot route-end"></span><small>Destination</small><strong>${escapeHTML(parcel.destinationCity)}</strong><p>${escapeHTML(parcel.destinationAgencyName || "")}</p></div>
+          <div><span class="route-dot route-end"></span><small>Destination</small><strong>${escapeHTML(parcel.destinationCity)}</strong><p>${escapeHTML(destinationLabel(parcel))}</p></div>
         </div>
+        ${parcel.destinationAgencyAttachedAt ? `<p class="attached-note">Rattachée le ${escapeHTML(formatDateTime(parcel.destinationAgencyAttachedAt))} par ${escapeHTML(parcel.destinationAgencyAttachedBy || "l'agence expéditrice")}</p>` : ""}
         <dl class="parcel-meta">
           <div><dt>Nature</dt><dd>${escapeHTML(parcel.packageNature)}</dd></div>
           <div><dt>Poids</dt><dd>${escapeHTML(String(parcel.weightKg))} kg</dd></div>
@@ -128,7 +285,8 @@ function renderDetail(parcel) {
         <dl class="person-data">
           <div><dt>Nom complet</dt><dd>${escapeHTML(`${parcel.recipient?.firstName || ""} ${parcel.recipient?.lastName || ""}`.trim())}</dd></div>
           <div><dt>Téléphone</dt><dd>${escapeHTML(parcel.recipient?.phone || "—")}</dd></div>
-          <div><dt>Agence de retrait</dt><dd>${escapeHTML(parcel.destinationAgencyName || "—")}</dd></div>
+          <div><dt>Agence de retrait</dt><dd>${escapeHTML(destinationLabel(parcel))}</dd></div>
+          ${agenceDeclaree(parcel)?.phone ? `<div><dt>Téléphone de l'agence</dt><dd>${escapeHTML(agenceDeclaree(parcel).phone)}</dd></div>` : ""}
         </dl>
       </section>
 
@@ -137,13 +295,16 @@ function renderDetail(parcel) {
 
     <section class="action-card">
       <div><p class="eyebrow">Action sur le colis</p><h2>${nextStatus ? escapeHTML(ACTIONS_STATUT[nextStatus]) : "Aucune action disponible"}</h2>
-      <p>${nextStatus ? "Chaque mise à jour est visible immédiatement dans le suivi public." : (parcel.status === "Retiré" ? "Ce colis a déjà été retiré." : "Cette étape doit être effectuée par l'agence concernée.")}</p></div>
+      <p>${nextStatus ? "Chaque mise à jour est visible immédiatement dans le suivi public." : (parcel.status === "Retiré" ? "Ce colis a déjà été retiré." : "Cette étape doit être effectuée par l'agence concernée.")}</p>
+      ${exceptionNote}</div>
       <div class="action-stack">
         ${nextStatus ? `<button class="button button-primary" id="statusAction" type="button">${escapeHTML(ACTIONS_STATUT[nextStatus])}</button>` : ""}
         ${canNotify}
         ${shareLinks(parcel)}
       </div>
     </section>
+
+    ${attachCardHtml(parcel)}
 
     <section class="history-card">
       <h2>Historique</h2>
@@ -160,6 +321,7 @@ function renderDetail(parcel) {
       updateStatus(nextStatus);
     }
   });
+  bindAttachForm();
 }
 
 async function updateStatus(nextStatus, collectedBy = null) {
@@ -193,15 +355,12 @@ async function updateStatus(nextStatus, collectedBy = null) {
       };
       if (collectedBy) changes.collectedBy = { ...collectedBy, date: now };
       transaction.update(parcelRef, changes);
-      transaction.set(doc(db, "suivis", parcel.trackingCode), {
-        code: parcel.trackingCode,
-        colisId: parcel.id,
-        status: nextStatus,
-        history,
-        originCity: parcel.originCity,
-        destinationCity: parcel.destinationCity,
-        lastUpdatedAtISO: now
-      });
+      // transaction.set() crée le document s'il manque : le suivi public se
+      // répare donc tout seul s'il a été supprimé.
+      transaction.set(doc(db, "suivis", parcel.trackingCode), construireSuiviPublic(
+        { ...parcel, status: nextStatus, history },
+        now
+      ));
     });
     collectionModal.hidden = true;
     document.body.classList.remove("modal-open");
@@ -253,6 +412,12 @@ async function boot() {
   currentAgency = await initAgencyLayout(user, "");
   if (!currentAgency) return;
   bindCollectionForm();
+
+  // Annuaire des agences : nécessaire pour proposer un rattachement.
+  onSnapshot(collection(db, "agences"), (snapshot) => {
+    agencies = snapshot.docs.map((agencyDoc) => ({ id: agencyDoc.id, ...agencyDoc.data() }));
+    if (currentParcel) renderDetail(currentParcel);
+  }, (error) => console.error(error));
 
   onSnapshot(doc(db, "colis", parcelId), (snapshot) => {
     if (!snapshot.exists()) {

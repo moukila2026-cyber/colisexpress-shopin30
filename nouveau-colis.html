@@ -18,7 +18,7 @@
         <header class="desktop-page-heading"><div><h1>Nouveau colis</h1><p>Enregistrez un envoi et obtenez un code de suivi unique.</p></div></header>
         <div class="page-heading-mobile"><h1>Nouveau colis</h1><p>Enregistrez un envoi et obtenez un code de suivi unique.</p></div>
         <div class="page-message" id="pageMessage" hidden role="alert"></div>
-        <p class="notice-box" id="noDestinationAgency" hidden>Aucune autre agence n'est encore disponible. Une agence de destination doit avoir créé son compte avant de pouvoir recevoir un colis.</p>
+        <p class="notice-box" id="noDestinationAgency" hidden>Aucune autre agence n'est encore inscrite sur COLIS EXPRESS. Vous pouvez tout de même enregistrer le colis en cochant « Mon agence de destination n'est pas encore inscrite », puis inviter l'agence à créer un compte.</p>
 
         <form class="parcel-form-card" id="parcelForm" novalidate>
           <section class="form-section">
@@ -48,7 +48,26 @@
               <div class="field"><label for="priceFCFA">Prix (FCFA) <span class="required">*</span></label><input id="priceFCFA" name="priceFCFA" type="number" inputmode="numeric" min="0" step="1" placeholder="0" required></div>
               <div class="field"><label for="originCity">Ville de départ <span class="required">*</span></label><input id="originCity" name="originCity" type="text" required></div>
               <div class="field"><label for="destinationCity">Ville de destination <span class="required">*</span></label><input id="destinationCity" name="destinationCity" type="text" required></div>
-              <div class="field field-full"><label for="destinationAgencyId">Agence de destination <span class="required">*</span></label><select id="destinationAgencyId" name="destinationAgencyId" required><option value="">Chargement des agences…</option></select><small class="field-help">Seules les agences connectées au réseau apparaissent ici.</small></div>
+              <div class="field field-full">
+                <label for="destinationAgencyId">Agence de destination <span class="required" id="destinationRequired">*</span></label>
+                <select id="destinationAgencyId" name="destinationAgencyId"><option value="">Chargement des agences…</option></select>
+                <small class="field-help">Seules les agences déjà inscrites sur COLIS EXPRESS apparaissent ici.</small>
+                <label class="switch-field">
+                  <input type="checkbox" id="agencyNotRegistered" name="agencyNotRegistered">
+                  <span>Mon agence de destination n'est pas encore inscrite</span>
+                </label>
+                <small class="field-help">Saisissez son nom, sa ville et son téléphone : le colis est enregistré quand même, et vous rattacherez l'agence depuis sa fiche dès qu'elle aura un compte.</small>
+              </div>
+            </div>
+
+            <div class="declared-agency" id="unregisteredAgencyPanel" hidden>
+              <p class="declared-agency-note">L'agence ne peut pas encore être alertée automatiquement dans l'application : prévenez-la par WhatsApp qu'un colis l'attend, et invitez-la à créer un compte.</p>
+              <div class="form-grid">
+                <div class="field"><label for="declaredAgencyName">Nom de l'agence <span class="required">*</span></label><input id="declaredAgencyName" name="declaredAgencyName" type="text" autocomplete="off" placeholder="Ex. Rapid Express Yopougon" required><small class="field-help">Repris tel quel sur le reçu du client.</small></div>
+                <div class="field"><label for="declaredAgencyCity">Ville <span class="required">*</span></label><input id="declaredAgencyCity" name="declaredAgencyCity" type="text" autocomplete="off" placeholder="Ex. Bouaké" required></div>
+                <div class="field field-full"><label for="declaredAgencyPhone">Téléphone de l'agence <span class="required">*</span></label><input id="declaredAgencyPhone" name="declaredAgencyPhone" type="tel" inputmode="numeric" placeholder="0700000000" required><small class="field-help">Format ivoirien, 10 chiffres. Sert à joindre l'agence en cas de blocage.</small></div>
+              </div>
+              <div class="declared-agency-actions"><a class="button button-outline button-small" id="inviteAgencyWhatsapp" href="#" target="_blank" rel="noopener noreferrer">◉ Inviter l'agence par WhatsApp</a></div>
             </div>
           </section>
           <div class="form-footer"><a class="button button-outline" href="dashboard.html">Annuler</a><button class="button button-primary" id="saveParcelButton" type="submit">Enregistrer et générer le reçu</button></div>
