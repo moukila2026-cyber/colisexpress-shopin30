@@ -17,6 +17,15 @@ import {
   statusBadge
 } from "./utils.js";
 
+const EMPTY_ILLUSTRATION = `<svg class="empty-art" viewBox="0 0 120 90" aria-hidden="true" focusable="false">
+  <rect x="14" y="30" width="92" height="50" rx="6" fill="#e6f3ee"/>
+  <path d="M14 42h92" stroke="#126656" stroke-width="2" stroke-opacity=".25"/>
+  <rect x="48" y="30" width="24" height="50" fill="#f27622" fill-opacity=".85"/>
+  <rect x="34" y="14" width="52" height="22" rx="5" fill="#fff" stroke="#dce7e1" stroke-width="2"/>
+  <rect x="42" y="21" width="36" height="4" rx="2" fill="#126656" fill-opacity=".5"/>
+  <rect x="42" y="29" width="22" height="3" rx="1.5" fill="#f27622" fill-opacity=".6"/>
+</svg>`;
+
 const state = {
   owner: new Map(),
   destination: new Map(),
@@ -84,12 +93,24 @@ function renderList() {
   const parcels = filteredParcels();
   listCount.textContent = `${parcels.length} colis`;
   if (!parcels.length) {
-    listTarget.innerHTML = `<div class="empty-state">
-      <span class="empty-icon" aria-hidden="true">▣</span>
-      <h3>Aucun colis trouvé</h3>
-      <p>Modifiez les filtres ou enregistrez votre premier colis.</p>
-      <a class="button button-primary" href="nouveau-colis.html">Enregistrer un colis</a>
+    const noParcelAtAll = state.parcels.length === 0;
+    listTarget.innerHTML = noParcelAtAll
+      ? `<div class="empty-state empty-state-rich">
+      ${EMPTY_ILLUSTRATION}
+      <h3>Pas encore de colis</h3>
+      <p>Enregistrez votre premier envoi : vous obtiendrez un code de suivi et un QR code à remettre au client.</p>
+      <div class="empty-actions"><a class="button button-orange" href="nouveau-colis.html">＋ Enregistrer un colis</a><a class="button button-outline" href="parametres.html">Compléter mon profil</a></div>
+    </div>`
+      : `<div class="empty-state empty-state-rich">
+      ${EMPTY_ILLUSTRATION}
+      <h3>Aucun colis ne correspond à votre recherche</h3>
+      <p>Essayez un autre code, un autre statut ou une autre ville.</p>
+      <div class="empty-actions"><button class="button button-outline" id="resetFiltersInline" type="button">Réinitialiser les filtres</button></div>
     </div>`;
+    document.getElementById("resetFiltersInline")?.addEventListener("click", () => {
+      document.getElementById("dashboardFilters").reset();
+      renderList();
+    });
     return;
   }
 

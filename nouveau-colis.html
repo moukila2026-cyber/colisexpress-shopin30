@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Enregistrer un nouveau colis dans COLIS EXPRESS.">
   <title>Nouveau colis — COLIS EXPRESS</title>
+  <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="assets/css/style.css">
 </head>
 <body class="agency-page">
@@ -13,6 +14,7 @@
     <main class="agency-main">
       <div id="topbarMount"></div>
       <div class="agency-content">
+        <div class="page-banner page-banner-short" aria-hidden="true"><img src="assets/img/retrait-comptoir.jpg" alt="" width="1024" height="683" loading="lazy"></div>
         <header class="desktop-page-heading"><div><h1>Nouveau colis</h1><p>Enregistrez un envoi et obtenez un code de suivi unique.</p></div></header>
         <div class="page-heading-mobile"><h1>Nouveau colis</h1><p>Enregistrez un envoi et obtenez un code de suivi unique.</p></div>
         <div class="page-message" id="pageMessage" hidden role="alert"></div>
@@ -59,9 +61,11 @@
     <div class="modal-card receipt-modal">
       <div class="modal-heading"><div><h2 id="receiptTitle">Colis enregistré</h2><p>Remettez ce reçu à l'expéditeur.</p></div><button class="modal-close" id="closeReceipt" type="button" aria-label="Fermer">×</button></div>
       <div class="receipt" id="receiptContent"></div>
+      <div class="receipt-share" id="receiptShare"></div>
       <div class="modal-actions"><button class="button button-outline" id="printReceipt" type="button">Imprimer le reçu</button><button class="button button-primary" id="viewSavedParcel" type="button">Voir le colis</button></div>
     </div>
   </div>
+  <script src="js/vendor/qrcode-generator.js"></script>
   <script type="module" src="js/nouveau-colis.js"></script>
 </body>
 </html>

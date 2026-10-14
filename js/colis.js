@@ -22,7 +22,9 @@ import {
   showPageMessage,
   showToast,
   statusBadge,
-  toWhatsAppNumber
+  publicTrackingUrl,
+  toWhatsAppNumber,
+  whatsappShareLink
 } from "./utils.js";
 
 const message = document.getElementById("pageMessage");
@@ -58,6 +60,20 @@ function whatsappLink(parcel) {
   if (parcel.status !== "Arrivé à l'agence de destination" || !parcel.recipient?.phone) return "";
   const messageText = `Bonjour ${parcel.recipient.firstName || ""}, votre colis ${parcel.trackingCode} est arrivé à l'agence ${parcel.destinationAgencyName || "COLIS EXPRESS"}. Présentez votre CNI pour le retrait.`;
   return `<a class="button button-whatsapp" target="_blank" rel="noopener noreferrer" href="https://wa.me/${encodeURIComponent(toWhatsAppNumber(parcel.recipient.phone))}?text=${encodeURIComponent(messageText)}">◉ Prévenir le destinataire sur WhatsApp</a>`;
+}
+
+function shareLinks(parcel) {
+  const link = publicTrackingUrl(parcel.trackingCode);
+  const links = [];
+  if (parcel.recipient?.phone) {
+    const text = `Bonjour ${parcel.recipient.firstName || ""}, voici le suivi de votre colis COLIS EXPRESS (code ${parcel.trackingCode}) : ${link}`;
+    links.push(`<a class="button button-outline" target="_blank" rel="noopener noreferrer" href="${escapeHTML(whatsappShareLink(parcel.recipient.phone, text))}">Partager le suivi au destinataire</a>`);
+  }
+  if (parcel.sender?.phone) {
+    const text = `Bonjour ${parcel.sender.firstName || ""}, votre colis ${parcel.trackingCode} est enregistré. Suivez-le ici : ${link}`;
+    links.push(`<a class="button button-outline" target="_blank" rel="noopener noreferrer" href="${escapeHTML(whatsappShareLink(parcel.sender.phone, text))}">Partager le suivi à l'expéditeur</a>`);
+  }
+  return links.join("");
 }
 
 function renderDetail(parcel) {
@@ -125,6 +141,7 @@ function renderDetail(parcel) {
       <div class="action-stack">
         ${nextStatus ? `<button class="button button-primary" id="statusAction" type="button">${escapeHTML(ACTIONS_STATUT[nextStatus])}</button>` : ""}
         ${canNotify}
+        ${shareLinks(parcel)}
       </div>
     </section>
 
