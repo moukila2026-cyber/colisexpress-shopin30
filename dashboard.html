@@ -27,6 +27,17 @@
           <article class="stat-card"><div class="stat-card-top"><small>Retirés</small><span class="stat-icon" aria-hidden="true">✓</span></div><strong class="stat-number" id="statPickedUp">—</strong></article>
         </section>
 
+        <section class="panel-card forfait-card" id="forfaitCard" data-niveau="normal" aria-labelledby="forfaitTitle" aria-live="polite">
+          <div class="panel-title-row"><h2 id="forfaitTitle">Mon forfait</h2><span id="forfaitPlan">—</span></div>
+          <strong class="forfait-chiffre" id="forfaitChiffre">—</strong>
+          <div class="compteur-barre" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="forfaitBarre"></span></div>
+          <small id="forfaitDetail">Chargement du compteur…</small>
+          <div class="forfait-actions">
+            <a class="table-link" href="abonnement.html">Voir l'abonnement</a>
+            <a class="button button-orange button-small" id="forfaitRecharger" href="abonnement.html#recharge" hidden>Recharger le portefeuille</a>
+          </div>
+        </section>
+
         <section class="panel-card alerts-panel" id="alertsPanel" hidden aria-labelledby="alertsTitle">
           <div class="panel-title-row"><h2 id="alertsTitle">⚠ À traiter</h2><span id="alertsCount"></span></div>
           <p class="muted-note">Le système vous appelle avant la réclamation du client : colis qui dorment, arrivées non retirées, agences à rattacher, colis en souffrance (&gt; 7 jours, retour possible depuis la fiche).</p>

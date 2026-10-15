@@ -1,6 +1,7 @@
 import { api } from "./api.js";
 import { requireAgency } from "./auth.js";
-import { agencySidebar, initAgencyLayout, mobileAgencyHeader } from "./layout.js";
+import { agencySidebar, diffuserCompteur, initAgencyLayout, mobileAgencyHeader, surCompteur } from "./layout.js";
+import { phraseProchainColis } from "./metier-plans.js";
 import {
   libelleEtatPaiement,
   resoudreDestination,
@@ -43,11 +44,20 @@ let tarifs = [];
  * colis hors forfait prépayé (30 FCFA) ou portefeuille insuffisant. Le
  * serveur reste seul juge (POST /api/colis) ; ce bandeau n'est qu'informatif.
  */
+function afficherProchainColis(resume) {
+  const ligne = document.getElementById("prochainColis");
+  if (!ligne || !resume) return;
+  const phrase = phraseProchainColis(resume);
+  ligne.dataset.niveau = phrase.niveau;
+  ligne.textContent = phrase.texte;
+}
+
 async function rafraichirQuota() {
   const notice = document.getElementById("quotaNotice");
   if (!notice) return;
   try {
     const { resume } = await api(`/api/facturation?resume=1&_=${Date.now()}`);
+    afficherProchainColis(resume);
     const depassement = resume.prochainColis?.type === "depassement";
     const insuffisant = depassement && resume.soldeFCFA < resume.prochainColis.montantFCFA;
     notice.hidden = !resume.alerte;
@@ -375,7 +385,7 @@ async function saveParcel(event) {
 
   setButtonLoading(submitButton, true, "Enregistrement…");
   try {
-    const { parcel } = await api("/api/colis", {
+    const { parcel, compteur } = await api("/api/colis", {
       method: "POST",
       body: {
         values,
@@ -389,6 +399,9 @@ async function saveParcel(event) {
     refreshPrix();
     syncPaiement();
     showReceipt(parcel);
+    // LOT 10 — compteur renvoyé avec le colis : mise à jour immédiate de la
+    // barre latérale, de cette ligne et des autres onglets de l'agence.
+    if (compteur) diffuserCompteur(compteur);
     rafraichirQuota();
   } catch (error) {
     showPageMessage(message, errorMessage(error));
@@ -403,6 +416,8 @@ async function boot() {
   const user = await requireAgency();
   if (!user) return;
   currentAgency = await initAgencyLayout(user, "nouveau");
+  // LOT 10 — la ligne « Ce colis sera le … » suit le compteur temps réel.
+  surCompteur((resume) => afficherProchainColis(resume));
   if (!currentAgency) return;
   document.getElementById("originCity").value = currentAgency.city || "";
 

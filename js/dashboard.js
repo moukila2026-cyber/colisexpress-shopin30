@@ -1,6 +1,7 @@
 import { api } from "./api.js";
 import { requireAgency } from "./auth.js";
-import { afficherBadgeNotifications, agencySidebar, initAgencyLayout, mobileAgencyHeader } from "./layout.js";
+import { afficherBadgeNotifications, agencySidebar, initAgencyLayout, mobileAgencyHeader, surCompteur } from "./layout.js";
+import { libellePlan } from "./metier-plans.js";
 import {
   clearPageMessage,
   errorMessage,
@@ -139,6 +140,24 @@ function renderAlertes(alertes, total) {
     </div>`).join("");
 }
 
+/** LOT 10 — carte « Mon forfait » alimentée par le compteur temps réel (layout.js). */
+function renderForfait(resume, vue, estGerant) {
+  const card = document.getElementById("forfaitCard");
+  if (!card) return;
+  card.dataset.niveau = vue.niveau;
+  document.getElementById("forfaitPlan").textContent = `Plan ${libellePlan(resume.plan)}${resume.enRetard ? " · impayé" : ""}`;
+  document.getElementById("forfaitChiffre").textContent = vue.illimite
+    ? `${resume.compteur} colis ce mois`
+    : `${resume.compteur} / ${resume.quotaEffectif} colis`;
+  const barre = document.getElementById("forfaitBarre");
+  barre.style.width = `${vue.illimite ? 100 : vue.pourcentage}%`;
+  barre.parentElement.setAttribute("aria-valuenow", String(vue.illimite ? 0 : vue.pourcentage));
+  const depassements = resume.depassements ? ` · ${resume.depassements} hors forfait ce mois` : "";
+  document.getElementById("forfaitDetail").textContent = `${vue.detail}${depassements} · Portefeuille : ${Number(resume.soldeFCFA || 0).toLocaleString("fr-FR")} FCFA`;
+  const bouton = document.getElementById("forfaitRecharger");
+  if (bouton) bouton.hidden = !(vue.recharger && estGerant);
+}
+
 async function charger() {
   try {
     const { parcels } = await api("/api/colis");
@@ -171,6 +190,8 @@ async function boot() {
   if (!user) return;
   const agency = await initAgencyLayout(user, "dashboard");
   if (!agency) return;
+  const estGerant = (agency.member?.role || "gerant") === "gerant";
+  surCompteur((resume, vue) => renderForfait(resume, vue, estGerant));
 
   ["searchParcel", "statusFilter", "cityFilter", "dateFilter"].forEach((id) => {
     document.getElementById(id)?.addEventListener("input", renderList);

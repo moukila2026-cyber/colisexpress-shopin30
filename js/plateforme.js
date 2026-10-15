@@ -7,7 +7,7 @@
  * prix négociés) et créditer son portefeuille d'un paiement reçu.
  */
 import { api } from "./api.js";
-import { libellePeriode, libellePlan, libelleStatutAbonnement } from "./metier-plans.js";
+import { affichageCompteur, libellePeriode, libellePlan, libelleStatutAbonnement } from "./metier-plans.js";
 import {
   clearPageMessage,
   errorMessage,
@@ -125,6 +125,24 @@ function celluleAbonnement(agence) {
   return `<span class="${abonnement.enRetard ? "texte-alerte" : ""}">${escapeHTML(libelleStatutAbonnement(abonnement))}</span><br><small>${escapeHTML(formatFCFA(abonnement.montantFCFA))} · ${escapeHTML(echeance)}</small>`;
 }
 
+/** LOT 10 — compteur de l'agence avec barre, mis en évidence à partir de 80 % du quota. */
+function celluleCompteur(agence, quota) {
+  const periode = agence.periode;
+  const vueCompteur = affichageCompteur({
+    compteur: periode.compteur,
+    quotaEffectif: periode.quotaEffectif,
+    soldeFCFA: agence.portefeuilleFCFA,
+    enRetard: periode.abonnement?.enRetard,
+    prochainColis: agence.resume.prochainColis,
+    colisPrepayes: agence.resume.colisPrepayes
+  });
+  return `<div class="console-quota" data-niveau="${vueCompteur.niveau}" title="${escapeHTML(vueCompteur.detail)}">
+    <strong>${periode.compteur} / ${escapeHTML(String(quota))}${vueCompteur.niveau !== "normal" ? ` · ${vueCompteur.illimite ? "" : vueCompteur.pourcentage + " %"}` : ""}</strong>
+    <div class="compteur-barre" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${vueCompteur.illimite ? 0 : vueCompteur.pourcentage}"><span style="width:${vueCompteur.illimite ? 100 : vueCompteur.pourcentage}%"></span></div>
+    <small>${escapeHTML(vueCompteur.detail)}${periode.depassements ? ` · ${periode.depassements} hors forfait` : ""}</small>
+  </div>`;
+}
+
 function renderAgences() {
   const agences = vue.agences || [];
   document.getElementById("agencesCount").textContent = `${agences.length} agence${agences.length > 1 ? "s" : ""}`;
@@ -141,7 +159,7 @@ function renderAgences() {
       return `<tr>
         <td><strong>${escapeHTML(agence.name)}</strong><br><small>${escapeHTML(agence.city)} · ${escapeHTML(agence.phone || "")}</small></td>
         <td>${badgePlan(agence.plan)}${agence.planSuivant ? `<br><small>→ ${escapeHTML(libellePlan(agence.planSuivant))} le mois prochain</small>` : ""}${agence.plan === "reseau" && agence.prixNegocieFCFA !== null ? `<br><small>${escapeHTML(formatFCFA(agence.prixNegocieFCFA))}/mois</small>` : ""}</td>
-        <td><strong class="${agence.resume.prochainColis.type === "depassement" ? "texte-alerte" : ""}">${periode.compteur} / ${escapeHTML(String(quota))}</strong>${periode.depassements ? `<br><small>${periode.depassements} hors forfait</small>` : ""}</td>
+        <td>${celluleCompteur(agence, quota)}</td>
         <td>${escapeHTML(formatFCFA(agence.portefeuilleFCFA))}<br><small>${agence.resume.colisPrepayes} colis prépayés</small></td>
         <td>${celluleAbonnement(agence)}</td>
         <td><small>Envoyés : ${agence.volumes.envoyesMois} ce mois / ${agence.volumes.envoyesTotal}<br>Reçus : ${agence.volumes.recusMois} ce mois / ${agence.volumes.recusTotal}</small></td>
@@ -350,9 +368,13 @@ function boot() {
   planSelect.addEventListener("change", syncReseau);
   document.getElementById("planForm").addEventListener("submit", appliquerPlan);
   document.getElementById("creditForm").addEventListener("submit", crediter);
+  // LOT 10 — compteurs des agences rafraîchis toutes les 30 s (onglet visible, aucune fenêtre ouverte).
   window.setInterval(() => {
     if (vue && document.visibilityState === "visible" && modal.hidden) charger({ silencieux: true });
-  }, 60_000);
+  }, 30_000);
+  document.addEventListener("visibilitychange", () => {
+    if (vue && document.visibilityState === "visible" && modal.hidden) charger({ silencieux: true });
+  });
   charger();
 }
 

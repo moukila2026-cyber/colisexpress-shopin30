@@ -1,6 +1,37 @@
 import { api } from "./api.js";
 import { logout } from "./auth.js";
 import { escapeHTML, showToast } from "./utils.js";
+import { affichageCompteur } from "./metier-plans.js";
+
+/* LOT 10 — compteur de colis « temps réel » sans WebSocket :
+ *  - une requête légère GET /api/resume (compteur + badge) toutes les 20 s
+ *    quand l'onglet est visible, et dès le retour sur l'onglet ;
+ *  - POST /api/colis renvoie le compteur à jour → mise à jour immédiate ;
+ *  - BroadcastChannel : les autres onglets de la même agence sont prévenus.
+ */
+const INTERVALLE_RESUME_MS = 20000;
+const CANAL_COMPTEUR = "colisexpress-compteur";
+let canal = null;
+let agenceCourante = null;
+let roleCourant = null;
+let minuterieResume = null;
+const abonnesCompteur = new Set();
+
+function ouvrirCanal() {
+  if (canal || typeof BroadcastChannel === "undefined") return canal;
+  try {
+    canal = new BroadcastChannel(CANAL_COMPTEUR);
+    canal.addEventListener("message", (event) => {
+      const data = event.data;
+      if (!data || data.agenceId !== agenceCourante) return;
+      if (data.compteur) afficherCompteur(data.compteur);
+      if (data.nonLues !== undefined) afficherBadgeNotifications(data.nonLues);
+    });
+  } catch {
+    canal = null;
+  }
+  return canal;
+}
 
 /**
  * Habillage des pages agence : barre latérale, identité affichée, déconnexion.
@@ -57,8 +88,12 @@ export async function initAgencyLayout(agency, activePage) {
         '<footer class="agency-credit" id="agencyCredit"><a href="conditions.html">Conditions</a> <span>·</span> <a href="confidentialite.html">Confidentialité</a> <span>·</span> Conçu par <strong>Shopin30</strong> <span>·</span> <a href="https://wa.me/2250501303343" target="_blank" rel="noopener noreferrer">WhatsApp : +225 0501303343</a></footer>'
       );
     }
-    // LOT 5 — compteur des notifications non lues (non bloquant).
-    rafraichirBadgeNotifications();
+    // LOT 10 — compteur de colis + badge notifications, une seule requête,
+    // puis rafraîchissement périodique (onglet visible) et entre onglets.
+    agenceCourante = agency.id;
+    roleCourant = agency.member?.role || "gerant";
+    ouvrirCanal();
+    demarrerRafraichissementResume();
     return agency;
   } catch (error) {
     console.error(error);
@@ -87,6 +122,81 @@ export async function rafraichirBadgeNotifications() {
   }
 }
 
+/** Les pages peuvent s'abonner au compteur (carte « Mon forfait », formulaire). */
+export function surCompteur(callback) {
+  abonnesCompteur.add(callback);
+  return () => abonnesCompteur.delete(callback);
+}
+
+/** Affiche le compteur (barre latérale + en-tête mobile) et prévient les abonnés de la page. */
+export function afficherCompteur(resume) {
+  if (!resume) return;
+  const vue = affichageCompteur(resume);
+  document.querySelectorAll("[data-compteur]").forEach((element) => {
+    element.hidden = false;
+    element.dataset.niveau = vue.niveau;
+    const libelle = element.querySelector("[data-compteur-libelle]");
+    const detail = element.querySelector("[data-compteur-detail]");
+    const barre = element.querySelector("[data-compteur-barre]");
+    const lien = element.querySelector("[data-compteur-recharger]");
+    if (libelle) libelle.textContent = vue.libelle;
+    if (detail) detail.textContent = vue.detail;
+    if (barre) {
+      barre.style.width = `${vue.illimite ? 100 : vue.pourcentage}%`;
+      barre.parentElement?.setAttribute("aria-valuenow", String(vue.illimite ? 0 : vue.pourcentage));
+    }
+    if (lien) lien.hidden = !(vue.recharger && roleCourant === "gerant");
+    element.setAttribute("aria-label", `${vue.libelle}. ${vue.detail}`);
+  });
+  document.querySelectorAll("[data-compteur-court]").forEach((element) => {
+    element.hidden = false;
+    element.dataset.niveau = vue.niveau;
+    element.textContent = vue.illimite ? `${resume.compteur ?? 0} colis` : `${resume.compteur ?? 0} / ${resume.quotaEffectif}`;
+    element.title = `${vue.libelle}. ${vue.detail}`;
+  });
+  abonnesCompteur.forEach((callback) => {
+    try { callback(resume, vue); } catch (error) { console.error(error); }
+  });
+}
+
+/**
+ * Publie un compteur reçu d'une réponse serveur (ex. POST /api/colis) : la
+ * page courante ET les autres onglets de l'agence sont mis à jour aussitôt.
+ */
+export function diffuserCompteur(compteur, nonLues) {
+  if (!compteur) return;
+  afficherCompteur(compteur);
+  if (nonLues !== undefined) afficherBadgeNotifications(nonLues);
+  try {
+    ouvrirCanal()?.postMessage({ agenceId: agenceCourante, compteur, nonLues });
+  } catch {
+    // Diffusion entre onglets : confort, jamais bloquante.
+  }
+}
+
+/** Une requête légère : compteur du mois + notifications non lues. */
+export async function rafraichirResume() {
+  try {
+    const { compteur, nonLues } = await api(`/api/resume?_=${Date.now()}`);
+    afficherCompteur(compteur);
+    afficherBadgeNotifications(nonLues);
+    return compteur;
+  } catch {
+    return null;
+  }
+}
+
+function demarrerRafraichissementResume() {
+  rafraichirResume();
+  if (minuterieResume) window.clearInterval(minuterieResume);
+  minuterieResume = window.setInterval(() => {
+    if (document.visibilityState === "visible") rafraichirResume();
+  }, INTERVALLE_RESUME_MS);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") rafraichirResume();
+  });
+}
+
 export function agencySidebar() {
   return `
     <aside class="agency-sidebar" id="agencySidebar" aria-label="Navigation agence">
@@ -101,6 +211,12 @@ export function agencySidebar() {
           <small data-agency-city>—</small>
           <small class="member-line" data-member-label hidden></small>
         </div>
+      </div>
+      <div class="compteur-colis" data-compteur data-niveau="normal" hidden role="status">
+        <strong data-compteur-libelle>Colis ce mois : —</strong>
+        <div class="compteur-barre" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span data-compteur-barre></span></div>
+        <small data-compteur-detail>—</small>
+        <a class="compteur-recharger" data-compteur-recharger href="abonnement.html#recharge" hidden>Recharger</a>
       </div>
       <nav class="agency-nav">
         <a href="dashboard.html" data-nav="dashboard"><span aria-hidden="true">▦</span> Tableau de bord</a>
@@ -124,6 +240,7 @@ export function mobileAgencyHeader(title, actionHtml = "") {
   return `<header class="agency-topbar">
     <button class="icon-button menu-button" data-menu-toggle type="button" aria-label="Ouvrir le menu">☰</button>
     <div class="topbar-title"><small>COLIS EXPRESS</small><strong>${escapeHTML(title)}</strong></div>
+    <a class="compteur-court" data-compteur-court data-niveau="normal" href="abonnement.html" hidden aria-label="Colis ce mois"></a>
     <div class="topbar-action">${actionHtml}</div>
   </header>`;
 }

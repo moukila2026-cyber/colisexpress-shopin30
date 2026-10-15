@@ -6,6 +6,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  affichageCompteur,
+  phraseProchainColis,
+  SEUIL_ALERTE_COMPTEUR,
   DELAI_ECHEANCE_JOURS,
   IDS_PLANS,
   PLANS,
@@ -150,4 +153,51 @@ test("projections : période normalisée, synthèse et échéances à venir", ()
   assert.deepEqual(echeances[0], { libelle: "Abonnement Pro — octobre 2026", montantFCFA: 10_000, echeanceISO: "2026-10-20T00:00:00.000Z", statut: "a_regler" });
   assert.deepEqual(echeances[1], { libelle: "Abonnement Pro — novembre 2026", montantFCFA: 10_000, echeanceISO: "2026-11-08T00:00:00.000Z", statut: "a_venir" });
   assert.deepEqual(echeancesFacturation({ periode: { ...periode, abonnement: { statut: "paye" } }, plan: "pro", planSuivant: "gratuit" }), [], "retour au Gratuit programmé : plus d'échéance");
+});
+
+test("compteur temps réel (LOT 10) : libellés, niveaux normal → alerte (80 %) → danger, illimité, recharge", () => {
+  assert.equal(SEUIL_ALERTE_COMPTEUR, 0.8);
+  const normal = affichageCompteur({ compteur: 37, quotaEffectif: 50, soldeFCFA: 0 });
+  assert.equal(normal.libelle, "Colis ce mois : 37 / 50");
+  assert.equal(normal.detail, "Reste 13 colis inclus");
+  assert.deepEqual([normal.niveau, normal.pourcentage, normal.recharger, normal.restants], ["normal", 74, false, 13]);
+
+  const alerte = affichageCompteur({ compteur: 40, quotaEffectif: 50, soldeFCFA: 0 });
+  assert.equal(alerte.niveau, "alerte", "80 % du quota");
+  assert.equal(alerte.recharger, true);
+  assert.equal(affichageCompteur({ compteur: 39, quotaEffectif: 50 }).niveau, "normal");
+
+  const horsForfait = affichageCompteur({ compteur: 50, quotaEffectif: 50, soldeFCFA: 900 });
+  assert.equal(horsForfait.niveau, "danger");
+  assert.equal(horsForfait.pourcentage, 100);
+  assert.equal(horsForfait.detail, "Hors forfait : 30 FCFA par colis — votre solde couvre 30 colis");
+
+  const insuffisant = affichageCompteur({ compteur: 52, quotaEffectif: 50, soldeFCFA: 10 });
+  assert.equal(insuffisant.libelle, "Colis ce mois : 52 / 50");
+  assert.match(insuffisant.detail, /portefeuille insuffisant \(10 FCFA\)/);
+  assert.equal(insuffisant.niveau, "danger");
+
+  const retard = affichageCompteur({ compteur: 10, quotaEffectif: 50, enRetard: true });
+  assert.equal(retard.niveau, "alerte");
+  assert.match(retard.detail, /Abonnement impayé/);
+
+  const illimite = affichageCompteur({ compteur: 1234, quotaEffectif: null });
+  assert.equal(illimite.libelle, "Colis ce mois : 1 234");
+  assert.deepEqual([illimite.detail, illimite.niveau, illimite.illimite, illimite.recharger], ["Illimité (plan Réseau)", "normal", true, false]);
+});
+
+test("phrase du prochain colis (LOT 10) : inclus, hors forfait débité, refus annoncé, Réseau", () => {
+  assert.deepEqual(phraseProchainColis({ compteur: 37, quotaEffectif: 50 }), {
+    texte: "Ce colis sera le 38e sur 50 inclus ce mois-ci.", niveau: "normal", bloque: false
+  });
+  assert.equal(phraseProchainColis({ compteur: 0, quotaEffectif: 50 }).texte, "Ce colis sera le 1er sur 50 inclus ce mois-ci.");
+  assert.equal(phraseProchainColis({ compteur: 45, quotaEffectif: 50 }).niveau, "alerte");
+  const debite = phraseProchainColis({ compteur: 50, quotaEffectif: 50, soldeFCFA: 900 });
+  assert.equal(debite.texte, "Ce colis sera hors forfait : 30 FCFA débités du portefeuille (solde après : 870 FCFA).");
+  assert.deepEqual([debite.niveau, debite.bloque], ["alerte", false]);
+  const refus = phraseProchainColis({ compteur: 50, quotaEffectif: 50, soldeFCFA: 20 });
+  assert.match(refus.texte, /Quota atteint \(50 colis\) et portefeuille insuffisant \(20 FCFA\)/);
+  assert.match(refus.texte, /jamais bloqués/);
+  assert.deepEqual([refus.niveau, refus.bloque], ["danger", true]);
+  assert.match(phraseProchainColis({ compteur: 99, quotaEffectif: null }).texte, /100e du mois — plan Réseau, sans limite/);
 });

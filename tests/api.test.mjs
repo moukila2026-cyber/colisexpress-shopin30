@@ -2484,6 +2484,61 @@ test("amorçage console (LOT 8) : fermé si un administrateur existe, jeton exig
   }
 });
 
+/* ------------------------- LOT 10 — compteur temps réel ------------------------- */
+
+test("compteur temps réel (LOT 10) : /api/resume léger, compteur renvoyé avec le colis, expéditeur seul compté", async () => {
+  const a = client();
+  const b = client();
+  const agenceA = await creerAgence(a, "Agence CompteurA", "Abidjan");
+  const agenceB = await creerAgence(b, "Agence CompteurB", "Bouaké");
+
+  // Sans session : refus.
+  assert.equal((await client().get("/api/resume")).status, 401);
+
+  const initial = await a.get("/api/resume");
+  assert.equal(initial.status, 200, JSON.stringify(initial.data));
+  assert.equal(initial.data.nonLues, 0);
+  assert.deepEqual(
+    [initial.data.compteur.plan, initial.data.compteur.compteur, initial.data.compteur.quotaEffectif, initial.data.compteur.soldeFCFA],
+    ["gratuit", 0, 50, 0]
+  );
+  assert.equal(initial.data.compteur.prochainColis.type, "inclus");
+  assert.match(initial.data.compteur.periode, /^\d{4}-\d{2}$/);
+  assert.ok(initial.data.horodatageISO);
+  // Pas de données personnelles ni de secret : uniquement des chiffres de facturation.
+  for (const cle of ["mouvements", "email", "phone", "password"]) assert.ok(!(cle in initial.data.compteur), cle);
+
+  // POST /api/colis renvoie le compteur à jour (mise à jour immédiate de l'interface).
+  const cree = await nouveauColis(a, agenceB.id, 7);
+  assert.equal(cree.status, 201, JSON.stringify(cree.data));
+  assert.equal(cree.data.compteur.compteur, 1);
+  assert.equal(cree.data.compteur.quotaEffectif, 50);
+  assert.equal(cree.data.compteur.prochainColis.type, "inclus");
+
+  // Seule l'expéditrice est comptée : la destination reste à 0.
+  assert.equal((await b.get("/api/resume")).data.compteur.compteur, 0);
+
+  // Quota atteint et solde insuffisant : le résumé le dit, et /api/facturation?resume=1 reste cohérent.
+  await fixerCompteur(agenceA.id, 50);
+  const plein = (await a.get("/api/resume")).data.compteur;
+  assert.equal(plein.compteur, 50);
+  assert.equal(plein.prochainColis.type, "depassement");
+  assert.match(plein.alerte, /portefeuille insuffisant/);
+  const ancien = (await a.get("/api/facturation?resume=1")).data.resume;
+  assert.deepEqual([ancien.compteur, ancien.quotaEffectif, ancien.prochainColis.type], [50, 50, "depassement"]);
+
+  // Un agent (non gérant) lit le compteur aussi : il doit comprendre un refus.
+  const invitation = await a.post("/api/agents", { name: "Agent Compteur", phone: "0701020304", email: compteUnique("agentcompteur"), password: "agent1234" });
+  assert.equal(invitation.status, 201, JSON.stringify(invitation.data));
+  const agent = client();
+  const connexionAgent = await agent.post("/api/login", { email: invitation.data.agent.email, password: "agent1234" });
+  assert.equal(connexionAgent.status, 200, JSON.stringify(connexionAgent.data));
+  assert.equal((await agent.get("/api/resume")).data.compteur.compteur, 50);
+
+  // Aucune route d'écriture sur /api/resume.
+  assert.equal((await a.post("/api/resume", {})).status, 404);
+});
+
 /* ------------------------- LOT 9 — mise en service assistée ------------------------- */
 
 const { diagnosticMiseEnService, empreinteHoteBase } = await import("../lib/mise-en-service.js");
