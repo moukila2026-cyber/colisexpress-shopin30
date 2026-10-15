@@ -24,7 +24,8 @@ const entrees = {
   "nouveau-colis.html": "js/nouveau-colis.js",
   "colis.html": "js/colis.js",
   "parametres.html": "js/parametres.js",
-  "caisse.html": "js/caisse.js"
+  "caisse.html": "js/caisse.js",
+  "clients.html": "js/clients.js"
 };
 
 const PAGES_SANS_SCRIPT = new Set(["conditions.html", "confidentialite.html", "404.html"]);
@@ -263,7 +264,8 @@ test("les points d'entrée Vercel captent les routes API à un segment et imbriq
     "api/agents/[id].js": "../../../lib/app.js",
     "api/colis/[id]/encaisser.js": "../../../lib/app.js",
     "api/tarifs/[id].js": "../../lib/app.js",
-    "api/caisse/cloture.js": "../../lib/app.js"
+    "api/caisse/cloture.js": "../../lib/app.js",
+    "api/clients/[id].js": "../../lib/app.js"
   };
   for (const [fichier, cible] of Object.entries(entreesImbriquees)) {
     assert.ok(existsSync(path.join(RACINE, fichier)), `${fichier} doit exister : sinon Vercel répond 404 NOT_FOUND sur cette route`);
@@ -272,7 +274,7 @@ test("les points d'entrée Vercel captent les routes API à un segment et imbriq
 
   // Les routes imbriquées appelées par le front doivent exister côté Express.
   const api = lire("lib/app.js");
-  for (const route of ["/api/colis/:id", "/api/colis/:id/attach", "/api/colis/:id/progress", "/api/suivi/:code", "/api/agents/:id", "/api/colis/:id/encaisser", "/api/tarifs/:id", "/api/caisse/cloture"]) {
+  for (const route of ["/api/colis/:id", "/api/colis/:id/attach", "/api/colis/:id/progress", "/api/suivi/:code", "/api/agents/:id", "/api/colis/:id/encaisser", "/api/tarifs/:id", "/api/caisse/cloture", "/api/clients/:id"]) {
     assert.ok(api.includes(route), `lib/app.js doit déclarer ${route} (captée par son point d'entrée Vercel)`);
   }
   assert.match(lire("js/colis.js"), /\/api\/colis\//, "la fiche colis appelle les routes imbriquées /api/colis/…");
@@ -359,4 +361,48 @@ test("le LOT 2 (tarifs, paiement, caisse) est câblé de bout en bout", () => {
   const readme = lire("README.md");
   assert.match(readme, /grille tarifaire|Tarifs/i, "le README documente la grille tarifaire");
   assert.match(readme, /caisse/i, "le README documente la caisse");
+});
+
+test("le LOT 3 (carnet de clients + devis public) est câblé de bout en bout", () => {
+  // Carnet de clients : page dédiée, recherche et formulaire.
+  const clientsHtml = lire("clients.html");
+  const clientsJs = lire("js/clients.js");
+  for (const id of ["clientsList", "clientsCount", "searchClient", "kindFilter", "clientForm", "clientKind", "clientPhone", "clientFirstName", "clientLastName", "clientCni", "clientCity", "clientNotes", "clientDetail", "newClientButton"]) {
+    assert.match(clientsHtml, new RegExp(`id="${id}"`), `clients.html doit exposer #${id}`);
+  }
+  assert.match(clientsJs, /\/api\/clients/, "le carnet passe par /api/clients");
+  assert.match(clientsJs, /rechercherClients/, "la recherche utilise le module partagé");
+  assert.match(clientsJs, /validerClient/, "la validation est partagée client/serveur");
+  assert.match(clientsJs, /"PATCH"/, "la modification passe par PATCH");
+  assert.match(lire("js/layout.js"), /clients\.html/, "la barre latérale pointe vers clients.html");
+
+  // Mémorisation automatique côté serveur.
+  const app = lire("lib/app.js");
+  assert.match(app, /clientsDepuisColis/, "POST /api/colis mémorise expéditeur et destinataire");
+  assert.match(app, /memoriserClient/, "l'upsert du carnet est mutualisé");
+
+  // Pré-remplissage depuis le carnet sur « nouveau colis ».
+  assert.match(lire("nouveau-colis.html"), /id="senderMatch"/, "zone de pré-remplissage expéditeur");
+  assert.match(lire("nouveau-colis.html"), /id="recipientMatch"/, "zone de pré-remplissage destinataire");
+  const nouveauJs = lire("js/nouveau-colis.js");
+  assert.match(nouveauJs, /\/api\/clients/, "le formulaire interroge le carnet");
+  assert.match(nouveauJs, /chercherClientConn/, "recherche par téléphone câblée");
+  assert.match(nouveauJs, /prefill|pré-remplir/i, "le bouton de pré-remplissage existe");
+
+  // Devis public sur la page d'accueil : anonyme, sans donnée personnelle.
+  const index = lire("index.html");
+  for (const id of ["devisForm", "devisOriginCity", "devisDestinationCity", "devisWeightKg", "devisNature", "devisResult", "devisMessage"]) {
+    assert.match(index, new RegExp(`id="${id}"`), `index.html doit exposer #${id}`);
+  }
+  const publicJs = lire("js/public.js");
+  assert.match(publicJs, /\/api\/devis/, "l'estimateur appelle /api/devis");
+  assert.match(publicJs, /Contacter l'agence/, "chaque offre propose le contact WhatsApp de l'agence");
+  assert.match(app, /app\.post\("\/api\/devis", async/, "la route devis est publique (sans requireAgency)");
+  assert.match(app, /estimerDevis/, "le calcul du devis utilise le module partagé");
+  assert.doesNotMatch(app, /app\.post\("\/api\/devis", requireAgency/, "le devis ne doit pas exiger de session");
+
+  // README documente les nouveautés.
+  const readme = lire("README.md");
+  assert.match(readme, /carnet de clients|Carnet/i, "le README documente le carnet de clients");
+  assert.match(readme, /devis/i, "le README documente le devis public");
 });

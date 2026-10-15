@@ -172,6 +172,24 @@ async function seedDemo(db) {
     );
   }
 
+  // LOT 3 — carnet de clients de démonstration : les expéditeurs et
+  // destinataires des colis ci-dessus sont mémorisés par leur agence, plus un
+  // client sans colis pour montrer la saisie manuelle.
+  const clients = [
+    ["demo-client-1", "demo-abidjan", "expediteur", "Awa", "Traoré", "0700000001", "CI12345678", "Abidjan"],
+    ["demo-client-2", "demo-abidjan", "destinataire", "Ibrahim", "Koné", "0500000002", null, "Bouaké"],
+    ["demo-client-3", "demo-abidjan", "expediteur", "Mariam", "Diarra", "0700000021", "CI87654321", "Abidjan"],
+    ["demo-client-4", "demo-bouake", "expediteur", "Awa", "Traoré", "0700000001", "CI12345678", "Bouaké"],
+    ["demo-client-5", "demo-bouake", "destinataire", "Ibrahim", "Koné", "0500000002", null, "Abidjan"]
+  ];
+  for (const [id, agency, kind, prenom, nom, tel, cni, ville] of clients) {
+    await db.query(
+      `INSERT INTO clients (id, agency_id, kind, first_name, last_name, phone, cni, city, notes, created_at_iso, updated_at_iso)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, '', $9, $9)`,
+      [id, agency, kind, prenom, nom, tel, cni, ville, now]
+    );
+  }
+
   // LOT 2 — encaissement du jour (caisse de démonstration) : le colis 1 a été
   // payé au départ en espèces par l'agent Koffi.
   const jour = new Intl.DateTimeFormat("en-CA", {

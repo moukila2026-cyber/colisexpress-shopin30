@@ -8,12 +8,14 @@ import {
   validerPaiement
 } from "./metier-colis.js";
 import { optionsPrix } from "./metier-tarifs.js";
+import { nomClient } from "./metier-clients.js";
 import {
   clearPageMessage,
   errorMessage,
   escapeHTML,
   formatFCFA,
   isValidIvorianPhone,
+  normalizeIvorianPhone,
   setButtonLoading,
   publicTrackingUrl,
   showPageMessage,
@@ -156,6 +158,74 @@ function rendreRecap() {
       <div><dt>Prix</dt><dd>${escapeHTML(formatFCFA(prix))}${enGrille ? " — grille tarifaire" : " — saisie libre"}</dd></div>
     </dl>
     <small>Le prix sera figé sur le colis à l'enregistrement.</small>`;
+}
+
+/* --------------------- carnet de clients (LOT 3) --------------------------- */
+
+/**
+ * Recherche par téléphone dans le carnet de l'agence : si le client est
+ * connu, un bouton propose de pré-remplir ses champs en un geste.
+ */
+const PREFILL = [
+  {
+    phoneId: "senderPhone",
+    matchId: "senderMatch",
+    kind: "expediteur",
+    champs: { senderFirstName: "firstName", senderLastName: "lastName", senderCni: "cni" }
+  },
+  {
+    phoneId: "recipientPhone",
+    matchId: "recipientMatch",
+    kind: "destinataire",
+    champs: { recipientFirstName: "firstName", recipientLastName: "lastName" }
+  }
+];
+
+async function chercherClientConn(telephone, kind) {
+  const phone = normalizeIvorianPhone(telephone);
+  if (!isValidIvorianPhone(phone)) return null;
+  try {
+    const { clients } = await api(`/api/clients?recherche=${encodeURIComponent(phone)}&kind=${kind}`);
+    return clients.find((client) => client.phone === phone) || null;
+  } catch {
+    return null; // carnet indisponible : la saisie manuelle reste la norme
+  }
+}
+
+function renderClientMatch(cible, client, config) {
+  if (!client) {
+    cible.hidden = true;
+    cible.innerHTML = "";
+    return;
+  }
+  cible.hidden = false;
+  cible.innerHTML = `<button class="client-match-button" type="button" data-prefill="${escapeHTML(config.phoneId)}">
+    ✆ Client connu : <strong>${escapeHTML(nomClient(client))}</strong>${client.city ? ` — ${escapeHTML(client.city)}` : ""} · pré-remplir
+  </button>`;
+  cible.querySelector("button").addEventListener("click", () => {
+    for (const [champId, cle] of Object.entries(config.champs)) {
+      const valeur = client[cle] || "";
+      const champ = document.getElementById(champId);
+      if (champ && valeur) champ.value = valeur;
+    }
+    cible.hidden = true;
+  });
+}
+
+function bindClientPrefill() {
+  for (const config of PREFILL) {
+    const input = document.getElementById(config.phoneId);
+    const cible = document.getElementById(config.matchId);
+    if (!input || !cible) continue;
+    let timer = null;
+    input.addEventListener("input", () => {
+      if (timer) clearTimeout(timer);
+      timer = window.setTimeout(async () => {
+        const client = await chercherClientConn(input.value, config.kind);
+        renderClientMatch(cible, client, config);
+      }, 350);
+    });
+  }
 }
 
 /* --------------------------- état de paiement ----------------------------- */
@@ -329,6 +399,7 @@ async function boot() {
   }
   refreshPrix();
   syncPaiement();
+  bindClientPrefill();
   ["originCity", "destinationCity", "weightKg"].forEach((id) => {
     document.getElementById(id)?.addEventListener("input", refreshPrix);
     document.getElementById(id)?.addEventListener("change", refreshPrix);

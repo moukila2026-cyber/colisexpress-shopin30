@@ -27,7 +27,7 @@ Navigateur  ── fetch /api/* ──►  lib/app.js (Express)
 - **Métier** (`js/metier-colis.js`) : inchangé, importé **à la fois** par le
   navigateur et par le serveur — une seule source de vérité.
 - **Base** (`db/schema.sql`) : `agencies`, `parcels`, `agents` (LOT 1),
-  `tarifs`, `encaissements`, `caisse_closures` (LOT 2).
+  `tarifs`, `encaissements`, `caisse_closures` (LOT 2), `clients` (LOT 3).
 
 ### `agencies`
 
@@ -69,6 +69,31 @@ premier versement crée la ligne `encaissements` associée.
 `GET /api/caisse`, `POST /api/caisse/cloture` — les trois formes imbriquées
 ont leur fichier dans `api/` (verrouillé par `npm test`), lecture/écriture
 réservées aux agences concernées, écritures de grille au gérant.
+
+### `clients` (LOT 3 — carnet de clients)
+
+| colonne | rôle |
+|---|---|
+| `agency_id` | agence propriétaire : le carnet est **privé**, jamais de visibilité croisée |
+| `kind` | `expediteur` ou `destinataire` (la CNI n'est mémorisée que pour un expéditeur) |
+| `first_name`, `last_name`, `phone`, `cni`, `city`, `notes` | fiche client ; `phone` ivoirien normalisé = clé de recherche au guichet |
+| UNIQUE (`agency_id`, `kind`, `phone`) | la mémorisation automatique est un **upsert** : jamais de doublon, une CNI déjà renseignée n'est pas effacée |
+
+**Mémorisation automatique.** `POST /api/colis` upserte l'expéditeur (avec
+CNI, ville de départ) et le destinataire (ville d'arrivée) dans le carnet de
+l'agence expéditrice (`clientsDepuisColis()` partagé) ; un échec de
+mémorisation ne bloque jamais l'enregistrement du colis. Aucune route de
+suppression : le carnet est la mémoire de l'agence.
+
+**Routes du LOT 3.** `GET/POST /api/clients`, `GET/PATCH /api/clients/:id`
+(fichier `api/clients/[id].js`) réservés à l'agence propriétaire ;
+`GET /api/clients/:id` renvoie aussi l'**historique des colis** du client
+(colis de l'agence dont l'expéditeur ou le destinataire porte ce téléphone).
+`POST /api/devis` est **public et anonyme** : il agrège les grilles actives
+(`tarifs` JOIN `agencies`), calcule les offres via `estimerDevis()`
+(`js/metier-tarifs.js`, partagé) et ne renvoie que prix, tranche et
+coordonnées professionnelles des agences — jamais d'identifiant interne,
+d'e-mail ni de donnée personnelle.
 
 ### `parcels`
 
@@ -126,8 +151,9 @@ suivi public anonyme, refus d'accès).
   couvre les routes à un segment (`/api/health`, `/api/colis`…), et chaque
   route imbriquée a son fichier (`api/colis/[id].js`,
   `api/colis/[id]/attach.js`, `api/colis/[id]/progress.js`,
-  `api/suivi/[code].js`) — sinon elle renvoie le 404 NOT_FOUND de la
-  plateforme au lieu d'atteindre Express. Toute nouvelle route imbriquée
-  doit recevoir son point d'entrée (verrouillé par `npm test`).
+  `api/suivi/[code].js`, `api/clients/[id].js`…) — sinon elle renvoie le
+  404 NOT_FOUND de la plateforme au lieu d'atteindre Express. Toute nouvelle
+  route imbriquée doit recevoir son point d'entrée (verrouillé par
+  `npm test`).
 - **Autre hébergeur Node** : `npm start` sert API + fichiers statiques
   (`server.js`).

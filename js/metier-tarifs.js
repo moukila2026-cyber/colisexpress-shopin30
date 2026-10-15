@@ -146,6 +146,43 @@ export function trouverTarif({ tarifs = [], originCity, destinationCity, weightK
 }
 
 /**
+ * Devis public (LOT 3) : à partir des grilles ACTIVES de toutes les agences,
+ * calcule les offres applicables à un axe (ville départ → ville arrivée) et
+ * un poids. Chaque ligne de `tarifs` porte l'agence normalisée
+ * (`{ name, city, phone }`) — jamais d'identifiant interne ni de donnée
+ * personnelle en sortie. Offres triées par prix croissant ; liste vide =
+ * aucune agence ne couvre cet axe dans sa grille.
+ */
+export function estimerDevis({ tarifs = [], originCity, destinationCity, weightKg }) {
+  const parAgence = new Map();
+  for (const brut of Array.isArray(tarifs) ? tarifs : []) {
+    const tarif = brut.originCity !== undefined ? brut : normaliserTarif(brut);
+    const agence = tarif.agence ?? brut.agence ?? null;
+    if (!agence?.name) continue;
+    const cle = `${agence.name}|${agence.city}|${agence.phone}`;
+    if (!parAgence.has(cle)) parAgence.set(cle, { agence, tarifs: [] });
+    parAgence.get(cle).tarifs.push(tarif);
+  }
+  const offres = [];
+  for (const { agence, tarifs: grille } of parAgence.values()) {
+    const tarif = trouverTarif({ tarifs: grille, originCity, destinationCity, weightKg });
+    if (!tarif) continue;
+    offres.push({
+      priceFCFA: tarif.priceFCFA,
+      tranche: trancheLibelle(tarif.weightMinKg, tarif.weightMaxKg),
+      destination: textePropre(tarif.destinationCity) || "toutes destinations",
+      agence: {
+        name: textePropre(agence.name),
+        city: textePropre(agence.city),
+        phone: textePropre(agence.phone)
+      }
+    });
+  }
+  offres.sort((a, b) => a.priceFCFA - b.priceFCFA || a.agence.name.localeCompare(b.agence.name, "fr"));
+  return offres;
+}
+
+/**
  * Options du menu déroulant « prix » : une option par ligne applicable,
  * la plus spécifique en premier (c'est celle appliquée par défaut).
  * Liste vide = grille non applicable → saisie libre autorisée (repli).

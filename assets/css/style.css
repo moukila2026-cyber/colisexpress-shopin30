@@ -640,3 +640,27 @@ dd { margin: 4px 0 0; color: var(--ink); overflow-wrap: anywhere; font-size: .88
 .cloture-done p { margin: 8px 0 0; font-size: .88rem; }
 .caisse-table td { white-space: nowrap; }
 .caisse-table td a.tracking-code, .caisse-table .tracking-code { white-space: nowrap; }
+
+/* ----------------------------- LOT 3 — carnet de clients + devis public ---- */
+
+.client-match { margin-top: 7px; }
+.client-match-button { width: 100%; min-height: 38px; padding: 6px 10px; border: 1px dashed #9dbcb0; border-radius: 10px; background: var(--green-50); color: var(--green-900); font-size: .8rem; font-weight: 650; text-align: left; }
+.client-match-button:hover { border-color: var(--orange); background: var(--orange-light); }
+
+.client-kind { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: .72rem; font-weight: 750; }
+.client-kind-expediteur { color: #22634e; background: var(--green-100); }
+.client-kind-destinataire { color: var(--orange-dark); background: var(--orange-light); }
+.client-actions { display: flex; gap: 10px; justify-content: flex-end; }
+
+.devis-section { max-width: 920px; margin: 0 auto; }
+.devis-form { padding: 20px; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; box-shadow: var(--shadow); }
+.devis-grid { display: grid; gap: 14px; grid-template-columns: 1fr; }
+@media (min-width: 760px) { .devis-grid { grid-template-columns: repeat(4, 1fr); } }
+.devis-summary { margin: 16px 0 10px; color: var(--muted); font-size: .86rem; }
+.devis-cards { display: grid; gap: 12px; grid-template-columns: 1fr; }
+@media (min-width: 640px) { .devis-cards { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); } }
+.devis-card { padding: 16px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: #fff; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.devis-price { color: var(--green-900); font-size: 1.35rem; font-weight: 850; }
+.devis-agency { display: flex; flex-direction: column; gap: 2px; font-size: .85rem; }
+.devis-agency span { color: var(--muted); font-size: .78rem; }
+.devis-card .button { align-self: stretch; }
