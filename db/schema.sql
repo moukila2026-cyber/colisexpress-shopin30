@@ -240,3 +240,32 @@ ALTER TABLE parcels ADD COLUMN IF NOT EXISTS retour_completed_at    TEXT;
 -- LOT 4 — libellé d'un encaissement (colonne additive) : distingue les
 -- frais de magasinage (retour d'un colis en souffrance) du prix d'un colis.
 ALTER TABLE encaissements ADD COLUMN IF NOT EXISTS label TEXT NOT NULL DEFAULT '';
+
+-- LOT 5 — journal des notifications : une ligne par agence destinataire et
+-- par événement (incident ouvert / escalade 24 h, bordereau arrivé / écart au
+-- contrôle, colis en souffrance, retour à l'expéditeur décidé / reçu, colis
+-- qui dorment). MODE SIMULATION par défaut (statut 'simule') : aucun envoi
+-- réel sans configuration (lib/notifications.js). La clé de dédoublonnage
+-- garantit une seule notification par événement et par agence, même quand
+-- les échéances sont détectées par plusieurs balayages. Titre et message ne
+-- contiennent aucune donnée personnelle. Pas de suppression : on marque lu.
+CREATE TABLE IF NOT EXISTS notifications (
+  id             TEXT PRIMARY KEY,
+  agency_id      TEXT NOT NULL REFERENCES agencies(id),   -- destinataire (une des deux agences concernées)
+  type           TEXT NOT NULL,
+  titre          TEXT NOT NULL,
+  message        TEXT NOT NULL,
+  lien           TEXT NOT NULL DEFAULT '',                -- lien interne relatif (colis.html?id=…, bordereaux.html?id=…)
+  parcel_id      TEXT REFERENCES parcels(id),
+  bordereau_id   TEXT REFERENCES bordereaux(id),
+  incident_id    TEXT REFERENCES incidents(id),
+  canal          TEXT NOT NULL DEFAULT 'simulation',      -- simulation | whatsapp | sms | email
+  statut         TEXT NOT NULL DEFAULT 'en_attente' CHECK (statut IN ('en_attente', 'simule', 'envoye', 'echec')),
+  erreur         TEXT NOT NULL DEFAULT '',
+  dedup_key      TEXT NOT NULL UNIQUE,
+  lu             BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at_iso TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_agency ON notifications (agency_id, created_at);
