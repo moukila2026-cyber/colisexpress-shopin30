@@ -1,4 +1,5 @@
 import { api } from "./api.js";
+import { variablesMarque } from "./metier-marque.js";
 import {
   STATUTS,
   clearPageMessage,
@@ -32,9 +33,25 @@ function progressHtml(status) {
   }).join("")}</ol>`;
 }
 
+/**
+ * LOT 7 — habillage de l'agence expéditrice (si elle l'a activé) : nom
+ * affiché, couleurs et logo. Les couleurs sont revalidées (#rrggbb) avant
+ * d'entrer dans l'attribut style ; aucune donnée personnelle.
+ */
+function marqueHtml(tracking) {
+  const marque = tracking.marque;
+  if (!marque) return "";
+  const logo = marque.logo
+    ? `<img class="tracking-brand-logo" src="/api/suivi/${encodeURIComponent(tracking.code)}/logo?v=${encodeURIComponent(marque.version || "")}" alt="Logo ${escapeHTML(marque.nom)}" width="52" height="52">`
+    : `<span class="tracking-brand-initiale" aria-hidden="true">${escapeHTML((marque.nom || "A").trim().charAt(0).toUpperCase())}</span>`;
+  return `<div class="tracking-brand">${logo}<div><small>Colis confié à</small><strong>${escapeHTML(marque.nom)}</strong></div></div>`;
+}
+
 function showResult(tracking) {
+  const style = tracking.marque ? ` style="${variablesMarque(tracking.marque)}"` : "";
   result.innerHTML = `
-    <article class="tracking-card">
+    <article class="tracking-card${tracking.marque ? " tracking-card-marque" : ""}"${style}>
+      ${marqueHtml(tracking)}
       <div class="tracking-card-head">
         <div>
           <p class="eyebrow">Suivi en direct</p>

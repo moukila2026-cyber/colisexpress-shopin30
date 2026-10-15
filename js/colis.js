@@ -35,6 +35,7 @@ import {
   libelleTypeIncident
 } from "./metier-incidents.js";
 import { estEnSouffrance, joursDepuis, dateArriveeDestinantion } from "./metier-alertes.js";
+import { libelleModePaiement } from "./metier-paiements.js";
 import {
   ETAPES_PHOTO,
   MAX_PHOTOS_PAR_ETAPE,
@@ -56,6 +57,8 @@ let agencies = [];
 let updateInProgress = false;
 let attachInProgress = false;
 let refreshTimer = null;
+// LOT 7 — paiement en ligne (SasPay) du reste à payer.
+let paiementsEnLigne = { actif: false, mode: null, enAttente: null };
 
 function mountLayout() {
   document.getElementById("sidebarMount").innerHTML = agencySidebar();
@@ -238,8 +241,80 @@ function paymentCardHtml(parcel) {
         <div><dt>Encaissé</dt><dd>${escapeHTML(formatFCFA(parcel.paidAmountFCFA ?? 0))}</dd></div>
         <div><dt>Reste à payer</dt><dd>${escapeHTML(formatFCFA(etat.reste))}</dd></div>
       </dl>
-      ${regle ? '<p class="muted-note">Aucun montant restant dû.</p>' : '<div class="payment-actions"><button class="button button-primary button-small" id="openEncaisser" type="button">Encaisser le solde</button></div>'}
+      ${regle ? '<p class="muted-note">Aucun montant restant dû.</p>' : `<div class="payment-actions"><button class="button button-primary button-small" id="openEncaisser" type="button">Encaisser le solde</button>${paiementsEnLigne.actif ? '<button class="button button-orange button-small" id="payerEnLigne" type="button">Payer en ligne (SasPay)</button>' : ""}</div>`}
+      ${regle ? "" : paiementEnLigneHtml()}
     </section>`;
+}
+
+/** Lien de paiement hébergé en attente : ouvrir, partager au client, vérifier. */
+function paiementEnLigneHtml() {
+  const enAttente = paiementsEnLigne.enAttente;
+  if (!paiementsEnLigne.actif) return "";
+  const mode = paiementsEnLigne.mode === "live" ? "" : ` <span class="status-badge paiement-mode">${escapeHTML(libelleModePaiement(paiementsEnLigne.mode))}</span>`;
+  if (!enAttente?.checkoutUrl) {
+    return `<p class="muted-note">Paiement mobile money ou carte par le client sur la page sécurisée SasPay${mode}. Le montant arrive dans la caisse du jour dès sa confirmation.</p>`;
+  }
+  const partage = paiementsEnLigne.mode !== "simulation" && currentParcel?.recipient?.phone
+    ? `<a class="button button-outline button-small" target="_blank" rel="noopener noreferrer" href="${escapeHTML(whatsappShareLink(currentParcel.recipient.phone, `COLIS EXPRESS — réglez ${formatFCFA(enAttente.montantFCFA)} pour le colis ${currentParcel.trackingCode} : ${enAttente.checkoutUrl}`))}">Envoyer le lien au destinataire</a>`
+    : "";
+  return `<div class="paiement-lien">
+    <p><strong>Lien de paiement prêt</strong>${mode} — ${escapeHTML(formatFCFA(enAttente.montantFCFA))}, ${escapeHTML(enAttente.statut === "echec" ? "dernière tentative échouée" : "en attente du client")}.</p>
+    <div class="payment-actions">
+      <a class="button button-orange button-small" href="${escapeHTML(enAttente.checkoutUrl)}" ${paiementsEnLigne.mode === "simulation" ? "" : 'target="_blank" rel="noopener noreferrer"'}>Ouvrir la page de paiement</a>
+      ${partage}
+      <button class="button button-outline button-small" id="verifierPaiement" type="button" data-paiement="${escapeHTML(enAttente.id)}">Vérifier le paiement</button>
+    </div>
+  </div>`;
+}
+
+async function chargerPaiementsEnLigne() {
+  try {
+    const data = await api(`/api/paiements?parcelId=${encodeURIComponent(parcelId)}&_=${Date.now()}`);
+    paiementsEnLigne = {
+      actif: data.configuration?.actif === true,
+      mode: data.configuration?.mode ?? null,
+      enAttente: (data.paiements || []).find((item) => item.statut === "en_attente" || item.statut === "echec") || null
+    };
+  } catch {
+    paiementsEnLigne = { actif: false, mode: null, enAttente: null };
+  }
+}
+
+async function payerEnLigne(event) {
+  const bouton = event.currentTarget;
+  setButtonLoading(bouton, true, "Préparation…");
+  try {
+    const { paiement } = await api("/api/paiements", { method: "POST", body: { objet: "colis", parcelId } });
+    paiementsEnLigne.enAttente = paiement;
+    if (paiementsEnLigne.mode === "simulation") {
+      window.location.href = paiement.checkoutUrl;
+      return;
+    }
+    renderDetail(currentParcel);
+    showToast("Lien de paiement SasPay prêt : ouvrez-le ou envoyez-le au client.");
+  } catch (error) {
+    showToast(errorMessage(error), "error");
+    setButtonLoading(bouton, false);
+  }
+}
+
+async function verifierPaiementEnLigne(id, { retour = false } = {}) {
+  try {
+    const { paiement } = await api("/api/paiements/verifier", { method: "POST", body: { id } });
+    if (paiement.statut === "paye") {
+      showToast(`Paiement en ligne confirmé : ${formatFCFA(paiement.montantFCFA)} encaissés dans la caisse du jour.`);
+    } else if (paiement.statut === "echec") {
+      showToast("Le paiement en ligne a échoué : le client peut réessayer avec le même lien.", "error");
+    } else if (paiement.statut === "expire" || paiement.statut === "annule") {
+      showToast("Ce lien de paiement a expiré : créez-en un nouveau.", "error");
+    } else if (!retour) {
+      showToast("Paiement pas encore confirmé par SasPay. Réessayez dans un instant.");
+    }
+    await chargerPaiementsEnLigne();
+    await chargerColis({ silencieux: true });
+  } catch (error) {
+    showToast(errorMessage(error), "error");
+  }
 }
 
 function openPaymentModal() {
@@ -303,6 +378,10 @@ async function encaisserSolde(event) {
 }
 
 function bindPaymentForm() {
+  document.getElementById("payerEnLigne")?.addEventListener("click", payerEnLigne);
+  document.getElementById("verifierPaiement")?.addEventListener("click", (event) => {
+    verifierPaiementEnLigne(event.currentTarget.dataset.paiement);
+  });
   document.getElementById("openEncaisser")?.addEventListener("click", openPaymentModal);
   document.getElementById("closePayment")?.addEventListener("click", closePaymentModal);
   document.getElementById("cancelEncaisser")?.addEventListener("click", closePaymentModal);
@@ -756,7 +835,15 @@ async function boot() {
     console.error(error);
   }
 
+  await chargerPaiementsEnLigne();
   await chargerColis();
+  // Retour de la page de paiement : vérification côté serveur (jamais sur la
+  // seule foi du navigateur), puis nettoyage de l'adresse.
+  const retourPaiement = getQueryParam("paiement");
+  if (retourPaiement) {
+    window.history.replaceState(null, "", `colis.html?id=${encodeURIComponent(parcelId)}`);
+    await verifierPaiementEnLigne(retourPaiement, { retour: true });
+  }
   refreshTimer = window.setInterval(() => {
     if (document.visibilityState === "visible") chargerColis({ silencieux: true });
   }, 15000);

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="description" content="Page de paiement simulée COLIS EXPRESS (aucune somme réelle).">
+  <title>Paiement simulé — COLIS EXPRESS</title>
+  <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body class="plateforme-page">
+  <header class="plateforme-header">
+    <a class="brand" href="index.html" aria-label="COLIS EXPRESS, accueil"><span class="brand-mark" aria-hidden="true">CE</span><span>COLIS <em>EXPRESS</em></span></a>
+    <strong class="plateforme-title">Paiement sécurisé (simulation)</strong>
+  </header>
+  <main class="plateforme-main">
+    <section class="panel-card simulation-card" aria-labelledby="simulationTitle">
+      <p class="notice-box">Mode SIMULATION : aucune clé SasPay n'est configurée. Cette page remplace la page de paiement hébergée de SasPay ; aucune somme réelle n'est prélevée et aucun numéro n'est demandé.</p>
+      <h1 id="simulationTitle">Régler un paiement COLIS EXPRESS</h1>
+      <div class="page-message" id="pageMessage" hidden role="alert"></div>
+      <dl class="simulation-details" id="simulationDetails"><div><dt>Chargement</dt><dd>…</dd></div></dl>
+      <div class="simulation-actions" id="simulationActions" hidden>
+        <button class="button button-primary" id="simulerSucces" type="button">Payer (simulation)</button>
+        <button class="button button-outline" id="simulerEchec" type="button">Refuser le paiement (simulation)</button>
+      </div>
+      <p><a class="table-link" id="retourLien" href="dashboard.html">Revenir sans payer</a></p>
+    </section>
+  </main>
+  <script type="module" src="js/paiement-simulation.js"></script>
+</body>
+</html>
