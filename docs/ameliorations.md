@@ -324,3 +324,44 @@ statique au vert.
   pré-rempli). Aucune donnée personnelle demandée ni renvoyée (ni e-mail, ni
   identifiant interne). Axe non couvert = proposition de contact équipe,
   jamais d'erreur.
+
+## 12. Livré : LOT 4 — chaîne de preuve (chantiers 1, 2, 4, 5, 9 + colis en
+souffrance)
+
+- **Bordereau d'acheminement** (pages « Bordereaux » + suivi public
+  `bordereau.html?code=BDR-…`) : lot de 1 à 200 colis partis ensemble avec
+  transporteur (nom, téléphone, véhicule/ligne) ; statuts
+  `Préparé → Remis → En route → Arrivé → Contrôlé/Écart`. Émargements
+  verrouillés par acteur : la remise au transporteur expédie les colis
+  (`Enregistré → Expédié`), le départ les met `En transit`, l'arrivée et le
+  **contrôle en cases à cocher** appartiennent à l'agence de destination (ou à
+  l'expéditrice si rien n'est rattaché). Chaque colis absent ouvre
+  **automatiquement un incident `perdu`** avec le bordereau en preuve ; les
+  présents sont confirmés arrivés. Le suivi public du bordereau ne montre ni
+  téléphone du transporteur ni identité des clients.
+- **Photos de preuve** (prise en charge = expéditeur, arrivée = destination) :
+  2 max par étape, compression navigateur ~200 Ko (`js/photos.js`), `image/*`
+  seulement, **jamais publiques** (contenu servi uniquement par
+  `GET /api/photos/:id` authentifié, aux deux agences concernées), **jamais
+  supprimables**. Stockage objet isolé derrière `lib/photos.js` : Vercel Blob
+  si `BLOB_READ_WRITE_TOKEN`, sinon disque local — aucun base64 géant en base.
+- **Incidents et escalade** (chantiers 4 + 9) : état latéral du colis
+  (`perdu`, `endommage`, `retard`, `conteste`, `bloque`) avec cycle
+  `ouvert → recherches → resolu`, visible par les deux agences, un seul
+  incident non résolu à la fois, résolu = immuable. Le public ne voit qu'un
+  bandeau sobre (« Une vérification est en cours sur ce colis. »). Escalade :
+  ouvert > 24 h = alerte aux deux agences (`alerte24h`) ; > 7 j = file
+  plateforme (`filePlateforme`, traitement lot 6).
+- **Colis en souffrance + retour à l'expéditeur** : liste « Arrivé non retiré
+  depuis > 7 jours » (`GET /api/souffrance`) ; la destination **décide** le
+  retour (frais de magasinage éventuels encaissés dans sa caisse du jour,
+  label « Frais de magasinage »), l'expéditrice **reçoit** le colis — nouveau
+  trajet tracé dans l'historique sans toucher aux 5 statuts officiels.
+- **Alertes « colis qui dorment »** (chantier 5, tableau de bord) :
+  `GET /api/alertes` groupe les cartes « À traiter » par signal — sans
+  mouvement > 48 h, arrivé non retiré > 72 h, non rattaché > 7 j, en
+  souffrance > 7 j.
+- Règles d'or respectées : autorisations côté serveur uniquement, aucune route
+  DELETE (la preuve est immuable), aucune donnée personnelle en public,
+  migrations additives idempotentes, données de démo enrichies (2 bordereaux,
+  2 incidents, 1 photo, 1 colis en souffrance).

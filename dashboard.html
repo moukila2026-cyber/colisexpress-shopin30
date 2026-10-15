@@ -27,6 +27,12 @@
           <article class="stat-card"><div class="stat-card-top"><small>Retirés</small><span class="stat-icon" aria-hidden="true">✓</span></div><strong class="stat-number" id="statPickedUp">—</strong></article>
         </section>
 
+        <section class="panel-card alerts-panel" id="alertsPanel" hidden aria-labelledby="alertsTitle">
+          <div class="panel-title-row"><h2 id="alertsTitle">⚠ À traiter</h2><span id="alertsCount"></span></div>
+          <p class="muted-note">Le système vous appelle avant la réclamation du client : colis qui dorment, arrivées non retirées, agences à rattacher, colis en souffrance (&gt; 7 jours, retour possible depuis la fiche).</p>
+          <div id="alertsList"></div>
+        </section>
+
         <section class="panel-card filter-panel">
           <form id="dashboardFilters" class="filter-grid" autocomplete="off">
             <div class="field"><label for="searchParcel">Rechercher</label><input id="searchParcel" type="search" placeholder="Code, expéditeur ou destinataire"></div>

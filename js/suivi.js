@@ -42,6 +42,7 @@ function showResult(tracking) {
         </div>
         ${statusBadge(tracking.status)}
       </div>
+      ${tracking.notice ? `<div class="tracking-notice" role="status">⚠ ${escapeHTML(tracking.notice)}</div>` : ""}
       ${progressHtml(tracking.status)}
       <div class="route-display" aria-label="Itinéraire">
         <div><span class="route-dot route-start"></span><small>Départ</small><strong>${escapeHTML(tracking.originCity)}</strong></div>

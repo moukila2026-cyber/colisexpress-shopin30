@@ -138,3 +138,105 @@ CREATE TABLE IF NOT EXISTS caisse_closures (
   created_at_iso       TEXT NOT NULL,
   UNIQUE (agency_id, date_key)
 );
+
+-- LOT 4 — bordereaux d'acheminement : regrouper 1 à 200 colis expédiés
+-- ensemble (transporteur, véhicule/ligne), avec émargement à chaque bout.
+-- Statuts : Préparé → Remis → En route → Arrivé → Contrôlé (ou Écart si des
+-- colis manquent au contrôle — chaque absent ouvre un incident automatique).
+-- Pas de suppression : le bordereau est une pièce de la chaîne de preuve.
+CREATE TABLE IF NOT EXISTS bordereaux (
+  id                 TEXT PRIMARY KEY,
+  code               TEXT NOT NULL UNIQUE,      -- BDR-XXXXXX
+  from_agency_id     TEXT NOT NULL REFERENCES agencies(id),
+  from_agency_name   TEXT NOT NULL DEFAULT '',
+  from_city          TEXT NOT NULL DEFAULT '',
+  to_agency_id       TEXT REFERENCES agencies(id),  -- NULL = destination non rattachée
+  to_agency_name     TEXT NOT NULL DEFAULT '',
+  to_city            TEXT NOT NULL DEFAULT '',
+  carrier_name       TEXT NOT NULL,
+  carrier_phone      TEXT NOT NULL DEFAULT '',
+  vehicle_ref        TEXT NOT NULL DEFAULT '',
+  parcel_count       INTEGER NOT NULL CHECK (parcel_count BETWEEN 1 AND 200),
+  status             TEXT NOT NULL DEFAULT 'Préparé',
+  handed_over_at     TEXT,
+  handed_over_by     TEXT,
+  departed_at        TEXT,
+  arrived_at         TEXT,
+  arrived_by         TEXT,
+  checked_at         TEXT,
+  checked_by         TEXT,
+  missing_parcel_ids JSONB NOT NULL DEFAULT '[]',
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at_iso     TEXT NOT NULL,
+  updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_bordereaux_from ON bordereaux (from_agency_id);
+CREATE INDEX IF NOT EXISTS idx_bordereaux_to   ON bordereaux (to_agency_id);
+
+-- Composition du bordereau : jamais modifiée après création (la preuve est
+-- figée à la remise au transporteur).
+CREATE TABLE IF NOT EXISTS bordereau_parcels (
+  bordereau_id TEXT NOT NULL REFERENCES bordereaux(id),
+  parcel_id    TEXT NOT NULL REFERENCES parcels(id),
+  PRIMARY KEY (bordereau_id, parcel_id)
+);
+
+-- Un colis appartient au plus à un bordereau (colonne additive, NULL = hors
+-- bordereau : les colis existants continuent de fonctionner comme avant).
+ALTER TABLE parcels ADD COLUMN IF NOT EXISTS bordereau_id TEXT REFERENCES bordereaux(id);
+
+-- LOT 4 — photos de preuve (prise en charge / arrivée) : 2 maximum par étape,
+-- image/* uniquement, contenu stocké HORS de Postgres (lib/photos.js : disque
+-- local ou Vercel Blob), accès limité aux deux agences du colis, jamais
+-- supprimables par les agences. La base ne garde que les métadonnées.
+CREATE TABLE IF NOT EXISTS photos (
+  id             TEXT PRIMARY KEY,
+  parcel_id      TEXT NOT NULL REFERENCES parcels(id),
+  etape          TEXT NOT NULL CHECK (etape IN ('prise_en_charge', 'arrivee')),
+  storage_key    TEXT NOT NULL,
+  content_type   TEXT NOT NULL,
+  size_bytes     INTEGER NOT NULL CHECK (size_bytes > 0),
+  agency_id      TEXT NOT NULL REFERENCES agencies(id),
+  agent_id       TEXT,
+  agent_name     TEXT NOT NULL DEFAULT '',
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at_iso TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_photos_parcel ON photos (parcel_id, etape);
+
+-- LOT 4 — incidents : état LATÉRAL du colis (jamais dans la chaîne des 5
+-- statuts, un colis perdu peut être retrouvé). Visible par les deux agences ;
+-- le suivi public n'affiche qu'un bandeau sobre, sans aucun détail.
+CREATE TABLE IF NOT EXISTS incidents (
+  id                   TEXT PRIMARY KEY,
+  parcel_id            TEXT NOT NULL REFERENCES parcels(id),
+  bordereau_id         TEXT REFERENCES bordereaux(id),
+  type                 TEXT NOT NULL CHECK (type IN ('perdu', 'endommage', 'retard', 'conteste', 'bloque')),
+  state                TEXT NOT NULL DEFAULT 'ouvert' CHECK (state IN ('ouvert', 'recherches', 'resolu')),
+  note                 TEXT NOT NULL DEFAULT '',
+  resolution           TEXT NOT NULL DEFAULT '',
+  opened_by_agency_id  TEXT NOT NULL REFERENCES agencies(id),
+  opened_by_id         TEXT,
+  opened_by_name       TEXT NOT NULL DEFAULT '',
+  opened_at_iso        TEXT NOT NULL,
+  updated_by_name      TEXT NOT NULL DEFAULT '',
+  resolved_at_iso      TEXT,
+  created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at           TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_incidents_parcel ON incidents (parcel_id);
+CREATE INDEX IF NOT EXISTS idx_incidents_state  ON incidents (state);
+
+-- LOT 4 — retour à l'expéditeur des colis en souffrance (colonnes additives,
+-- NULL = colis jamais concerné). Le trajet retour est tracé dans l'historique
+-- du colis ; les frais de magasinage éventuels vont dans la caisse.
+ALTER TABLE parcels ADD COLUMN IF NOT EXISTS retour_status          TEXT;   -- 'en_cours' | 'termine'
+ALTER TABLE parcels ADD COLUMN IF NOT EXISTS retour_started_at      TEXT;
+ALTER TABLE parcels ADD COLUMN IF NOT EXISTS retour_completed_at    TEXT;
+
+-- LOT 4 — libellé d'un encaissement (colonne additive) : distingue les
+-- frais de magasinage (retour d'un colis en souffrance) du prix d'un colis.
+ALTER TABLE encaissements ADD COLUMN IF NOT EXISTS label TEXT NOT NULL DEFAULT '';

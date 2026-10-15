@@ -25,7 +25,9 @@ const entrees = {
   "colis.html": "js/colis.js",
   "parametres.html": "js/parametres.js",
   "caisse.html": "js/caisse.js",
-  "clients.html": "js/clients.js"
+  "clients.html": "js/clients.js",
+  "bordereaux.html": "js/bordereaux.js",
+  "bordereau.html": "js/bordereau-public.js"
 };
 
 const PAGES_SANS_SCRIPT = new Set(["conditions.html", "confidentialite.html", "404.html"]);
@@ -252,29 +254,75 @@ test("les points d'entrée Vercel captent les routes API à un segment et imbriq
   // colis », dashboard) et suivi QR en panne sur le site déployé, alors que
   // tout passait en local via server.js. Chaque forme de route imbriquée a
   // donc son fichier, qui réexporte la même application Express.
+  // LOT 4 — mais le plan Hobby de Vercel limite un déploiement à 12 fonctions
+  // serverless : avec un fichier par route imbriquée, on atteignait 19 et
+  // CHAQUE déploiement échouait (« No more than 12 Serverless Functions… »).
+  // Les routes à 3 segments sont donc repliées par les rewrites de
+  // vercel.json sur la fonction parente (?action=…), et le premier
+  // middleware de lib/app.js redéplie l'URL réelle avant le routage Express.
   assert.ok(existsSync(path.join(RACINE, "api/[...path].js")), "api/[...path].js doit exister (routes à un segment)");
   assert.ok(!existsSync(path.join(RACINE, "api/[[...path]].js")), "api/[[...path]].js ne capte qu'un seul segment hors Next.js : les routes imbriquées finissent en 404 plateforme");
   assert.match(lire("api/[...path].js"), /lib\/app\.js/, "le point d'entrée Vercel doit exporter l'application Express");
 
+  // Garde-fou : jamais plus de 12 fonctions serverless (limite Hobby).
+  const fichiersApi = [];
+  (function parcourir(dossier) {
+    for (const entree of readdirSync(path.join(RACINE, dossier), { withFileTypes: true })) {
+      const chemin = `${dossier}/${entree.name}`;
+      if (entree.isDirectory()) parcourir(chemin);
+      else if (entree.name.endsWith(".js")) fichiersApi.push(chemin);
+    }
+  })("api");
+  assert.ok(fichiersApi.length <= 12, `plan Hobby : 12 fonctions serverless max, or api/ en contient ${fichiersApi.length} — replier les nouvelles routes imbriquées via les rewrites vercel.json (?action=…)`);
+
+  // Les rewrites qui replient les routes à 3 segments sur leur fonction parente.
+  const vercelJson = JSON.parse(lire("vercel.json"));
+  const rewrites = vercelJson.rewrites ?? [];
+  for (const [source, destination] of [
+    ["/api/colis/:id/:action", "/api/colis/:id?action=:action"],
+    ["/api/bordereaux/:id/:action", "/api/bordereaux/:id?action=:action"],
+    ["/api/caisse/:action", "/api/caisse?action=:action"]
+  ]) {
+    assert.ok(
+      rewrites.some((r) => r.source === source && r.destination === destination),
+      `vercel.json doit replier ${source} vers ${destination} (limite Hobby de 12 fonctions)`
+    );
+  }
+  // Le middleware qui redéplie ?action=… dans lib/app.js.
+  assert.match(lire("lib/app.js"), /req\.query\?\.action/, "lib/app.js doit redéplier l'action des rewrites Vercel avant le routage");
+
   const entreesImbriquees = {
     "api/colis/[id].js": "../../lib/app.js",
-    "api/colis/[id]/attach.js": "../../../lib/app.js",
-    "api/colis/[id]/progress.js": "../../../lib/app.js",
     "api/suivi/[code].js": "../../lib/app.js",
-    "api/agents/[id].js": "../../../lib/app.js",
-    "api/colis/[id]/encaisser.js": "../../../lib/app.js",
+    "api/agents/[id].js": "../../lib/app.js",
     "api/tarifs/[id].js": "../../lib/app.js",
-    "api/caisse/cloture.js": "../../lib/app.js",
-    "api/clients/[id].js": "../../lib/app.js"
+    "api/clients/[id].js": "../../lib/app.js",
+    "api/bordereaux/[id].js": "../../lib/app.js",
+    "api/suivi-bordereau/[code].js": "../../lib/app.js",
+    "api/incidents/[id].js": "../../lib/app.js",
+    "api/photos/[id].js": "../../lib/app.js"
   };
   for (const [fichier, cible] of Object.entries(entreesImbriquees)) {
     assert.ok(existsSync(path.join(RACINE, fichier)), `${fichier} doit exister : sinon Vercel répond 404 NOT_FOUND sur cette route`);
     assert.ok(lire(fichier).includes(cible), `${fichier} doit réexporter ${cible} (l'application Express)`);
+    // La profondeur du chemin relatif doit réellement tomber sur lib/app.js :
+    // un « ../ » de trop fait sortir du dépôt et casse la fonction sur Vercel.
+    assert.ok(
+      existsSync(path.resolve(path.join(RACINE, fichier), "..", cible)),
+      `${fichier} : ${cible} doit résoudre vers lib/app.js depuis son dossier`
+    );
   }
 
   // Les routes imbriquées appelées par le front doivent exister côté Express.
   const api = lire("lib/app.js");
-  for (const route of ["/api/colis/:id", "/api/colis/:id/attach", "/api/colis/:id/progress", "/api/suivi/:code", "/api/agents/:id", "/api/colis/:id/encaisser", "/api/tarifs/:id", "/api/caisse/cloture", "/api/clients/:id"]) {
+  for (const route of [
+    "/api/colis/:id", "/api/colis/:id/attach", "/api/colis/:id/progress", "/api/suivi/:code",
+    "/api/agents/:id", "/api/colis/:id/encaisser", "/api/tarifs/:id", "/api/caisse/cloture",
+    "/api/clients/:id",
+    "/api/bordereaux/:id", "/api/bordereaux/:id/remettre", "/api/bordereaux/:id/controle",
+    "/api/suivi-bordereau/:code", "/api/colis/:id/incidents", "/api/colis/:id/photos",
+    "/api/colis/:id/retour", "/api/incidents/:id", "/api/photos/:id"
+  ]) {
     assert.ok(api.includes(route), `lib/app.js doit déclarer ${route} (captée par son point d'entrée Vercel)`);
   }
   assert.match(lire("js/colis.js"), /\/api\/colis\//, "la fiche colis appelle les routes imbriquées /api/colis/…");
@@ -405,4 +453,79 @@ test("le LOT 3 (carnet de clients + devis public) est câblé de bout en bout", 
   const readme = lire("README.md");
   assert.match(readme, /carnet de clients|Carnet/i, "le README documente le carnet de clients");
   assert.match(readme, /devis/i, "le README documente le devis public");
+});
+
+test("le LOT 4 (bordereaux, photos, incidents, souffrance, alertes) est câblé de bout en bout", () => {
+  // Bordereaux : page agence (liste + préparation + contrôle en cases à cocher)
+  // et page publique sans données personnelles.
+  const bordereauxHtml = lire("bordereaux.html");
+  const bordereauxJs = lire("js/bordereaux.js");
+  for (const id of ["bordereauxList", "bordereauForm", "carrierName", "carrierPhone", "vehicleRef", "destinationGroup", "embarquablesList", "bordereauDetail", "newBordereauButton"]) {
+    assert.match(bordereauxHtml, new RegExp(`id="${id}"`), `bordereaux.html doit exposer #${id}`);
+  }
+  assert.match(bordereauxJs, /\/api\/bordereaux/, "la page bordereaux passe par l'API");
+  assert.match(bordereauxJs, /\/remettre/, "l'émargement appelle /api/bordereaux/:id/remettre");
+  assert.match(bordereauxJs, /\/controle/, "le contrôle d'arrivée appelle /api/bordereaux/:id/controle");
+  assert.match(bordereauxJs, /validerCreationBordereau/, "la validation de création est partagée client/serveur");
+  assert.match(bordereauxJs, /type="checkbox" name="present"/, "le contrôle d'arrivée se fait en cases à cocher");
+
+  const bordereauPublicHtml = lire("bordereau.html");
+  const bordereauPublicJs = lire("js/bordereau-public.js");
+  assert.match(bordereauPublicHtml, /id="bordereauResult"/, "page publique bordereau.html?code=BDR-…");
+  assert.match(bordereauPublicJs, /\/api\/suivi-bordereau\//, "le suivi public du bordereau appelle son API");
+  assert.match(bordereauPublicJs, /BDR-\[A-Z0-9\]\{6\}/, "le code bordereau est validé au format BDR-XXXXXX");
+  assert.match(bordereauxJs, /bordereau\.html\?code=|bordereauPublicUrl/, "le lien public est partageable (transporteur)");
+  assert.match(lire("js/layout.js"), /bordereaux\.html/, "la barre latérale pointe vers bordereaux.html");
+
+  // Photos : compression navigateur, 2 max/étape, jamais publiques ni supprimables.
+  const photosJs = lire("js/photos.js");
+  assert.match(photosJs, /compresserImage/, "la compression est faite côté navigateur (canvas)");
+  assert.match(photosJs, /image\/jpeg/, "ré-encodage JPEG ~200 Ko");
+  assert.match(photosJs, /MAX_PHOTOS_PAR_ETAPE = 2/, "2 photos maximum par étape");
+  const colisJs = lire("js/colis.js");
+  assert.match(colisJs, /\/photos/, "la fiche colis appelle les routes photos");
+  assert.match(colisJs, /accept="image\/\*"|image\/\*/, "seules les images sont acceptées");
+  const app = lire("lib/app.js");
+  assert.match(app, /lib\/photos\.js|from "\.\/photos\.js"/, "le stockage est isolé derrière lib/photos.js");
+  assert.match(lire("lib/photos.js"), /BLOB_READ_WRITE_TOKEN/, "Vercel Blob utilisé quand le jeton existe");
+  assert.match(lire("lib/photos.js"), /PHOTOS_DIR/, "repli disque local pour dev/démo/tests");
+  assert.doesNotMatch(app, /app\.delete\(/, "aucune route de suppression (photos comprises)");
+
+  // Incidents : fiche colis (ouverture + recherches + résolution), bandeau sobre
+  // sur le suivi public, escalade 24 h / 7 j.
+  assert.match(colisJs, /\/incidents/, "la fiche colis appelle les routes incidents");
+  assert.match(colisJs, /incidentResolution/, "la résolution d'un incident est tracée");
+  const incidentsMetier = lire("js/metier-incidents.js");
+  assert.match(incidentsMetier, /SEUIL_ALERTE_24H = 24/, "escalade > 24 h");
+  assert.match(incidentsMetier, /SEUIL_FILE_PLATEFORME_JOURS = 7/, "file plateforme > 7 jours");
+  assert.match(incidentsMetier, /BANDEAU_PUBLIC_INCIDENT/, "bandeau public sobre et fixe");
+  assert.match(app, /bandeauPublicIncident/, "le suivi public projette le bandeau sans détail");
+  assert.match(lire("js/suivi.js"), /tracking\.notice/, "le suivi public affiche le bandeau");
+
+  // Souffrance + retour à l'expéditeur (frais de magasinage dans la caisse).
+  assert.match(app, /\/api\/souffrance/, "liste des colis en souffrance");
+  assert.match(app, /\/api\/colis\/:id\/retour/, "workflow retour à l'expéditeur");
+  assert.match(app, /Frais de magasinage/, "les frais de magasinage alimentent la caisse");
+  assert.match(colisJs, /retourForm/, "la décision de retour passe par la modale dédiée");
+  assert.match(lire("colis.html"), /id="retourModal"/, "modale retour dans colis.html");
+  assert.match(colisJs, /estEnSouffrance/, "le seuil de souffrance est partagé client/serveur");
+
+  // Alertes « colis qui dorment » sur le tableau de bord.
+  const dashboardHtml = lire("dashboard.html");
+  const dashboardJs = lire("js/dashboard.js");
+  for (const id of ["alertsPanel", "alertsList", "alertsCount"]) {
+    assert.match(dashboardHtml, new RegExp(`id="${id}"`), `dashboard.html doit exposer #${id}`);
+  }
+  assert.match(dashboardJs, /\/api\/alertes/, "le tableau de bord appelle /api/alertes");
+  assert.match(dashboardJs, /À traiter/, "cartes « À traiter »");
+  const alertesMetier = lire("js/metier-alertes.js");
+  assert.match(alertesMetier, /SEUIL_SANS_MOUVEMENT_H = 48/, "sans mouvement > 48 h");
+  assert.match(alertesMetier, /SEUIL_NON_RETIRE_H = 72/, "non retiré > 72 h");
+  assert.match(alertesMetier, /SEUIL_NON_RATTACHE_J = 7/, "non rattaché > 7 j");
+
+  // README documente la chaîne de preuve.
+  const readme = lire("README.md");
+  assert.match(readme, /bordereau/i, "le README documente les bordereaux");
+  assert.match(readme, /incident/i, "le README documente les incidents");
+  assert.match(readme, /photo/i, "le README documente les photos de preuve");
 });

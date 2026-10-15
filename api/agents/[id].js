@@ -5,4 +5,4 @@
  * d'URL — chaque forme de route imbriquée a son fichier, qui réexporte
  * la même application Express (lib/app.js).
  */
-export { default } from "../../../lib/app.js";
+export { default } from "../../lib/app.js";

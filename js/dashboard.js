@@ -115,6 +115,30 @@ function renderAll() {
   renderList();
 }
 
+/* --------------------- alertes « colis qui dorment » (LOT 4) --------------- */
+
+const GROUPES_ALERTES = [
+  { cle: "sans_mouvement", label: "Sans mouvement depuis plus de 48 h", icone: "◷" },
+  { cle: "non_retire", label: "Arrivé, non retiré depuis plus de 72 h", icone: "⌖" },
+  { cle: "souffrance", label: "En souffrance : non retiré depuis plus de 7 jours (retour possible)", icone: "⚠" },
+  { cle: "non_rattache", label: "Agence de destination non rattachée depuis plus de 7 jours", icone: "↪" }
+];
+
+function renderAlertes(alertes, total) {
+  const panel = document.getElementById("alertsPanel");
+  if (!panel) return;
+  const groupes = GROUPES_ALERTES.filter((groupe) => (alertes[groupe.cle] || []).length);
+  panel.hidden = groupes.length === 0;
+  if (!groupes.length) return;
+  document.getElementById("alertsCount").textContent = `${total} colis à traiter`;
+  document.getElementById("alertsList").innerHTML = groupes.map((groupe) => `
+    <div class="alert-group">
+      <h3>${groupe.icone} ${groupe.label} <span class="alert-count">${alertes[groupe.cle].length}</span></h3>
+      <ul class="alert-items">${alertes[groupe.cle].map((item) => `
+        <li><a href="colis.html?id=${encodeURIComponent(item.id)}"><strong class="tracking-code">${escapeHTML(item.trackingCode)}</strong> ${escapeHTML(item.originCity)} → ${escapeHTML(item.destinationCity)}</a> <small>depuis ${Math.floor(item.heures / 24)} j</small></li>`).join("")}</ul>
+    </div>`).join("");
+}
+
 async function charger() {
   try {
     const { parcels } = await api("/api/colis");
@@ -127,6 +151,14 @@ async function charger() {
     renderAll();
   } catch (error) {
     showPageMessage(dashboardMessage, errorMessage(error));
+  }
+  // Cartes « À traiter » : une panne de cette route secondaire ne doit pas
+  // priver l'agence de sa liste de colis.
+  try {
+    const { alertes, total } = await api("/api/alertes");
+    renderAlertes(alertes, total);
+  } catch {
+    document.getElementById("alertsPanel")?.setAttribute("hidden", "");
   }
 }
 

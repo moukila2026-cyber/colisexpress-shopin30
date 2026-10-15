@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Bordereaux d'acheminement COLIS EXPRESS : regroupez les colis expédiés ensemble et contrôlez les arrivées.">
+  <title>Bordereaux d'acheminement — COLIS EXPRESS</title>
+  <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body class="agency-page">
+  <div class="app-shell">
+    <div id="sidebarMount"></div>
+    <main class="agency-main">
+      <div id="topbarMount"></div>
+      <div class="agency-content">
+        <header class="desktop-page-heading">
+          <div><h1>Bordereaux d'acheminement</h1><p>Regroupez les colis qui partent ensemble, identifiez le transporteur et contrôlez l'arrivée en cases à cocher.</p></div>
+          <button class="button button-orange" id="newBordereauButton" type="button">＋ Nouveau bordereau</button>
+        </header>
+        <div class="page-heading-mobile"><h1>Bordereaux</h1><p>Les lots de colis expédiés ensemble.</p></div>
+        <div class="page-message" id="pageMessage" hidden role="alert"></div>
+
+        <section class="panel-card parcels-panel" id="bordereauxPanel">
+          <div class="panel-title-row"><h2>Mes bordereaux</h2><span id="bordereauxCount">0 bordereau</span></div>
+          <div id="bordereauxList"><div class="loading-state">Chargement des bordereaux…</div></div>
+        </section>
+
+        <section class="panel-card" id="bordereauFormSection" aria-labelledby="bordereauFormTitle" hidden>
+          <div class="panel-title-row"><h2 id="bordereauFormTitle">Préparer un bordereau</h2><button class="button button-outline button-small" id="cancelBordereau" type="button">Annuler</button></div>
+          <p class="notice-box">Sélectionnez de 1 à 200 colis « Enregistré » ou « Expédié » qui partent ensemble, vers la <strong>même destination</strong>. Le transporteur reçoit un lien public (sans données personnelles) et l'agence d'arrivée contrôle le lot en cases à cocher : un colis absent crée automatiquement un incident.</p>
+          <div class="page-message" id="bordereauFormMessage" hidden role="alert"></div>
+          <form id="bordereauForm" class="form-stack" novalidate>
+            <div class="form-grid">
+              <div class="field"><label for="carrierName">Transporteur <span class="required">*</span></label><input id="carrierName" name="carrierName" type="text" autocomplete="off" placeholder="Ex. Gbala Transport" required></div>
+              <div class="field"><label for="carrierPhone">Téléphone du transporteur <span class="required">*</span></label><input id="carrierPhone" name="carrierPhone" type="tel" inputmode="numeric" placeholder="0700000000" required><small class="field-help">Format ivoirien, 10 chiffres. Sert à la relance si le lot dort.</small></div>
+              <div class="field field-full"><label for="vehicleRef">Véhicule ou ligne de car</label><input id="vehicleRef" name="vehicleRef" type="text" autocomplete="off" maxlength="120" placeholder="Ex. car Korhogo 11 h — CI-1234-AB"></div>
+            </div>
+            <div class="field" id="destinationGroupField">
+              <label for="destinationGroup">Destination du lot <span class="required">*</span></label>
+              <select id="destinationGroup" name="destinationGroup"><option value="">Chargement des colis embarquables…</option></select>
+              <small class="field-help">Tous les colis d'un bordereau vont dans la même ville d'arrivée.</small>
+            </div>
+            <div class="bordereau-parcels" id="embarquablesList"><div class="loading-state">Chargement des colis embarquables…</div></div>
+            <div class="form-footer">
+              <span id="embarquesCount" class="muted-note">0 colis sélectionné</span>
+              <button class="button button-primary" id="saveBordereauButton" type="submit">Créer le bordereau</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel-card" id="bordereauDetail" aria-labelledby="bordereauDetailTitle" hidden>
+          <div class="panel-title-row"><h2 id="bordereauDetailTitle">Bordereau</h2><button class="button button-outline button-small" id="closeBordereauDetail" type="button">← Retour à la liste</button></div>
+          <div id="bordereauDetailContent"></div>
+        </section>
+      </div>
+    </main>
+  </div>
+  <script type="module" src="js/bordereaux.js"></script>
+</body>
+</html>

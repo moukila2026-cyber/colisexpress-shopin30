@@ -43,6 +43,17 @@
       </form>
     </div>
   </div>
+  <div class="modal-backdrop" id="retourModal" hidden role="dialog" aria-modal="true" aria-labelledby="retourModalTitle">
+    <div class="modal-card">
+      <div class="modal-heading"><div><h2 id="retourModalTitle">Retour à l'expéditeur</h2><p id="retourHint">Le colis est arrivé et n'a pas été retiré : décidez son retour vers l'agence expéditrice. Le nouveau trajet est tracé dans l'historique du colis.</p></div><button class="modal-close" id="closeRetour" type="button" aria-label="Fermer">×</button></div>
+      <div class="page-message" id="retourMessage" hidden role="alert"></div>
+      <form id="retourForm" class="form-stack" novalidate>
+        <div class="field"><label for="retourFrais">Frais de magasinage (FCFA)</label><input id="retourFrais" name="retourFrais" type="number" inputmode="numeric" min="0" step="1" value="0"><small class="field-help">Facultatif : encaissé immédiatement dans la caisse du jour de votre agence.</small></div>
+        <div class="field" id="retourModeField"><label for="retourMode">Mode d'encaissement</label><select id="retourMode" name="retourMode"><option value="especes">Espèces</option><option value="mobile_money">Mobile Money</option></select></div>
+        <div class="modal-actions"><button class="button button-outline" id="cancelRetour" type="button">Annuler</button><button class="button button-primary" type="submit">Décider le retour</button></div>
+      </form>
+    </div>
+  </div>
   <script type="module" src="js/colis.js"></script>
 </body>
 </html>

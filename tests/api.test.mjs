@@ -7,12 +7,18 @@
  * rattachement unique, progression des statuts, et refus d'accès.
  */
 import assert from "node:assert/strict";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import test from "node:test";
 
 process.env.SEED_DEMO = "0";
 delete process.env.DATABASE_URL;
+// Photos de preuve : backend disque local dans un dossier temporaire.
+process.env.PHOTOS_DIR = mkdtempSync(path.join(tmpdir(), "colis-photos-"));
 
 const { buildApp } = await import("../lib/app.js");
+const { query } = await import("../db/db.js");
 
 const app = buildApp();
 const server = app.listen(0);
@@ -39,6 +45,12 @@ function client() {
     get(path) { return this.call("GET", path); },
     post(path, body) { return this.call("POST", path, body ?? {}); },
     patch(path, body) { return this.call("PATCH", path, body); },
+    async brut(urlPath) {
+      const headers = cookie ? { Cookie: cookie } : {};
+      const res = await fetch(`${BASE}${urlPath}`, { headers });
+      const buffer = Buffer.from(await res.arrayBuffer());
+      return { status: res.status, contentType: res.headers.get("content-type"), buffer };
+    },
     deconnexion() { cookie = null; }
   };
 }
@@ -943,6 +955,425 @@ test("le devis public est anonyme, calcule depuis les grilles actives et ne dema
   // Aucune donnée personnelle ni identifiant interne dans la réponse.
   const brut = JSON.stringify(devis.data);
   assert.ok(!brut.includes("password") && !brut.includes("@") && !brut.includes("agencyId") && !brut.includes("agency_id"));
+});
+
+/* ------------- bordereaux, photos, incidents, souffrance (LOT 4) ----------- */
+
+const PNG_1PX = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+
+function joursAvant(n) {
+  return new Date(Date.now() - n * 86400000).toISOString();
+}
+
+/** Antidate la dernière étape d'historique (et updated_at) d'un colis. */
+async function antidaterArrivee(id, jours) {
+  const { rows } = await query("SELECT history FROM parcels WHERE id = $1", [id]);
+  const history = typeof rows[0].history === "string" ? JSON.parse(rows[0].history) : rows[0].history;
+  history[history.length - 1].date = joursAvant(jours);
+  await query(`UPDATE parcels SET history = $1, updated_at = now() - interval '${jours} days' WHERE id = $2`, [
+    JSON.stringify(history), id
+  ]);
+}
+
+test("bordereau : création, émargements par acteur, contrôle d'arrivée, écart → incident automatique", async () => {
+  const a = client();
+  const b = client();
+  const c = client();
+  await creerAgence(a, "Agence BordA", "Abidjan");
+  const agenceB = await creerAgence(b, "Agence BordB", "Bouaké");
+  await creerAgence(c, "Agence BordC", "Korhogo");
+
+  const ids = [];
+  const codes = [];
+  for (let i = 0; i < 3; i += 1) {
+    const cree = await a.post("/api/colis", {
+      agencyNotRegistered: false,
+      values: valeurs({ destinationAgencyId: agenceB.id, recipientPhone: `0500000${100 + i}` })
+    });
+    assert.equal(cree.status, 201, JSON.stringify(cree.data));
+    ids.push(cree.data.parcel.id);
+    codes.push(cree.data.parcel.trackingCode);
+  }
+
+  // Validations serveur à la création.
+  assert.equal((await a.post("/api/bordereaux", { carrierName: "Gbaka", carrierPhone: "0700000055", parcelIds: [] })).status, 400);
+  assert.equal((await a.post("/api/bordereaux", { carrierName: "Gbaka", carrierPhone: "123", parcelIds: ids })).status, 400);
+  assert.equal((await b.post("/api/bordereaux", { carrierName: "Gbaka", carrierPhone: "0700000055", parcelIds: [ids[0]] })).status, 400, "seul l'expéditeur borde ses colis");
+
+  const ok = await a.post("/api/bordereaux", {
+    carrierName: "Gbaka Express",
+    carrierPhone: "+225 07-00-00-00-55",
+    vehicleRef: "car Bouaké 07 h",
+    parcelIds: ids
+  });
+  assert.equal(ok.status, 201, JSON.stringify(ok.data));
+  const bordereau = ok.data.bordereau;
+  assert.match(bordereau.code, /^BDR-[A-Z0-9]{6}$/);
+  assert.equal(bordereau.status, "Préparé");
+  assert.equal(bordereau.parcelCount, 3);
+  assert.equal(bordereau.toAgencyId, agenceB.id);
+  assert.equal(bordereau.carrierPhone, "0700000055");
+
+  // Un colis déjà bordé ne repart pas dans un autre lot.
+  assert.equal((await a.post("/api/bordereaux", { carrierName: "Autre Car", carrierPhone: "0700000055", parcelIds: [ids[0]] })).status, 400);
+
+  // Visibilité : les deux agences concernées seulement.
+  assert.equal((await c.get(`/api/bordereaux/${bordereau.id}`)).status, 404);
+  const vuB = await b.get(`/api/bordereaux/${bordereau.id}`);
+  assert.equal(vuB.status, 200);
+  assert.equal(vuB.data.parcels.length, 3);
+  assert.equal(vuB.data.actions.role, "destinataire");
+  assert.equal(vuB.data.actions.prochaineEtape, null, "la destination n'émarge pas la remise");
+  assert.deepEqual((await c.get("/api/bordereaux")).data.bordereaux, []);
+  assert.equal((await a.get("/api/bordereaux")).data.bordereaux[0].role, "emetteur");
+
+  // Émargements verrouillés par acteur.
+  assert.equal((await b.post(`/api/bordereaux/${bordereau.id}/remettre`, {})).status, 403);
+  const remis = await a.post(`/api/bordereaux/${bordereau.id}/remettre`, { etape: "Remis" });
+  assert.equal(remis.status, 200);
+  assert.equal(remis.data.bordereau.status, "Remis");
+  assert.ok(remis.data.bordereau.handedOverAt);
+
+  // La remise au transporteur expédie les colis et trace le bordereau.
+  const colis0 = await a.get(`/api/colis/${ids[0]}`);
+  assert.equal(colis0.data.parcel.status, "Expédié");
+  assert.equal(colis0.data.parcel.bordereauId, bordereau.id);
+  const etapeRemise = colis0.data.parcel.history[colis0.data.parcel.history.length - 1];
+  assert.equal(etapeRemise.status, "Expédié");
+  assert.match(etapeRemise.note, new RegExp(bordereau.code));
+
+  assert.equal((await a.post(`/api/bordereaux/${bordereau.id}/remettre`, { etape: "Arrivé" })).status, 400, "l'étape suivante est imposée");
+  const enRoute = await a.post(`/api/bordereaux/${bordereau.id}/remettre`, {});
+  assert.equal(enRoute.data.bordereau.status, "En route");
+  assert.equal((await a.get(`/api/colis/${ids[1]}`)).data.parcel.status, "En transit", "le lot qui roule met les colis en transit");
+
+  assert.equal((await a.post(`/api/bordereaux/${bordereau.id}/remettre`, {})).status, 403, "l'arrivée appartient à la destination");
+  assert.equal((await b.post(`/api/bordereaux/${bordereau.id}/remettre`, {})).data.bordereau.status, "Arrivé");
+
+  // Contrôle d'arrivée en cases à cocher.
+  assert.equal((await a.post(`/api/bordereaux/${bordereau.id}/controle`, { absentParcelIds: [] })).status, 403);
+  const controle = await b.post(`/api/bordereaux/${bordereau.id}/controle`, { absentParcelIds: [ids[2]] });
+  assert.equal(controle.status, 201, JSON.stringify(controle.data));
+  assert.equal(controle.data.bordereau.status, "Écart");
+  assert.deepEqual(controle.data.bordereau.missingParcelIds, [ids[2]]);
+  assert.equal(controle.data.colisAvances, 2, "les colis présents sont confirmés arrivés");
+  assert.equal(controle.data.incidentsCrees, 1, "l'absent ouvre un incident automatique");
+
+  assert.equal((await b.get(`/api/colis/${ids[0]}`)).data.parcel.status, "Arrivé à l'agence de destination");
+  assert.equal((await b.get(`/api/colis/${ids[2]}`)).data.parcel.status, "En transit", "l'absent n'avance pas");
+  assert.equal((await b.post(`/api/bordereaux/${bordereau.id}/controle`, { absentParcelIds: [] })).status, 403, "le contrôle ne se rejoue pas");
+
+  // Incident automatique visible par les deux agences, avec le bordereau en preuve.
+  const incA = await a.get("/api/incidents");
+  const incB = await b.get("/api/incidents");
+  assert.equal(incA.data.incidents.length, 1);
+  assert.equal(incB.data.incidents.length, 1);
+  const incident = incA.data.incidents[0];
+  assert.equal(incident.type, "perdu");
+  assert.equal(incident.state, "ouvert");
+  assert.equal(incident.parcel.id, ids[2]);
+  assert.equal(incident.bordereauId, bordereau.id);
+  assert.match(incident.note, new RegExp(bordereau.code));
+  assert.deepEqual((await c.get("/api/incidents")).data.incidents, [], "une agence sans lien ne voit rien");
+
+  // Suivi public du colis absent : bandeau sobre, aucun détail privé.
+  const suivi = await c.get(`/api/suivi/${codes[2]}`);
+  assert.equal(suivi.data.tracking.notice, "Une vérification est en cours sur ce colis.");
+  assert.ok(!JSON.stringify(suivi.data).includes("Absent au contrôle"), "la note de l'incident ne fuit pas en public");
+
+  // Suivi public du bordereau : aucune donnée personnelle, résultat du contrôle.
+  const publicBdr = await c.get(`/api/suivi-bordereau/${bordereau.code}`);
+  assert.equal(publicBdr.status, 200);
+  const brutBdr = JSON.stringify(publicBdr.data);
+  assert.ok(!brutBdr.includes("0700000055"), "le téléphone du transporteur n'est jamais public");
+  assert.ok(!brutBdr.includes("Awa") && !brutBdr.includes("Ibrahim") && !brutBdr.includes("CI12345678"));
+  assert.equal(publicBdr.data.bordereau.status, "Écart");
+  assert.equal(publicBdr.data.bordereau.carrierName, "Gbaka Express");
+  assert.equal(publicBdr.data.bordereau.parcels.length, 3);
+  assert.equal(publicBdr.data.bordereau.parcels.filter((p) => p.present === true).length, 2);
+  assert.equal(publicBdr.data.bordereau.parcels.filter((p) => p.present === false).length, 1);
+  assert.equal((await c.get("/api/suivi-bordereau/BDR-XXXXXX")).status, 404);
+});
+
+test("bordereau vers une destination non rattachée : l'expéditeur déclare l'arrivée et contrôle", async () => {
+  const a = client();
+  await creerAgence(a, "Agence SoloBord", "Abidjan");
+  const cree = await a.post("/api/colis", {
+    agencyNotRegistered: true,
+    values: valeurs({ destinationAgencyId: "", destinationCity: "Korhogo", declaredAgencyName: "Flash Solo", declaredAgencyCity: "Korhogo", declaredAgencyPhone: "0700000009" })
+  });
+  const id = cree.data.parcel.id;
+
+  const ok = await a.post("/api/bordereaux", { carrierName: "Car Korhogo", carrierPhone: "0700000066", parcelIds: [id] });
+  assert.equal(ok.status, 201, JSON.stringify(ok.data));
+  assert.equal(ok.data.bordereau.toAgencyId, null);
+  assert.equal(ok.data.bordereau.toCity, "Korhogo");
+  const bdr = ok.data.bordereau.id;
+
+  assert.equal((await a.post(`/api/bordereaux/${bdr}/remettre`, {})).data.bordereau.status, "Remis");
+  assert.equal((await a.post(`/api/bordereaux/${bdr}/remettre`, {})).data.bordereau.status, "En route");
+  assert.equal((await a.post(`/api/bordereaux/${bdr}/remettre`, {})).data.bordereau.status, "Arrivé", "l'expéditeur déclare l'arrivée si rien n'est rattaché");
+  const controle = await a.post(`/api/bordereaux/${bdr}/controle`, { absentParcelIds: [] });
+  assert.equal(controle.data.bordereau.status, "Contrôlé");
+  assert.equal(controle.data.colisAvances, 1);
+  assert.equal(controle.data.incidentsCrees, 0);
+  assert.equal((await a.get(`/api/colis/${id}`)).data.parcel.status, "Arrivé à l'agence de destination");
+});
+
+test("incidents : ouverture, transitions, cloisonnement, bandeau public, escalade 24 h / 7 j", async () => {
+  const a = client();
+  const b = client();
+  const c = client();
+  await creerAgence(a, "Agence IncA", "Abidjan");
+  const agenceB = await creerAgence(b, "Agence IncB", "Bouaké");
+  await creerAgence(c, "Agence IncC", "Korhogo");
+  const cree = await a.post("/api/colis", {
+    agencyNotRegistered: false,
+    values: valeurs({ destinationAgencyId: agenceB.id })
+  });
+  const id = cree.data.parcel.id;
+  const code = cree.data.parcel.trackingCode;
+
+  assert.equal((await c.post(`/api/colis/${id}/incidents`, { type: "perdu", note: "vu nulle part" })).status, 404, "une agence sans lien n'ouvre rien");
+  assert.equal((await a.post(`/api/colis/${id}/incidents`, { type: "vole", note: "xx" })).status, 400);
+  assert.equal((await a.post(`/api/colis/${id}/incidents`, { type: "perdu", note: "" })).status, 400);
+
+  const ouvert = await b.post(`/api/colis/${id}/incidents`, { type: "retard", note: "Le car a trois jours de retard, client informé." });
+  assert.equal(ouvert.status, 201, JSON.stringify(ouvert.data));
+  assert.equal(ouvert.data.incident.state, "ouvert");
+  assert.equal((await a.post(`/api/colis/${id}/incidents`, { type: "perdu", note: "doublon" })).status, 409, "un seul incident non résolu à la fois");
+
+  // Bandeau public sobre : ni type, ni note, ni agence.
+  const suivi = await c.get(`/api/suivi/${code}`);
+  assert.equal(suivi.data.tracking.notice, "Une vérification est en cours sur ce colis.");
+  const brutSuivi = JSON.stringify(suivi.data);
+  assert.ok(!brutSuivi.includes("car a trois jours"));
+  assert.ok(!brutSuivi.includes("IncB"));
+
+  // Transitions d'état.
+  const incId = ouvert.data.incident.id;
+  assert.equal((await c.patch(`/api/incidents/${incId}`, { state: "recherches" })).status, 404, "cloisonnement");
+  assert.equal((await a.patch(`/api/incidents/${incId}`, { state: "resolu" })).status, 400, "résolution sans explication refusée");
+  assert.equal((await a.patch(`/api/incidents/${incId}`, { state: "ouvert" })).status, 400, "jamais de retour à ouvert");
+  assert.equal((await a.patch(`/api/incidents/${incId}`, { state: "recherches" })).data.incident.state, "recherches");
+
+  // Escalade : ouvert > 24 h → alerte ; > 7 j → file plateforme (lot 6).
+  await query("UPDATE incidents SET opened_at_iso = $1 WHERE id = $2", [joursAvant(2), incId]);
+  const esc = (await a.get("/api/incidents")).data.incidents.find((item) => item.id === incId);
+  assert.equal(esc.alerte24h, true);
+  assert.equal(esc.filePlateforme, false);
+  await query("UPDATE incidents SET opened_at_iso = $1 WHERE id = $2", [joursAvant(8), incId]);
+  const esc2 = (await b.get("/api/incidents?state=recherches")).data.incidents.find((item) => item.id === incId);
+  assert.equal(esc2.filePlateforme, true);
+  assert.deepEqual((await b.get("/api/incidents?state=ouvert")).data.incidents, []);
+  assert.equal((await b.get("/api/incidents?state=invalide")).status, 400);
+
+  // Résolution : bandeau public disparu, incident conservé, immuable.
+  const resolu = await b.patch(`/api/incidents/${incId}`, { state: "resolu", resolution: "Colis arrivé par le car suivant, remis au destinataire." });
+  assert.equal(resolu.data.incident.state, "resolu");
+  assert.ok(resolu.data.incident.resolvedAtISO);
+  assert.equal((await a.patch(`/api/incidents/${incId}`, { state: "recherches" })).status, 409, "résolu = immuable");
+  const suivi2 = await c.get(`/api/suivi/${code}`);
+  assert.equal("notice" in suivi2.data.tracking, false);
+  assert.equal((await a.get("/api/incidents?state=resolu")).data.incidents.length, 1);
+
+  // Un nouvel incident est possible après résolution.
+  assert.equal((await a.post(`/api/colis/${id}/incidents`, { type: "endommage", note: "Carton écrasé constaté ce jour." })).status, 201);
+});
+
+test("photos de preuve : 2 par étape, acteurs verrouillés, accès privé, jamais supprimables", async () => {
+  const a = client();
+  const b = client();
+  const c = client();
+  await creerAgence(a, "Agence PhotoA", "Abidjan");
+  const agenceB = await creerAgence(b, "Agence PhotoB", "Bouaké");
+  await creerAgence(c, "Agence PhotoC", "Korhogo");
+  const cree = await a.post("/api/colis", {
+    agencyNotRegistered: false,
+    values: valeurs({ destinationAgencyId: agenceB.id })
+  });
+  const id = cree.data.parcel.id;
+
+  // Validations : étape, type de contenu, data URL.
+  assert.equal((await a.post(`/api/colis/${id}/photos`, { etape: "retrait", image: PNG_1PX })).status, 400);
+  assert.equal((await a.post(`/api/colis/${id}/photos`, { etape: "prise_en_charge", image: "data:text/plain;base64,Ym9uam91cg==" })).status, 400);
+  assert.equal((await a.post(`/api/colis/${id}/photos`, { etape: "prise_en_charge", image: "pas-une-image" })).status, 400);
+
+  // Acteurs : prise en charge = expéditeur, arrivée = destination.
+  assert.equal((await b.post(`/api/colis/${id}/photos`, { etape: "prise_en_charge", image: PNG_1PX })).status, 403);
+  assert.equal((await a.post(`/api/colis/${id}/photos`, { etape: "arrivee", image: PNG_1PX })).status, 403);
+  assert.equal((await c.post(`/api/colis/${id}/photos`, { etape: "prise_en_charge", image: PNG_1PX })).status, 404, "agence sans lien");
+
+  const p1 = await a.post(`/api/colis/${id}/photos`, { etape: "prise_en_charge", image: PNG_1PX });
+  assert.equal(p1.status, 201, JSON.stringify(p1.data));
+  assert.equal(p1.data.photo.etape, "prise_en_charge");
+  assert.equal(p1.data.photo.contentType, "image/png");
+  assert.ok(p1.data.photo.sizeBytes > 0);
+  assert.ok(p1.data.photo.agentName, "l'agent acteur est tracé");
+  assert.equal("storageKey" in p1.data.photo, false, "la clé de stockage ne sort jamais de l'API");
+  assert.equal((await a.post(`/api/colis/${id}/photos`, { etape: "prise_en_charge", image: PNG_1PX })).status, 201);
+  assert.equal((await a.post(`/api/colis/${id}/photos`, { etape: "prise_en_charge", image: PNG_1PX })).status, 400, "2 max par étape");
+  assert.equal((await b.post(`/api/colis/${id}/photos`, { etape: "arrivee", image: PNG_1PX })).status, 201);
+
+  // Métadonnées : les deux agences, jamais la troisième.
+  assert.equal((await a.get(`/api/colis/${id}/photos`)).data.photos.length, 3);
+  assert.equal((await b.get(`/api/colis/${id}/photos`)).data.photos.length, 3);
+  assert.equal((await c.get(`/api/colis/${id}/photos`)).status, 404);
+
+  // Contenu binaire : session requise, agences concernées seulement.
+  const anonyme = client();
+  assert.equal((await anonyme.brut(`/api/photos/${p1.data.photo.id}`)).status, 401, "jamais public");
+  assert.equal((await c.brut(`/api/photos/${p1.data.photo.id}`)).status, 404);
+  const contenu = await b.brut(`/api/photos/${p1.data.photo.id}`);
+  assert.equal(contenu.status, 200);
+  assert.match(contenu.contentType, /image\/png/);
+  assert.ok(contenu.buffer.length > 0);
+
+  // Aucune suppression possible (chaîne de preuve).
+  assert.equal((await a.call("DELETE", `/api/photos/${p1.data.photo.id}`)).status, 404);
+  assert.equal((await a.call("DELETE", `/api/colis/${id}/photos`)).status, 404);
+});
+
+test("souffrance : liste > 7 jours, retour à l'expéditeur tracé, frais de magasinage en caisse", async () => {
+  const a = client();
+  const b = client();
+  const c = client();
+  await creerAgence(a, "Agence SouffA", "Abidjan");
+  const agenceB = await creerAgence(b, "Agence SouffB", "Bouaké");
+  await creerAgence(c, "Agence SouffC", "Korhogo");
+  const cree = await a.post("/api/colis", {
+    agencyNotRegistered: false,
+    payment: { status: "arrivee" },
+    values: valeurs({ destinationAgencyId: agenceB.id, priceFCFA: "3500" })
+  });
+  const id = cree.data.parcel.id;
+  await a.post(`/api/colis/${id}/progress`, {});
+  await a.post(`/api/colis/${id}/progress`, {});
+  const arrive = await b.post(`/api/colis/${id}/progress`, {});
+  assert.equal(arrive.data.parcel.status, "Arrivé à l'agence de destination");
+
+  // Rien en souffrance avant 7 jours.
+  assert.deepEqual((await b.get("/api/souffrance")).data.souffrance, []);
+  await antidaterArrivee(id, 8);
+
+  const souffranceB = await b.get("/api/souffrance");
+  assert.equal(souffranceB.data.souffrance.length, 1);
+  assert.equal(souffranceB.data.souffrance[0].id, id);
+  assert.ok(souffranceB.data.souffrance[0].jours >= 8);
+  assert.equal((await a.get("/api/souffrance")).data.souffrance.length, 1, "l'expéditeur voit aussi la souffrance");
+  assert.deepEqual((await c.get("/api/souffrance")).data.souffrance, []);
+
+  // Retour : gardes d'acteur, d'état et de mode de paiement.
+  assert.equal((await c.post(`/api/colis/${id}/retour`, { etape: "decider" })).status, 404);
+  assert.equal((await a.post(`/api/colis/${id}/retour`, { etape: "decider" })).status, 403, "l'expéditeur ne décide pas quand la destination est rattachée");
+  assert.equal((await b.post(`/api/colis/${id}/retour`, { etape: "decider", fraisMagasinageFCFA: 1500, mode: "cheque" })).status, 400);
+  assert.equal((await b.post(`/api/colis/${id}/retour`, { etape: "recevoir" })).status, 403, "la réception appartient à l'expéditeur");
+
+  const decider = await b.post(`/api/colis/${id}/retour`, { etape: "decider", fraisMagasinageFCFA: 1500, mode: "especes" });
+  assert.equal(decider.status, 200, JSON.stringify(decider.data));
+  assert.equal(decider.data.parcel.retourStatus, "en_cours");
+  const derniere = decider.data.parcel.history[decider.data.parcel.history.length - 1];
+  assert.equal(derniere.status, "Retour à l'expéditeur décidé");
+  assert.match(derniere.note, /magasinage/);
+  assert.equal(decider.data.parcel.status, "Arrivé à l'agence de destination", "les 5 statuts ne changent pas");
+
+  // Les frais de magasinage alimentent la caisse du jour de B.
+  const caisse = await b.get(`/api/caisse?date=${jourCleTest()}`);
+  const ligne = caisse.data.encaissements.find((e) => e.parcelId === id);
+  assert.ok(ligne, "frais de magasinage encaissés");
+  assert.equal(ligne.amountFCFA, 1500);
+  assert.equal(ligne.label, "Frais de magasinage");
+
+  // Pas de double décision ; réception par l'expéditeur.
+  assert.equal((await b.post(`/api/colis/${id}/retour`, { etape: "decider" })).status, 409);
+  const recevoir = await a.post(`/api/colis/${id}/retour`, { etape: "recevoir" });
+  assert.equal(recevoir.status, 200);
+  assert.equal(recevoir.data.parcel.retourStatus, "termine");
+  const fin = recevoir.data.parcel.history[recevoir.data.parcel.history.length - 1];
+  assert.equal(fin.status, "Colis retourné à l'expéditeur");
+  assert.equal((await a.post(`/api/colis/${id}/retour`, { etape: "recevoir" })).status, 400);
+  assert.equal((await b.post(`/api/colis/${id}/retour`, { etape: "decider" })).status, 409, "déjà retourné");
+  assert.deepEqual((await b.get("/api/souffrance")).data.souffrance, [], "un retour terminé sort de la souffrance");
+});
+
+test("alertes « colis qui dorment » : 48 h sans mouvement, 72 h non retiré, 7 j non rattaché", async () => {
+  const a = client();
+  const b = client();
+  await creerAgence(a, "Agence AlertA", "Abidjan");
+  const agenceB = await creerAgence(b, "Agence AlertB", "Bouaké");
+
+  // Colis 1 : expédié, sans mouvement depuis 3 jours.
+  const c1 = await a.post("/api/colis", {
+    agencyNotRegistered: false,
+    values: valeurs({ destinationAgencyId: agenceB.id, recipientPhone: "0500000111" })
+  });
+  await a.post(`/api/colis/${c1.data.parcel.id}/progress`, {});
+  await query("UPDATE parcels SET updated_at = now() - interval '3 days' WHERE id = $1", [c1.data.parcel.id]);
+
+  // Colis 2 : destination non rattachée depuis 8 jours.
+  const c2 = await a.post("/api/colis", {
+    agencyNotRegistered: true,
+    values: valeurs({
+      destinationAgencyId: "", recipientPhone: "0500000112",
+      declaredAgencyName: "Flash Alert", declaredAgencyCity: "Korhogo", declaredAgencyPhone: "0700000009"
+    })
+  });
+  await query("UPDATE parcels SET created_at = now() - interval '8 days', created_at_iso = $1, updated_at = now() - interval '8 days' WHERE id = $2", [
+    joursAvant(8), c2.data.parcel.id
+  ]);
+
+  // Colis 3 : arrivé non retiré depuis 4 jours (72 h, pas encore 7 j).
+  const c3 = await a.post("/api/colis", {
+    agencyNotRegistered: false,
+    values: valeurs({ destinationAgencyId: agenceB.id, recipientPhone: "0500000113" })
+  });
+  await a.post(`/api/colis/${c3.data.parcel.id}/progress`, {});
+  await a.post(`/api/colis/${c3.data.parcel.id}/progress`, {});
+  await b.post(`/api/colis/${c3.data.parcel.id}/progress`, {});
+  await antidaterArrivee(c3.data.parcel.id, 4);
+
+  const alertes = await a.get("/api/alertes");
+  assert.equal(alertes.status, 200);
+  const groupes = alertes.data.alertes;
+  assert.deepEqual(groupes.sans_mouvement.map((item) => item.id), [c1.data.parcel.id]);
+  assert.deepEqual(groupes.non_rattache.map((item) => item.id), [c2.data.parcel.id]);
+  assert.deepEqual(groupes.non_retire.map((item) => item.id), [c3.data.parcel.id]);
+  assert.deepEqual(groupes.souffrance.map((item) => item.id), [], "4 jours : pas encore en souffrance");
+  assert.ok(alertes.data.total >= 3);
+
+  // La destination voit les signaux de SES colis.
+  const alertesB = await b.get("/api/alertes");
+  assert.deepEqual(alertesB.data.alertes.non_retire.map((item) => item.id), [c3.data.parcel.id]);
+  assert.deepEqual(alertesB.data.alertes.non_rattache, [], "le colis non rattaché appartient à A seule");
+
+  // Au 8e jour, le colis non retiré bascule aussi en souffrance.
+  await antidaterArrivee(c3.data.parcel.id, 9);
+  const apres = await b.get("/api/alertes");
+  assert.deepEqual(apres.data.alertes.souffrance.map((item) => item.id), [c3.data.parcel.id]);
+  assert.equal((await b.get("/api/souffrance")).data.souffrance.length, 1);
+});
+
+test("limite Hobby Vercel : les rewrites ?action=… sont redépliés vers les routes imbriquées", async () => {
+  const a = client();
+  await creerAgence(a, "Agence PliAction", "Abidjan");
+  const cree = await a.post("/api/colis", {
+    agencyNotRegistered: true,
+    values: valeurs({ destinationCity: "Man", declaredAgencyName: "Flash Pli", declaredAgencyCity: "Man", declaredAgencyPhone: "0700000188" })
+  });
+  const id = cree.data.parcel.id;
+
+  // La forme repliée (celle que Vercel sert après rewrite) avance le colis.
+  const via = await a.post(`/api/colis/${id}?action=progress`, {});
+  assert.equal(via.status, 200, JSON.stringify(via.data));
+  assert.equal(via.data.parcel.status, "Expédié");
+
+  // L'URL directe fonctionne toujours telle quelle (local, npm start, tests).
+  const direct = await a.post(`/api/colis/${id}/progress`, {});
+  assert.equal(direct.status, 200);
+  assert.equal(direct.data.parcel.status, "En transit");
+
+  // Une action inconnue ne crée aucune route.
+  assert.equal((await a.post(`/api/colis/${id}?action=inconnue`, {})).status, 404);
 });
 
 test.after(() => {

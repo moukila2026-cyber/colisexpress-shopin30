@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Suivi public d'un bordereau d'acheminement COLIS EXPRESS : le lot et ses colis, sans données personnelles.">
+  <title>Suivi d'un bordereau — COLIS EXPRESS</title>
+  <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body class="tracking-page">
+  <section class="tracking-hero">
+    <img class="tracking-media" src="assets/img/suivi-route.jpg" alt="" width="1600" height="600">
+    <div class="tracking-hero-inner">
+      <a class="brand" href="index.html"><span class="brand-mark">CE</span><span>COLIS <em>EXPRESS</em></span></a>
+      <h1>Suivi d'un bordereau</h1>
+      <p>Saisissez le code du lot indiqué sur le bordereau (format BDR-XXXXXX) pour voir son acheminement en direct.</p>
+      <form class="tracking-search" id="bordereauForm" novalidate>
+        <label for="bordereauCode">Code bordereau</label>
+        <div class="tracking-search-row">
+          <input id="bordereauCode" name="bordereauCode" type="text" autocomplete="off" placeholder="Ex. BDR-8F3K2A" maxlength="10" aria-describedby="bordereauMessage">
+          <button class="button button-orange" type="submit">Rechercher</button>
+        </div>
+      </form>
+    </div>
+  </section>
+  <main class="tracking-main">
+    <div class="page-message" id="bordereauMessage" hidden role="alert"></div>
+    <div class="loading-state" id="bordereauLoading" hidden>Recherche du bordereau…</div>
+    <div id="bordereauResult" hidden></div>
+  </main>
+  <footer class="site-footer"><div class="footer-content"><a class="brand" href="index.html"><span class="brand-mark">CE</span><span>COLIS <em>EXPRESS</em></span></a><span>Suivi public sécurisé : aucune donnée personnelle n'est affichée.</span><div class="footer-links"><a href="index.html">Accueil</a><a href="suivi.html">Suivre un colis</a><a href="conditions.html">Conditions</a><a href="confidentialite.html">Confidentialité</a></div><div class="footer-credit">Conçu par <strong>Shopin30</strong> · <a href="https://wa.me/2250501303343" target="_blank" rel="noopener noreferrer">WhatsApp : +225 0501303343</a></div></div></footer>
+  <script type="module" src="js/bordereau-public.js"></script>
+</body>
+</html>
