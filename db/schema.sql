@@ -406,3 +406,16 @@ CREATE TABLE IF NOT EXISTS plateforme_amorcage (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   created_at_iso  TEXT NOT NULL
 );
+
+-- LOT 9/11 — journal des exécutions de la tâche quotidienne (Vercel Cron).
+-- Lue par le panneau « Mise en service » de la console ; remplie au LOT 11.
+CREATE TABLE IF NOT EXISTS taches_executions (
+  id               TEXT PRIMARY KEY,
+  declencheur      TEXT NOT NULL DEFAULT 'cron',
+  demarree_le_iso  TEXT NOT NULL,
+  terminee_le_iso  TEXT,
+  duree_ms         INTEGER,
+  statut           TEXT NOT NULL DEFAULT 'en_cours' CHECK (statut IN ('en_cours', 'ok', 'partiel', 'erreur')),
+  resultats        TEXT,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);

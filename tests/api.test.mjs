@@ -2484,6 +2484,93 @@ test("amorçage console (LOT 8) : fermé si un administrateur existe, jeton exig
   }
 });
 
+/* ------------------------- LOT 9 — mise en service assistée ------------------------- */
+
+const { diagnosticMiseEnService, empreinteHoteBase } = await import("../lib/mise-en-service.js");
+
+test("mise en service (LOT 9) : panneau réservé à la console, aucun secret dans la réponse, lignes ✗ → ✓ selon les variables", async () => {
+  const g = client();
+  await creerAgence(g, "Agence MES", "Abidjan");
+  assert.equal((await g.get("/api/plateforme/mise-en-service")).status, 401, "une agence n'y accède pas");
+  assert.equal((await client().get("/api/plateforme/mise-en-service")).status, 401);
+  const { p } = await consolePlateforme();
+
+  const demo = await p.get("/api/plateforme/mise-en-service");
+  assert.equal(demo.status, 200, JSON.stringify(demo.data));
+  assert.equal(demo.data.environnement, "local");
+  const cles = demo.data.lignes.map((l) => l.cle);
+  for (const attendu of ["environnement", "base", "session", "blob", "paiement", "webhook_secret", "app_url", "webhook_dernier", "notifications", "cron", "quotas"]) {
+    assert.ok(cles.includes(attendu), `ligne ${attendu}`);
+  }
+  for (const l of demo.data.lignes) assert.ok(["ok", "attention", "erreur"].includes(l.etat), l.cle);
+  assert.equal((await p.get("/api/plateforme?action=mise-en-service")).status, 200, "forme repliée Vercel");
+
+  // Empreinte de l'hôte : courte, non réversible, différente d'une base à l'autre.
+  const prod = empreinteHoteBase("postgresql://user:motdepasse@ep-prod-123.eu-central-1.aws.neon.tech/neondb?sslmode=require");
+  const prev = empreinteHoteBase("postgresql://user:motdepasse@ep-preview-456.eu-central-1.aws.neon.tech/neondb?sslmode=require");
+  assert.match(prod.empreinte, /^[0-9a-f]{10}$/);
+  assert.notEqual(prod.empreinte, prev.empreinte);
+  assert.equal(prod.neon, true);
+  assert.equal(empreinteHoteBase(""), null);
+  assert.equal(empreinteHoteBase("n'importe quoi").lisible, false);
+
+  // Production mal configurée → ✗ ; puis bien configurée → ✓ (jamais de valeur de secret).
+  const secrets = {
+    DATABASE_URL: "postgresql://u:SuperMotDePasse@ep-prod-123.eu-central-1.aws.neon.tech/neondb",
+    SESSION_SECRET: "session-secret-de-test-tres-long-0123456789",
+    BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_SECRET_BLOB_123",
+    SASPAY_SECRET_KEY: "sk_live_SECRETE_SASPAY_456",
+    SASPAY_WEBHOOK_SECRET: "whsec_SECRET_WEBHOOK_789",
+    CRON_SECRET: "cron-secret-tres-long-0123456789abcdef"
+  };
+  const mauvais = await diagnosticMiseEnService({ env: { VERCEL_ENV: "production", VERCEL: "1" }, hoteRequete: "https://colisexpress-shopin30.vercel.app" });
+  const etat = (diag, cle) => diag.lignes.find((l) => l.cle === cle).etat;
+  assert.equal(mauvais.production, true);
+  for (const cle of ["base", "session", "blob", "paiement", "cron"]) assert.equal(etat(mauvais, cle), "erreur", `${cle} en erreur sans variable`);
+  assert.equal(etat(mauvais, "app_url"), "attention");
+  for (const l of mauvais.lignes) assert.ok(l.etat !== "erreur" || l.action.length > 10, `action proposée pour ${l.cle}`);
+
+  const envProd = { VERCEL_ENV: "production", VERCEL: "1", ...secrets, APP_URL: "https://colisexpress-shopin30.vercel.app", SASPAY_MODE_FRAIS: "DEDUCTED" };
+  const bon = await diagnosticMiseEnService({ env: envProd, hoteRequete: "https://colisexpress-shopin30.vercel.app" });
+  for (const cle of ["base", "session", "blob", "paiement", "webhook_secret", "app_url"]) assert.equal(etat(bon, cle), "ok", `${cle} ok`);
+  assert.equal(etat(bon, "cron"), "attention", "CRON_SECRET présente mais aucune exécution encore");
+  assert.match(bon.lignes.find((l) => l.cle === "paiement").detail, /Mode live · frais DEDUCTED/);
+  const texte = JSON.stringify(bon) + JSON.stringify(mauvais) + JSON.stringify(demo.data);
+  for (const valeur of Object.values(secrets)) {
+    assert.ok(!texte.includes(valeur), `la valeur de ${valeur.slice(0, 6)}… n'apparaît jamais`);
+    assert.ok(!texte.includes(valeur.slice(-8)), "même pas la fin de la valeur");
+  }
+  assert.ok(!texte.includes("SuperMotDePasse") && !texte.includes("ep-prod-123"), "ni mot de passe ni hôte de la base");
+
+  // Cohérences croisées : clé de test en production, clé réelle en préversion, APP_URL en préversion.
+  assert.equal(etat(await diagnosticMiseEnService({ env: { ...envProd, SASPAY_SECRET_KEY: "sk_test_x" } }), "paiement"), "erreur");
+  const prevLive = await diagnosticMiseEnService({ env: { VERCEL_ENV: "preview", ...secrets, DATABASE_URL: "postgresql://u:p@ep-preview-456.aws.neon.tech/neondb", APP_URL: "https://colisexpress-shopin30.vercel.app" } });
+  assert.equal(etat(prevLive, "paiement"), "erreur", "sk_live_ en préversion");
+  assert.equal(etat(prevLive, "app_url"), "attention", "APP_URL définie en préversion");
+  const prevOk = await diagnosticMiseEnService({ env: { VERCEL_ENV: "preview", ...secrets, DATABASE_URL: "postgresql://u:p@ep-preview-456.aws.neon.tech/neondb", SASPAY_SECRET_KEY: "sk_test_y" } });
+  assert.equal(etat(prevOk, "paiement"), "ok");
+  assert.equal(etat(prevOk, "app_url"), "ok", "APP_URL vide en préversion = normal");
+  assert.notEqual(prevOk.lignes.find((l) => l.cle === "base").detail, bon.lignes.find((l) => l.cle === "base").detail, "empreintes différentes");
+
+  // Dernier webhook et tâche quotidienne : passent à ✓ quand une trace existe.
+  await query("INSERT INTO paiements_webhooks (id, evenement, transaction_id, recu_le_iso) VALUES ($1, 'webhook.test', NULL, $2)", [`wh-${Date.now()}`, new Date().toISOString()]);
+  await query("INSERT INTO taches_executions (id, demarree_le_iso, terminee_le_iso, duree_ms, statut, resultats) VALUES ($1, $2, $2, 10, 'ok', '{}')", [`tache-${Date.now()}`, new Date().toISOString()]);
+  const apres = await diagnosticMiseEnService({ env: envProd, hoteRequete: "https://colisexpress-shopin30.vercel.app" });
+  assert.equal(etat(apres, "webhook_dernier"), "ok");
+  assert.match(apres.lignes.find((l) => l.cle === "webhook_dernier").detail, /webhook\.test/);
+  assert.equal(etat(apres, "cron"), "ok");
+
+  // Agences Gratuit à ≥ 80 % du quota (d'autres tests en ont déjà créé : on vérifie l'apparition de la nôtre).
+  assert.doesNotMatch(apres.lignes.find((l) => l.cle === "quotas").detail, /Agence MES/);
+  const { rows } = await query("SELECT id FROM agencies WHERE name = 'Agence MES'");
+  const periode = await facturation(g);
+  await fixerCompteur(rows[0].id, 41);
+  const quotas = await diagnosticMiseEnService({ env: envProd });
+  assert.equal(etat(quotas, "quotas"), "attention");
+  assert.match(quotas.lignes.find((l) => l.cle === "quotas").detail, /Agence MES : 41\/50/);
+  assert.equal(periode.periode.quota, 50);
+});
+
 test.after(() => {
   server.close();
 });

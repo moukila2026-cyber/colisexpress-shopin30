@@ -352,6 +352,30 @@ l'expéditeur) — les 5 statuts officiels du colis ne changent jamais.
   désactivés). Routes repliées par le rewrite `/api/plateforme/:action`
   existant — toujours 10 fonctions.
 
+### Mise en service assistée (LOT 9)
+
+- `lib/mise-en-service.js` → `diagnosticMiseEnService({ env, hoteRequete })`
+  renvoie `{ environnement, production, resume, lignes[] }` ; chaque ligne :
+  `{ cle, libelle, etat: ok|attention|erreur, detail, action }`. Points :
+  environnement (`VERCEL_ENV`), base (Neon ou démo + `empreinteHoteBase()` =
+  10 hex de SHA-256 de l'hôte, non réversible, pour comparer Preview et
+  Production), `SESSION_SECRET` (`etatSecretSession`), `BLOB_READ_WRITE_TOKEN`,
+  paiement (`configurationPaiements`, cohérence avec l'environnement ;
+  `erreur: true` distingue une mauvaise configuration d'une absence),
+  `SASPAY_WEBHOOK_SECRET`, `APP_URL` (production : égale à l'hôte de la
+  requête ; préversion : vide = normal), dernier webhook
+  (`paiements_webhooks`), canal de notifications, tâche quotidienne
+  (`taches_executions`, table additive remplie au LOT 11, `CRON_SECRET`),
+  agences Gratuit ≥ 80 % du quota.
+- **Jamais de valeur de secret** : le module ne lit que la présence, la
+  longueur et le mode ; les tests vérifient qu'aucune valeur (ni sa fin) ne
+  sort dans le JSON.
+- Route `GET /api/plateforme/mise-en-service` (`requirePlateforme`, lecture
+  seule, `Cache-Control: no-store`), repliée par le rewrite
+  `/api/plateforme/:action` — toujours 10 fonctions. Panneau en tête de la
+  console (`plateforme.html`, `js/plateforme.js`).
+- Guide pas à pas : `docs/mise-en-service.md`.
+
 ## Autorisations (ex-`firestore.rules`)
 
 | Ancienne règle Firestore | Équivalent serveur |
