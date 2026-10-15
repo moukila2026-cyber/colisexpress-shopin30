@@ -68,6 +68,13 @@ GitHub est détecté comme projet **Node.js**. Après le premier import :
 2. Redéployez : toutes les routes `/api/*` sont servies par `lib/app.js`, les
    pages restent statiques.
 
+> **Ne jamais activer `cleanUrls`** dans `vercel.json` : la redirection
+> `colis.html?id=…` → `/colis` perd la query string, et les boutons
+> « Voir le colis » (reçu, dashboard) ouvrent la fiche sans identifiant.
+> Tous les liens de l'application portent déjà leur `.html` et leurs
+> paramètres (`?id=`, `?code=`, `?retour=`) ; un test (`npm test`) verrouille
+> ce point.
+
 ## 4. Sécurité : qui peut faire quoi
 
 L'autorisation est appliquée **côté serveur** dans `lib/app.js` (les pages
@@ -125,5 +132,8 @@ npm test
 - **401 sur les pages agence** : la session a expiré, reconnectez-vous.
 - **403 / 400 sur une action** : l'action n'est pas permise pour ce compte
   (rattachement réservé à l'expéditeur, étape réservée à l'agence concernée…).
+- **« Voir le colis » ouvre une fiche sans colis** : l'identifiant a été perdu
+  en route. Vérifiez que `cleanUrls` n'est pas activé sur Vercel (voir section 3)
+  et que l'URL finale contient bien `?id=…`.
 
 Conçu par **Shopin30** — support : [WhatsApp +225 0501303343](https://wa.me/2250501303343).
