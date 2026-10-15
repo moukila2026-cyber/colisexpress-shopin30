@@ -16,9 +16,10 @@ tests), déployée sur Vercel plan Hobby.
 
 **Les 13 lots sont livrés et fusionnés dans `main`.** `npm test` : **186 tests
 verts**. Déploiement Vercel : **12 fonctions sur 12 autorisées** (limite
-atteinte, marge zéro). Console plateforme : **aucun ✗ attendu en production**
-une fois `CRON_SECRET` ajoutée et la tâche quotidienne exécutée une fois
-(les ⚠ restants sont normaux : transports de notifications non configurés).
+atteinte, marge zéro). Console plateforme : **0 ✗ attendu en production** une
+fois `CRON_SECRET` ajoutée et la tâche quotidienne exécutée une fois. Les ⚠
+restants sont normaux : transports de notifications non configurés (LOT 12
+facultatif) et aucun webhook SasPay reçu pour l'instant.
 
 ---
 
@@ -157,8 +158,11 @@ déploiement Production → **Redeploy**.
    alors vers les agences : commencez par un numéro d'agence de test que vous
    contrôlez.
 9. **Contrôle final du panneau Mise en service** en production : **0 ✗**. Les
-   ⚠ attendus sont ceux des transports de notifications non configurés
-   (étapes 6 à 8) ; tout le reste doit être ✓.
+   ⚠ normaux sont : **Notifications (canal effectif)** tant que les transports
+   ne sont pas configurés (étapes 6 à 8) et **Dernier webhook SasPay reçu**
+   tant qu'aucun paiement réel n'a été confirmé (l'⚠ disparaît après le premier
+   paiement d'abonnement ou de recharge, ou après un « Envoyer un test »
+   depuis le tableau de bord SasPay). Tout le reste doit être ✓.
 10. **Contrôle des agences** : une agence se connecte, enregistre un colis,
     prend une photo (Vercel Blob), encaisse à la caisse du jour, puis une
     deuxième agence contrôle le bordereau au départ et à l'arrivée.
