@@ -49,7 +49,7 @@ export const FAMILLES_NOTIFICATION = [
   { id: "facturation", label: "Abonnement" }
 ];
 
-/** Canaux connus. Seule la simulation est active tant qu'aucun transport réel n'est configuré. */
+/** Canaux journalisés par l'interface ; le serveur choisit WhatsApp, SMS ou simulation. */
 export const CANAUX_NOTIFICATION = [
   { id: "simulation", label: "Simulation" },
   { id: "whatsapp", label: "WhatsApp" },

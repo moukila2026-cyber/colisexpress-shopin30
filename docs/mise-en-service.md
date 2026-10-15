@@ -188,15 +188,77 @@ d'abonnement à J-2, le jour de l'échéance et en retard. La console permet
 5. Dans **Mise en service**, la ligne « Tâche quotidienne » passe à ✓. Vercel
    exécutera ensuite la tâche à 05:00 UTC chaque jour.
 
-### Variables facultatives des transports (LOT 12)
+### Configurer WhatsApp Cloud (facultatif, Production)
 
-| Variable | Lot | Rôle |
-|---|---|---|
-| `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID` (ou `WHATSAPP_PHONE_NUMBER_ID`), `WHATSAPP_MODELE`, `WHATSAPP_API_VERSION` | LOT 12 | API Cloud Meta et modèle WhatsApp approuvé. |
-| `ORANGE_SMS_CLIENT_ID`, `ORANGE_SMS_CLIENT_SECRET`, `ORANGE_SMS_NOM_EXPEDITEUR` | LOT 12 | API SMS Orange Côte d'Ivoire et expéditeur autorisé. |
+⚠ Une fois activé, les notifications réelles partent vers les agences
+concernées. Commencez par un numéro d'agence de test que vous contrôlez.
 
-En attendant la configuration d'un transport, les notifications restent en
-**simulation** (journal dans l'application) ; elles ne sont jamais perdues.
+1. Meta for Developers → **My Apps** → **Create App** (type Business), puis
+   **Add product** → **WhatsApp**. Dans *WhatsApp → API Setup*, reliez le
+   compte WhatsApp Business et copiez le **Phone number ID** (identifiant
+   numérique, pas le numéro de téléphone).
+2. WhatsApp Manager → **Message templates** → **Create template** : nom
+   `colisexpress_notification`, catégorie *Utility*, langue *French*. Dans le
+   corps, mettez exactement deux variables de texte sur deux lignes :
+   `{{1}}` puis `{{2}}`. Soumettez le modèle et attendez le statut **Approved**.
+   L'application envoie le titre dans `{{1}}` et le message dans `{{2}}`.
+3. Meta Business Settings → **Users** → **System users** → créez/sélectionnez
+   un utilisateur système → **Generate new token**. Choisissez votre
+   application et les permissions WhatsApp demandées par Meta, dont
+   `whatsapp_business_messaging`. Copiez le jeton tout de suite ; ne le
+   partagez pas et ne le collez jamais dans un message.
+4. Dans Vercel → projet **colisexpress-shopin30** → **Settings** →
+   **Environment Variables** → **Add New**, créez ces quatre variables,
+   toutes cochées **Production seulement** :
+   - `WHATSAPP_TOKEN` = jeton d'accès Meta ;
+   - `WHATSAPP_PHONE_ID` = Phone number ID ;
+   - `WHATSAPP_MODELE` = `colisexpress_notification` ;
+   - `WHATSAPP_API_VERSION` = version Graph actuellement prise en charge,
+     au format `vNN.0` (celle affichée par Meta pour votre application).
+   Cliquez **Save** après chaque variable, puis **Redeploy** le dernier
+   déploiement Production.
+
+### Configurer Orange SMS Côte d'Ivoire (facultatif, repli)
+
+1. Orange Developer → créez/ouvrez votre application → activez l'API SMS
+   Messaging pour la Côte d'Ivoire. Obtenez le **Client ID** et le
+   **Client Secret** (OAuth client credentials) et faites approuver l'adresse
+   d'expéditeur par Orange.
+2. Vercel → projet → **Settings** → **Environment Variables** → **Add New**.
+   Ajoutez en **Production seulement** : `ORANGE_SMS_CLIENT_ID`,
+   `ORANGE_SMS_CLIENT_SECRET` et `ORANGE_SMS_NOM_EXPEDITEUR`. Pour
+   `ORANGE_SMS_NOM_EXPEDITEUR`, saisissez l'adresse numérique autorisée, soit
+   les 10 chiffres ivoiriens, soit le format `tel:+225XXXXXXXXXX` fourni par
+   Orange. Cliquez **Save** après chaque ligne, puis **Redeploy**.
+3. Le système essaie WhatsApp d'abord, puis Orange SMS si WhatsApp échoue ; si
+   aucun transport n'est configuré ou si les deux sont indisponibles, le
+   message reste dans le journal en **simulation**. La console → **Transports
+   de notifications** affiche le canal effectif et le journal, sans afficher
+   de numéro ni de secret. L'agence de test doit recevoir un message conforme
+   au modèle approuvé.
+
+`WHATSAPP_PHONE_NUMBER_ID` est également accepté comme alias de
+`WHATSAPP_PHONE_ID`. Laissez les variables de transports absentes en Preview
+pour conserver la simulation.
+
+`NOTIFICATIONS_CANAL` est facultative : absente = ordre automatique WhatsApp
+→ SMS → simulation ; `simulation` force la simulation ; `sms` force Orange
+avec simulation en repli. Ajoutez-la dans Vercel uniquement si vous voulez
+forcer ce comportement.
+
+| Variable | Production | Preview | Rôle |
+|---|---|---|---|
+| `WHATSAPP_TOKEN` | facultatif | vide (recommandé) | Jeton Meta secret. |
+| `WHATSAPP_PHONE_ID` (ou `WHATSAPP_PHONE_NUMBER_ID`) | facultatif | vide | Phone number ID de Meta. |
+| `WHATSAPP_MODELE` | facultatif | vide | Nom du modèle approuvé (ex. `colisexpress_notification`). |
+| `WHATSAPP_API_VERSION` | facultatif | vide | Version Graph au format `vNN.0`. |
+| `ORANGE_SMS_CLIENT_ID` | facultatif | vide | Identifiant Orange Developer. |
+| `ORANGE_SMS_CLIENT_SECRET` | facultatif | vide | Secret OAuth Orange. |
+| `ORANGE_SMS_NOM_EXPEDITEUR` | facultatif | vide | Expéditeur numérique approuvé par Orange. |
+| `NOTIFICATIONS_CANAL` | facultatif | facultatif | `auto`, `whatsapp`, `sms` ou `simulation` (défaut `auto`). |
+
+En l'absence de transports, les notifications restent en **simulation** ;
+elles ne sont jamais perdues.
 
 ## Étape 7 — Vérifications finales
 
@@ -229,8 +291,8 @@ attendu et le rôle.
 | `APP_URL` | ✔ `https://colisexpress-shopin30.vercel.app` | **vide** | URL sans barre finale | Adresse de retour après paiement. |
 | `SASPAY_MODE_FRAIS` | facultatif | facultatif | `ADD_ON` ou `DEDUCTED` | Qui paie les frais SasPay. Absente = réglage du compte. |
 | `PAIEMENTS_SIMULATION` | **jamais** | facultatif `1` | `1` | Simulation de paiement sans clé (préversion uniquement). |
-| `NOTIFICATIONS_CANAL` | plus tard | — | `simulation`, `whatsapp`, `sms` | Canal d'envoi réel (LOT 12) ; défaut simulation. |
+| `NOTIFICATIONS_CANAL` | facultatif | facultatif | `auto`, `whatsapp`, `sms`, `simulation` | Ordre des transports (LOT 12) ; défaut WhatsApp → SMS → simulation. |
 | `CRON_SECRET` | ✔ (Production seulement) | — | ≥ 32 caractères | Authentifie Vercel Cron à 05:00 UTC. |
-| `WHATSAPP_TOKEN` / `WHATSAPP_PHONE_ID` (ou `WHATSAPP_PHONE_NUMBER_ID`) / `WHATSAPP_MODELE` / `WHATSAPP_API_VERSION` | LOT 12 | facultatif | jeton Meta / identifiant / modèle approuvé / version Graph | Envois WhatsApp (API Cloud), prioritaire sur SMS. |
-| `ORANGE_SMS_CLIENT_ID` / `ORANGE_SMS_CLIENT_SECRET` / `ORANGE_SMS_NOM_EXPEDITEUR` | LOT 12 | facultatif | identifiants Orange Developer / expéditeur autorisé | Repli SMS Orange Côte d'Ivoire. |
+| `WHATSAPP_TOKEN` / `WHATSAPP_PHONE_ID` (ou `WHATSAPP_PHONE_NUMBER_ID`) / `WHATSAPP_MODELE` / `WHATSAPP_API_VERSION` | facultatif | vide recommandé | jeton / ID numérique / modèle approuvé / `vNN.0` | WhatsApp Cloud, prioritaire sur SMS. |
+| `ORANGE_SMS_CLIENT_ID` / `ORANGE_SMS_CLIENT_SECRET` / `ORANGE_SMS_NOM_EXPEDITEUR` | facultatif | vide recommandé | OAuth / expéditeur numérique agréé | Repli Orange SMS CI. |
 | `VERCEL_ENV`, `VERCEL` | automatiques | automatiques | — | Définies par Vercel : ne pas les créer. |

@@ -166,7 +166,8 @@ l'expéditeur) — les 5 statuts officiels du colis ne changent jamais.
   `incident_escalade` (non résolu > 24 h), `bordereau_arrive`,
   `bordereau_ecart`, `colis_souffrance`, `retour_decide`, `retour_recu`,
   `alerte_sans_mouvement` / `alerte_non_retire` / `alerte_non_rattache`
-  (colis qui dorment, mêmes seuils que `evaluerAlertes()`).
+  (colis qui dorment, mêmes seuils que `evaluerAlertes()`), puis rappels
+  `abonnement_jmoins2` / `abonnement_echeance` / `abonnement_retard` (LOT 11).
 - **Destinataires** : `agencesConcernees()` — les deux agences du colis (ou du
   bordereau), une seule si la destination n'est pas rattachée. Jamais de
   client ni de tiers.
@@ -181,17 +182,15 @@ l'expéditeur) — les 5 statuts officiels du colis ne changent jamais.
   seule notification par événement et par agence, même en concurrence) ;
   (2) transport du canal effectif ; (3) statut journalisé (`simule`,
   `envoye` ou `echec` avec un message générique, jamais l'erreur brute).
-- **Canal** (`configurationNotifications()`) : `NOTIFICATIONS_CANAL`
-  (défaut `simulation`). `whatsapp`, `sms`, `email` sont déclarés dans
-  `TRANSPORTS` avec leurs variables d'environnement requises mais
-  `envoyer: null` : tant qu'un transport n'est pas branché **et** configuré,
-  le canal effectif reste la simulation (aucun envoi réel). L'API ne renvoie
-  jamais la valeur d'une variable d'environnement.
-- **Échéances sans tâche planifiée** : `balayerEcheances()` est appelé par
-  `GET /api/alertes` (tableau de bord, rafraîchi toutes les 20 s) et
-  `GET /api/notifications`. Il évalue `evenementsEcheance()` sur les colis de
-  l'agence appelante, écarte en une requête les clés déjà journalisées et
-  notifie les **deux** agences — quelle que soit celle qui consulte.
+- **Canal** (`configurationNotifications()`) : défaut `auto`, ordre
+  WhatsApp Cloud → Orange SMS → simulation. `NOTIFICATIONS_CANAL=simulation`
+  force la simulation ; `sms` force Orange avec simulation en repli. Les
+  secrets et l'identifiant de téléphone ne sont jamais renvoyés par l'API ;
+  le journal ne stocke aucun numéro.
+- **Échéances** : `balayerEcheances()` reste appelé à la consultation par
+  `GET /api/alertes` et `GET /api/notifications`, et LOT 11 l'appelle une
+  fois par jour pour toutes les agences. Il écarte les clés déjà journalisées
+  et notifie les **deux** agences — quelle que soit celle qui consulte.
   Idempotent ; un colis qui « redort » après avoir bougé ouvre un nouvel
   épisode (clé datée par `sinceISO`).
 - **Jamais bloquant** : `notifier()` et `balayerEcheances()` absorbent toute
@@ -527,3 +526,25 @@ signature refusés, montant vérifié). Les règles pures sont testées dans
   statut et un résumé JSON. Le panneau console montre les dix dernières
   exécutions et le bouton « Exécuter maintenant » ; le diagnostic « Mise en
   service » ne coche la ligne Cron qu'après une exécution récente réussie.
+
+
+### Transports de notifications (LOT 12)
+
+- `lib/notifications.js` conserve une fonction d'envoi unique et la simulation
+  si aucune configuration n'est complète. Ordre par défaut : WhatsApp Cloud
+  (`WHATSAPP_TOKEN`, identifiant téléphone, modèle approuvé en français à deux
+  paramètres, version Graph) → Orange SMS CI (OAuth client credentials et
+  expéditeur approuvé) → journal en simulation si les fournisseurs échouent.
+  La panne de WhatsApp tente SMS ; la panne des deux ne bloque jamais l'action
+  métier. `NOTIFICATIONS_CANAL=simulation` force le mode simulation ; `sms`
+  force Orange, avec simulation en repli.
+- Chaque message est envoyé uniquement aux agences concernées, jamais aux
+  clients. WhatsApp et SMS ne reçoivent que le texte français sans donnée
+  personnelle produit par `js/metier-notifications.js`. Les numéros sont lus
+  juste avant l'envoi et ne sont jamais écrits dans le journal ou les logs ;
+  seule la configuration (canal effectif et raison sans secret) apparaît
+  dans le diagnostic.
+- Le panneau console (`GET /api/plateforme/notifications`) ne projette que
+  les libellés/messages, les canaux, les statuts et les dates — jamais les
+  numéros, e-mails ou secrets. Aucune fonction Vercel ajoutée : les 12
+  fonctions du plan Hobby restent inchangées.

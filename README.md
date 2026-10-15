@@ -53,9 +53,10 @@ plus aucune dépendance à Firebase.
   qui dorment. **Mode simulation par défaut** : aucun message ne sort de
   l'application, chaque notification est journalisée (page
   « Notifications », compteur de non lues dans la barre latérale). Messages
-  **sans aucune donnée personnelle** (codes, villes, durées seulement) ; une
-  seule fonction d'envoi (`lib/notifications.js`) pour brancher plus tard
-  WhatsApp, SMS ou e-mail
+  **sans aucune donnée personnelle** (codes, villes, durées seulement) ; envoi
+  unique dans `lib/notifications.js`, WhatsApp Cloud puis Orange SMS, enfin
+  simulation si aucun transport ne fonctionne ; page Notifications et panneau
+  console avec journal (aucun numéro de téléphone dans les logs)
 - **Plans, quotas et portefeuille (LOT 6)** : plan par agence — **Gratuit**
   (50 colis/mois, puis 30 FCFA par colis prépayés sur le portefeuille),
   **Pro** (10 000 FCFA/mois, 500 colis inclus), **Réseau** (sur devis).
@@ -164,15 +165,15 @@ tests/                 Tests automatisés (node --test)
      cas, le contenu n'est servi que par la route authentifiée
      `GET /api/photos/:id` (deux agences du colis uniquement) et Postgres ne
      garde que les métadonnées.
-   - **Notifications (LOT 5)** : rien à configurer — `NOTIFICATIONS_CANAL`
-     vaut `simulation` par défaut (aucun envoi réel, journal consultable
-     dans la page « Notifications »). Les canaux `whatsapp`, `sms` et `email`
-     sont des points de branchement prévus dans `lib/notifications.js`
-     (`TRANSPORTS`) : tant que la fonction d'envoi du transport n'est pas
-     écrite **et** que ses variables (ex. `WHATSAPP_API_URL`,
-     `WHATSAPP_API_TOKEN`) ne sont pas toutes définies, le serveur reste en
-     simulation. Ces jetons sont des secrets : variables d'environnement
-     uniquement.
+   - **Notifications (LOTS 5 et 12)** : aucun réglage nécessaire pour la
+     simulation. Sans variables de transport, les messages sont journalisés,
+     sans envoi extérieur. Si WhatsApp Cloud est configuré, l'application
+     essaie WhatsApp puis Orange SMS ; si les deux échouent, le message reste
+     dans le journal en simulation. La variable facultative `NOTIFICATIONS_CANAL`
+     permet de forcer `sms` ou `simulation`. Variables et guide pas à pas :
+     [`docs/mise-en-service.md`](docs/mise-en-service.md). Les jetons restent
+     dans Vercel uniquement ; aucun numéro de téléphone n'est écrit dans les
+     logs.
    - **Console plateforme (LOT 6)** : le compte de l'équipe Shopin30 est
      distinct des agences. Créez-le (ou changez son mot de passe) sans
      aucun secret dans le code :

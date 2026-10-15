@@ -27,7 +27,7 @@ import {
 } from "../js/metier-notifications.js";
 
 process.env.SEED_DEMO = "0";
-const { TRANSPORTS, configurationNotifications } = await import("../lib/notifications.js");
+const { TRANSPORTS, configurationNotifications, envoyerWhatsApp, envoyerSmsOrange } = await import("../lib/notifications.js");
 
 const NOW = new Date("2026-10-15T12:00:00.000Z");
 const heures = (h) => new Date(NOW.getTime() - h * 3_600_000).toISOString();
@@ -269,23 +269,104 @@ test("journal : normalisation sans clé interne, filtres et compteurs", () => {
   assert.deepEqual(resume.parFamille, { incidents: 0, bordereaux: 1, souffrance: 1, dorment: 1, facturation: 0 });
 });
 
-test("canal : simulation par défaut, aucun envoi réel sans transport branché ET configuré", () => {
+test("transports : simulation par défaut, sélection WhatsApp → Orange SMS → simulation", () => {
   assert.equal(configurationNotifications({}).canal, "simulation");
   assert.equal(configurationNotifications({}).simulation, true);
-  assert.equal(configurationNotifications({ NOTIFICATIONS_CANAL: "SMS" }).canal, "simulation", "transport pas encore branché");
   assert.equal(configurationNotifications({ NOTIFICATIONS_CANAL: "pigeon" }).canal, "simulation", "canal inconnu");
   assert.equal(configurationNotifications({ NOTIFICATIONS_CANAL: "rm -rf /;" }).demande, "inconnu", "valeur illisible jamais renvoyée");
-  for (const canal of ["whatsapp", "sms", "email"]) {
-    assert.equal(TRANSPORTS[canal].envoyer, null, `${canal} : point de branchement prévu, aucun envoi réel dans ce lot`);
-    assert.ok(TRANSPORTS[canal].variables.length > 0, `${canal} : variables d'environnement documentées`);
-  }
+  const configMalformee = JSON.stringify(configurationNotifications({ NOTIFICATIONS_CANAL: "jeton-secr3t-qui-ne-doit-pas-sortir" }));
+  assert.ok(!configMalformee.includes("jeton-secr3t"), "une valeur arbitraire du canal ne fuite pas dans le diagnostic");
+  assert.equal(typeof TRANSPORTS.whatsapp.envoyer, "function");
+  assert.equal(typeof TRANSPORTS.sms.envoyer, "function");
+  assert.equal(TRANSPORTS.email.envoyer, null, "aucun canal e-mail activé");
 
-  // Un transport branché mais non configuré reste en simulation ; configuré, il devient effectif.
-  const branche = { ...TRANSPORTS, whatsapp: { ...TRANSPORTS.whatsapp, envoyer: async () => ({ statut: "envoye" }) } };
-  assert.equal(configurationNotifications({ NOTIFICATIONS_CANAL: "whatsapp" }, branche).canal, "simulation");
-  const secret = "jeton-ultra-secret-123";
-  const actif = configurationNotifications({ NOTIFICATIONS_CANAL: "whatsapp", WHATSAPP_API_URL: "https://exemple.invalid", WHATSAPP_API_TOKEN: secret }, branche);
+  const whatsapp = {
+    WHATSAPP_TOKEN: "jeton-meta-test-secret",
+    WHATSAPP_PHONE_ID: "123456789012345",
+    WHATSAPP_MODELE: "colisexpress_notification",
+    WHATSAPP_API_VERSION: "v23.0"
+  };
+  const orange = {
+    ORANGE_SMS_CLIENT_ID: "orange-id-test",
+    ORANGE_SMS_CLIENT_SECRET: "orange-secret-test",
+    ORANGE_SMS_NOM_EXPEDITEUR: "0700000002"
+  };
+  assert.equal(configurationNotifications(whatsapp).canal, "whatsapp");
+  assert.equal(configurationNotifications(orange).canal, "sms");
+  assert.equal(configurationNotifications({ ...whatsapp, ...orange }).canal, "whatsapp", "WhatsApp est prioritaire sur SMS");
+  assert.equal(configurationNotifications({ ...whatsapp, NOTIFICATIONS_CANAL: "simulation" }).canal, "simulation", "simulation forcée" );
+
+  const demandeWhatsapp = {
+    ...TRANSPORTS,
+    whatsapp: { ...TRANSPORTS.whatsapp, envoyer: async () => ({ statut: "envoye" }) }
+  };
+  assert.equal(configurationNotifications({ NOTIFICATIONS_CANAL: "whatsapp" }, demandeWhatsapp).canal, "simulation", "credentials manquants : aucun vrai envoi");
+  const secret = whatsapp.WHATSAPP_TOKEN;
+  const actif = configurationNotifications(whatsapp);
   assert.equal(actif.canal, "whatsapp");
   assert.equal(actif.simulation, false);
   assert.ok(!JSON.stringify(actif).includes(secret), "la configuration ne renvoie jamais de secret");
+  assert.ok(!JSON.stringify(actif).includes(orange.ORANGE_SMS_CLIENT_SECRET));
+});
+
+test("WhatsApp Cloud : modèle approuvé en français, numéro international et sans journaliser le jeton", async () => {
+  const appels = [];
+  const env = {
+    WHATSAPP_TOKEN: "meta-token-test-secret",
+    WHATSAPP_PHONE_ID: "123456789012345",
+    WHATSAPP_MODELE: "colisexpress_notification",
+    WHATSAPP_API_VERSION: "v23.0"
+  };
+  await envoyerWhatsApp({
+    destinataire: { phone: "0700000001" },
+    titre: "Incident — CLI-TEST01",
+    message: "Un message de test, sans nom ni téléphone."
+  }, {
+    env,
+    fetcher: async (url, options) => {
+      appels.push({ url, options });
+      return { ok: true, status: 200 };
+    }
+  });
+  assert.equal(appels.length, 1);
+  assert.equal(appels[0].url, "https://graph.facebook.com/v23.0/123456789012345/messages");
+  assert.equal(appels[0].options.headers.Authorization, `Bearer ${env.WHATSAPP_TOKEN}`);
+  const body = JSON.parse(appels[0].options.body);
+  assert.equal(body.messaging_product, "whatsapp");
+  assert.equal(body.to, "2250700000001");
+  assert.equal(body.template.name, "colisexpress_notification");
+  assert.deepEqual(body.template.language, { code: "fr" });
+  assert.equal(body.template.components[0].parameters[0].text, "Incident — CLI-TEST01");
+});
+
+test("Orange SMS CI : OAuth client credentials et expéditeur approuvé", async () => {
+  const appels = [];
+  const env = {
+    ORANGE_SMS_CLIENT_ID: "orange-id-test",
+    ORANGE_SMS_CLIENT_SECRET: "orange-secret-test",
+    ORANGE_SMS_NOM_EXPEDITEUR: "0700000002"
+  };
+  await envoyerSmsOrange({
+    destinataire: { phone: "0500000002" },
+    titre: "Rappel d'abonnement",
+    message: "Échéance demain."
+  }, {
+    env,
+    fetcher: async (url, options) => {
+      appels.push({ url, options });
+      if (url.endsWith("/oauth/v3/token")) {
+        return { ok: true, json: async () => ({ access_token: "jeton-orange-test", expires_in: 1800 }) };
+      }
+      return { ok: true, status: 201 };
+    }
+  });
+  assert.equal(appels.length, 2);
+  assert.equal(appels[0].url, "https://api.orange.com/oauth/v3/token");
+  assert.equal(appels[0].options.body, "grant_type=client_credentials");
+  assert.equal(appels[1].options.headers.Authorization, "Bearer jeton-orange-test");
+  assert.match(appels[1].url, /tel%3A%2B2250700000002/);
+  const body = JSON.parse(appels[1].options.body).outboundSMSMessageRequest;
+  assert.equal(body.address, "tel:+2250500000002");
+  assert.equal(body.senderAddress, "tel:+2250700000002");
+  assert.match(body.outboundSMSTextMessage.message, /Rappel d'abonnement.*Échéance demain/);
 });

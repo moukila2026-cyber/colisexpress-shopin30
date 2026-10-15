@@ -897,6 +897,39 @@ test("le LOT 11 (tâche quotidienne Vercel Cron) est câblé de bout en bout", (
   assert.match(lire("docs/ameliorations.md"), /LOT 11/);
 });
 
+test("le LOT 12 (WhatsApp Cloud, Orange SMS, repli simulation et panneau console) est câblé", () => {
+  const notifications = lire("lib/notifications.js");
+  assert.match(notifications, /export async function envoyerWhatsApp/);
+  assert.match(notifications, /graph\.facebook\.com/);
+  assert.match(notifications, /WHATSAPP_TOKEN/);
+  assert.match(notifications, /WHATSAPP_PHONE_ID/);
+  assert.match(notifications, /export async function envoyerSmsOrange/);
+  assert.match(notifications, /api\.orange\.com\/oauth\/v3\/token/);
+  assert.match(notifications, /ORANGE_SMS_CLIENT_ID/);
+  assert.match(notifications, /ORANGE_SMS_CLIENT_SECRET/);
+  assert.match(notifications, /candidat === "sms"|\["whatsapp", "sms"\]/, "WhatsApp est tenté avant Orange SMS");
+  assert.match(notifications, /canal = "simulation"/, "simulation en dernier repli");
+  assert.match(notifications, /Authorization: `Bearer \${c\.token}`/, "jeton Meta envoyé seulement au fournisseur");
+  assert.match(notifications, /Buffer\.from\(`\$\{c\.clientId\}:\$\{c\.clientSecret\}`\)/, "Orange utilise OAuth client credentials");
+
+  const api = lire("lib/app.js");
+  assert.match(api, /app\.get\("\/api\/plateforme\/notifications"/);
+  assert.match(api, /SELECT type, titre, message, canal, statut, erreur, created_at_iso/);
+  assert.doesNotMatch(api.match(/app\.get\("\/api\/plateforme\/notifications"[\s\S]*?\n  }\);/)?.[0] || "", /phone|email|client_secret|WHATSAPP_TOKEN/i, "projection console sans contacts ni valeurs de secrets");
+
+  const html = lire("plateforme.html");
+  for (const id of ["transportsNotificationsPanel", "transportsNotificationsEtat", "transportsNotificationsDetail", "transportsNotificationsListe"]) {
+    assert.match(html, new RegExp(`id="${id}"`));
+  }
+  assert.match(lire("js/plateforme.js"), /\/api\/plateforme\/notifications/);
+  assert.match(lire("js/metier-notifications.js"), /abonnement_jmoins2/, "les rappels d'abonnement restent dans le catalogue métier");
+  assert.match(lire("docs/mise-en-service.md"), /WHATSAPP_TOKEN/);
+  assert.match(lire("docs/mise-en-service.md"), /ORANGE_SMS_CLIENT_SECRET/);
+  assert.match(lire("docs/architecture.md"), /LOT 12/);
+  assert.match(lire("docs/ameliorations.md"), /LOT 12/);
+  assert.ok(!existsSync(path.join(RACINE, "api/notifications.js")), "aucune fonction Vercel supplémentaire");
+});
+
 test("le LOT 10 (compteur de colis en temps réel) est câblé de bout en bout", () => {
   // Une route légère, lecture seule, sans nouveau fichier api/.
   const api = lire("lib/app.js");
