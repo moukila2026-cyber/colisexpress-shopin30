@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="description" content="Console plateforme COLIS EXPRESS réservée à l'équipe Shopin30.">
+  <title>Console plateforme — COLIS EXPRESS</title>
+  <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body class="plateforme-page">
+  <header class="plateforme-header">
+    <a class="brand" href="index.html" aria-label="COLIS EXPRESS, accueil"><span class="brand-mark" aria-hidden="true">CE</span><span>COLIS <em>EXPRESS</em></span></a>
+    <strong class="plateforme-title">Console plateforme</strong>
+    <div class="plateforme-session" id="plateformeSession" hidden>
+      <span id="adminName"></span>
+      <button class="button button-outline button-small" id="logoutPlateforme" type="button">Se déconnecter</button>
+    </div>
+  </header>
+
+  <main class="plateforme-main">
+    <div class="page-message" id="pageMessage" hidden role="alert"></div>
+
+    <section class="panel-card plateforme-login" id="loginPanel" hidden>
+      <h1>Console plateforme</h1>
+      <p>Espace réservé à l'équipe Shopin30, avec un compte distinct des comptes agence et agents.</p>
+      <form id="plateformeLoginForm" class="form-stack" novalidate>
+        <div class="field"><label for="plateformeEmail">E-mail</label><input id="plateformeEmail" name="email" type="email" autocomplete="username" required></div>
+        <div class="field"><label for="plateformePassword">Mot de passe</label><input id="plateformePassword" name="password" type="password" autocomplete="current-password" required></div>
+        <button class="button button-primary" id="plateformeLoginButton" type="submit">Se connecter à la console</button>
+      </form>
+    </section>
+
+    <div id="consolePanel" hidden>
+      <div class="plateforme-heading">
+        <div><h1>Vue d'ensemble du réseau</h1><p id="consolePeriode">—</p></div>
+        <button class="button button-outline" id="refreshConsole" type="button">Actualiser</button>
+      </div>
+
+      <section class="stats-grid" aria-label="Indicateurs du réseau">
+        <article class="stat-card"><div class="stat-card-top"><small>Agences inscrites</small><span class="stat-icon" aria-hidden="true">⌂</span></div><strong class="stat-number" id="kpiAgences">—</strong><small class="stat-detail" id="kpiAbonnements"></small></article>
+        <article class="stat-card"><div class="stat-card-top"><small>Colis enregistrés ce mois</small><span class="stat-icon" aria-hidden="true">▦</span></div><strong class="stat-number" id="kpiColisMois">—</strong><small class="stat-detail" id="kpiColisTotal"></small></article>
+        <article class="stat-card"><div class="stat-card-top"><small>Incidents ouverts &gt; 7 jours</small><span class="stat-icon" aria-hidden="true">!</span></div><strong class="stat-number" id="kpiFile">—</strong><small class="stat-detail">File plateforme</small></article>
+        <article class="stat-card"><div class="stat-card-top"><small>Litiges ouverts</small><span class="stat-icon" aria-hidden="true">⚖</span></div><strong class="stat-number" id="kpiLitiges">—</strong><small class="stat-detail" id="kpiPortefeuilles"></small></article>
+      </section>
+
+      <section class="panel-card parcels-panel">
+        <div class="panel-title-row"><h2>File plateforme : incidents ouverts depuis plus de 7 jours</h2><span id="fileCount">—</span></div>
+        <div id="fileList"></div>
+      </section>
+
+      <section class="panel-card parcels-panel">
+        <div class="panel-title-row"><h2>Litiges (incidents « contesté »)</h2><span id="litigesCount">—</span></div>
+        <div id="litigesList"></div>
+      </section>
+
+      <section class="panel-card parcels-panel">
+        <div class="panel-title-row"><h2>Agences : plan, compteur du mois, portefeuille</h2><span id="agencesCount">—</span></div>
+        <div id="agencesList"></div>
+      </section>
+
+      <section class="panel-card parcels-panel">
+        <div class="panel-title-row"><h2>Volumes du réseau</h2><span id="volumesTotal">—</span></div>
+        <div class="volumes-grid" id="volumesList"></div>
+      </section>
+    </div>
+  </main>
+
+  <div class="modal-backdrop" id="agenceModal" hidden role="dialog" aria-modal="true" aria-labelledby="agenceModalTitle">
+    <div class="modal-card">
+      <div class="modal-heading"><div><h2 id="agenceModalTitle">Agence</h2><p id="agenceModalResume"></p></div><button class="modal-close" id="closeAgenceModal" type="button" aria-label="Fermer">×</button></div>
+      <div class="page-message" id="agenceModalMessage" hidden role="alert"></div>
+      <form id="planForm" class="form-stack" novalidate>
+        <h3 class="form-subheading">Plan de l'agence</h3>
+        <div class="field">
+          <label for="planSelect">Plan</label>
+          <select id="planSelect" name="plan">
+            <option value="gratuit">Gratuit : 50 colis/mois, puis 30 FCFA prépayés</option>
+            <option value="pro">Pro : 10 000 FCFA/mois, 500 colis inclus</option>
+            <option value="reseau">Réseau : sur devis (quota et prix négociés)</option>
+          </select>
+        </div>
+        <div class="form-grid" id="reseauFields" hidden>
+          <div class="field"><label for="quotaReseau">Quota mensuel négocié</label><input id="quotaReseau" name="quotaMensuel" type="number" min="1" step="1" inputmode="numeric" placeholder="Vide = illimité"></div>
+          <div class="field"><label for="prixReseau">Prix mensuel négocié (FCFA)</label><input id="prixReseau" name="prixMensuelFCFA" type="number" min="0" step="1" inputmode="numeric" placeholder="Ex. 45000"></div>
+        </div>
+        <small class="field-help">Effet immédiat sur le quota du mois. Un abonnement déjà payé ce mois-ci reste acquis.</small>
+        <button class="button button-primary" id="planSubmit" type="submit">Appliquer le plan</button>
+      </form>
+      <form id="creditForm" class="form-stack credit-form" novalidate>
+        <h3 class="form-subheading">Recharger le portefeuille</h3>
+        <div class="form-grid">
+          <div class="field"><label for="creditMontant">Montant reçu (FCFA)</label><input id="creditMontant" name="montantFCFA" type="number" min="1" step="1" inputmode="numeric" required></div>
+          <div class="field"><label for="creditReference">Référence du paiement</label><input id="creditReference" name="reference" type="text" maxlength="120" placeholder="Ex. n° de transaction mobile money" required></div>
+        </div>
+        <small class="field-help">Journalisé avec votre nom. Un abonnement dû est réglé automatiquement dès que le solde le permet.</small>
+        <button class="button button-orange" id="creditSubmit" type="submit">Créditer le portefeuille</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toastContainer" aria-live="polite"></div>
+  <script type="module" src="js/plateforme.js"></script>
+</body>
+</html>

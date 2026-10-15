@@ -762,3 +762,59 @@ dd { margin: 4px 0 0; color: var(--ink); overflow-wrap: anywhere; font-size: .88
 .notif-meta { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .notif-canal { color: var(--muted); font-size: .72rem; }
 .notif-actions { display: inline-flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+/* Abonnement, quotas et console plateforme (LOT 6). */
+.stat-detail { display: block; margin-top: 5px; color: var(--muted); font-size: .7rem; line-height: 1.35; }
+.quota-notice { margin: 0 0 14px; }
+.quota-panel { margin-bottom: 17px; }
+.quota-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.quota-head h2 { margin: 0; color: var(--green-950); font-size: 1rem; }
+.quota-head span { color: var(--muted); font-size: .78rem; }
+.quota-bar { height: 12px; overflow: hidden; border-radius: 8px; background: var(--green-100); }
+.quota-bar span { display: block; height: 100%; width: 0; border-radius: 8px; background: var(--green-700); transition: width .3s ease; }
+.quota-bar-plein span { background: var(--orange); }
+.quota-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+.quota-actions:empty { display: none; }
+.quota-panel .muted-note { margin: 12px 0 0; line-height: 1.5; }
+.plans-grid { display: grid; grid-template-columns: 1fr; gap: 12px; margin-bottom: 17px; }
+.plan-card { display: grid; gap: 10px; align-content: start; padding: 17px; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; }
+.plan-card-current { border-color: var(--green-700); box-shadow: 0 0 0 2px var(--green-100); }
+.plan-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.plan-card-head h3 { margin: 0; color: var(--green-950); font-size: 1.05rem; }
+.plan-card-head strong { color: var(--orange-dark); font-size: .9rem; }
+.plan-card p { margin: 0; color: #3d4d47; font-size: .84rem; line-height: 1.5; }
+.plan-card-action { margin-top: 4px; }
+.plan-current { display: inline-flex; padding: 6px 11px; border-radius: 20px; color: var(--green-800); background: var(--green-100); font-size: .76rem; font-weight: 800; }
+.plan-badge { display: inline-flex; padding: 3px 9px; border-radius: 20px; font-size: .7rem; font-weight: 820; color: var(--green-800); background: var(--green-100); }
+.plan-badge-pro { color: #9b4d10; background: var(--orange-light); }
+.plan-badge-reseau { color: #2c6689; background: #e7f5fc; }
+.panel-note { margin: 0; padding: 12px 17px; color: #3d4d47; border-bottom: 1px solid var(--line); font-size: .8rem; line-height: 1.5; }
+.panel-empty { margin: 14px 17px; }
+.billing-table td small, .plateforme-table td small { color: var(--muted); }
+.montant-debit { color: var(--danger); font-weight: 750; }
+.montant-credit { color: var(--success); font-weight: 750; }
+.echeance-en_retard { color: var(--danger); background: var(--danger-light); }
+.echeance-a_regler { color: #9b4d10; background: var(--orange-light); }
+.echeance-a_venir { color: #2c6689; background: #e7f5fc; }
+.texte-alerte { color: var(--danger); }
+.cell-wrap { min-width: 220px; white-space: normal !important; }
+.plateforme-page { min-height: 100vh; background: var(--green-50); }
+.plateforme-header { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 12px 18px; border-bottom: 1px solid var(--line); background: #fff; }
+.plateforme-title { color: var(--green-950); font-size: .9rem; }
+.plateforme-session { display: flex; align-items: center; gap: 10px; margin-left: auto; color: var(--muted); font-size: .8rem; }
+.plateforme-main { max-width: 1240px; margin: 0 auto; padding: 20px 16px 40px; }
+.plateforme-main .panel-card { margin-bottom: 17px; }
+.plateforme-login { max-width: 420px; margin: 40px auto; }
+.plateforme-login h1 { margin: 0 0 6px; color: var(--green-950); font-size: 1.3rem; }
+.plateforme-login p { margin: 0 0 16px; color: var(--muted); font-size: .86rem; line-height: 1.5; }
+.plateforme-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.plateforme-heading h1 { margin: 0; color: var(--green-950); font-size: 1.35rem; }
+.plateforme-heading p { margin: 4px 0 0; color: var(--muted); font-size: .82rem; }
+.plateforme-table { min-width: 0; }
+.volumes-grid { display: grid; grid-template-columns: 1fr; gap: 14px; padding: 14px 17px; }
+.volumes-grid .form-subheading { margin: 0 0 8px; }
+.credit-form { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+@media (min-width: 760px) {
+  .plans-grid { grid-template-columns: repeat(3, 1fr); }
+  .volumes-grid { grid-template-columns: 1fr 1fr; }
+}

@@ -109,6 +109,7 @@ export function agencySidebar() {
         <a href="clients.html" data-nav="clients"><span aria-hidden="true">✆</span> Clients</a>
         <a href="caisse.html" data-nav="caisse"><span aria-hidden="true">◈</span> Caisse</a>
         <a href="notifications.html" data-nav="notifications"><span aria-hidden="true">✉</span> Notifications <b class="nav-badge" data-notif-count hidden></b></a>
+        <a href="abonnement.html" data-nav="abonnement"><span aria-hidden="true">◎</span> Abonnement</a>
         <a href="parametres.html" data-nav="parametres"><span aria-hidden="true">⚙</span> Paramètres</a>
       </nav>
       <div class="sidebar-footer">
