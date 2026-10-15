@@ -395,3 +395,14 @@ CREATE TABLE IF NOT EXISTS paiements_webhooks (
   recu_le_iso     TEXT NOT NULL,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- LOT 8 — amorçage du premier administrateur de la console sans terminal.
+-- Une seule ligne possible (clé fixe) : la création du premier compte est
+-- atomique même si deux demandes arrivent en parallèle ; une fois la ligne
+-- posée, l'amorçage est définitivement fermé (aucune suppression).
+CREATE TABLE IF NOT EXISTS plateforme_amorcage (
+  cle             TEXT PRIMARY KEY,
+  admin_id        TEXT REFERENCES plateforme_admins(id),
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at_iso  TEXT NOT NULL
+);

@@ -17,7 +17,8 @@ let paiement = null;
 
 function retourInterne(chemin) {
   // Seuls les chemins internes construits par le serveur sont suivis.
-  return /^\/(colis|abonnement)\.html\?[A-Za-z0-9=&%._-]+$/.test(chemin || "") ? chemin.slice(1) : "dashboard.html";
+  // LOT 8 : seuls l'abonnement et la recharge se paient en ligne.
+  return /^\/abonnement\.html\?[A-Za-z0-9=&%._-]+$/.test(chemin || "") ? chemin.slice(1) : "abonnement.html";
 }
 
 function render() {
@@ -52,6 +53,10 @@ async function boot() {
     paiement = data.paiement;
     if (paiement.mode !== "simulation") {
       showPageMessage(message, "Ce paiement n'est pas une simulation : utilisez la page de paiement SasPay.");
+      return;
+    }
+    if (paiement.objet === "colis") {
+      showPageMessage(message, "Le paiement en ligne des colis n'est plus proposé : l'agence encaisse le colis au guichet. Seuls l'abonnement et les recharges se paient ici.");
       return;
     }
     render();

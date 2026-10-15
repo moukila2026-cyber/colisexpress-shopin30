@@ -445,3 +445,28 @@ l'inverse ».
   (qui reste la caisse des colis).
 - Suites possibles : paiement direct mobile money (softpay SasPay) au
   guichet, QR code du lien de paiement sur le reçu, relevé mensuel PDF.
+
+## 16. Livré : LOT 8 — sécurité avant la mise en production
+
+- **Décision** : Shopin30 n'encaisse **jamais** l'argent des colis. Les
+  agences encaissent au guichet (espèces, mobile money) comme avant ; seuls
+  l'abonnement et les recharges du portefeuille se paient en ligne (SasPay,
+  compte marchand de Shopin30). Le paiement en ligne d'un colis est refusé
+  (403) et le bouton a disparu de la fiche colis ; les lignes historiques
+  restent lisibles, rien n'est supprimé.
+- **Garde-fous de paiement** selon l'environnement Vercel : jamais de clé de
+  test ni de simulation en production, jamais de clé réelle en préversion.
+- **Frais SasPay** : `SASPAY_MODE_FRAIS` (ADD_ON / DEDUCTED) transmis à
+  SasPay ; le contrôle du montant et le crédit du portefeuille restent
+  justes dans les deux modes (montant demandé, pas le net après frais).
+- **Sessions** : plus de secret de secours dès qu'une vraie base est
+  branchée — `SESSION_SECRET` d'au moins 32 caractères, sinon refus clair.
+- **Premier administrateur sans terminal** : jeton d'amorçage à usage
+  unique, comparaison à temps constant, création atomique, fermeture
+  définitive.
+- **Option future, non implémentée — une clé SasPay par agence** : chaque
+  agence pourrait saisir sa propre clé SasPay (chiffrée côté serveur) pour
+  encaisser directement les colis sur son propre compte marchand, sans que
+  l'argent transite par Shopin30. Ce serait la seule façon saine de rouvrir
+  le paiement en ligne des colis ; elle demande un KYC par agence chez
+  SasPay, le chiffrement des clés au repos et un webhook par agence.

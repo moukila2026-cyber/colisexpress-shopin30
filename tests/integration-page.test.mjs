@@ -752,12 +752,10 @@ test("le LOT 7 (suivi personnalisé par agence + paiements SasPay) est câblé d
     assert.match(parametres, new RegExp(`id="${id}"`), `parametres.html doit exposer #${id}`);
   }
   assert.match(lire("js/parametres-marque.js"), /method: "PUT"/);
-  const colis = lire("js/colis.js");
-  assert.match(colis, /payerEnLigne/);
-  assert.match(colis, /\/api\/paiements\/verifier/, "retour de paiement vérifié côté serveur");
   const abonnement = lire("js/abonnement.js");
   assert.match(abonnement, /objet: "abonnement"/);
   assert.match(abonnement, /objet: "recharge"/);
+  assert.match(abonnement, /\/api\/paiements\/verifier/, "retour de paiement vérifié côté serveur");
   assert.match(lire("paiement-simulation.html"), /SIMULATION/);
   assert.match(lire("js/paiement-simulation.js"), /\/api\/paiements\/simulation/);
 
@@ -772,4 +770,61 @@ test("le LOT 7 (suivi personnalisé par agence + paiements SasPay) est câblé d
     assert.match(readme, motif);
   }
   assert.match(lire("docs/architecture.md"), /LOT 7/);
+});
+
+test("le LOT 8 (sécurité avant la mise en production) est câblé de bout en bout", () => {
+  // a) Plus aucun paiement en ligne des colis : ni bouton, ni appel depuis la fiche colis.
+  const colis = lire("js/colis.js");
+  assert.doesNotMatch(colis, /payerEnLigne|Payer en ligne|SasPay/, "la fiche colis ne propose plus de paiement en ligne");
+  assert.doesNotMatch(colis, /objet: "colis"/);
+  assert.match(colis, /openEncaisser/, "l'encaissement au guichet reste");
+  assert.doesNotMatch(lire("colis.html"), /Payer en ligne/);
+  const metier = lire("js/metier-paiements.js");
+  assert.match(metier, /OBJETS_PAIEMENT_CREATION = Object\.freeze\(\["abonnement", "recharge"\]\)/);
+  assert.match(metier, /OBJETS_PAIEMENT = Object\.freeze\(\["colis", "abonnement", "recharge"\]\)/, "l'historique reconnaît encore l'objet colis");
+  assert.match(lire("js/paiement-simulation.js"), /abonnement\.html/);
+  assert.doesNotMatch(lire("js/paiement-simulation.js"), /\(colis\|abonnement\)/);
+  const api = lire("lib/app.js");
+  assert.match(api, /controle\.status \?\? 400/, "403 métier sur l'objet colis");
+  assert.match(lire("db/schema.sql"), /objet IN \('colis', 'abonnement', 'recharge'\)/, "aucune migration destructive : les lignes historiques restent valides");
+
+  // b) et c) Garde-fous SasPay et mode de frais.
+  const paiements = lire("lib/paiements.js");
+  assert.match(paiements, /VERCEL_ENV/);
+  assert.match(paiements, /SASPAY_MODE_FRAIS/);
+  assert.match(paiements, /fee_charge_mode: modeFrais/);
+  assert.match(metier, /debited_amount/);
+  assert.match(metier, /net_amount/);
+
+  // d) Sessions : jamais de secret de secours hors démo locale.
+  const auth = lire("lib/auth.js");
+  assert.match(auth, /LONGUEUR_MIN_SECRET_SESSION = 32/);
+  assert.match(auth, /ErreurConfigurationSession/);
+  assert.match(auth, /secretSessionExige/);
+  assert.match(api, /verifierSecretSession\(\)/);
+  assert.match(api, /instanceof ErreurConfigurationSession/);
+
+  // e) Amorçage du premier administrateur : routes repliées, UI, aucune nouvelle fonction api/.
+  for (const route of ['app.get("/api/plateforme/amorcage"', 'app.post("/api/plateforme/amorcage"']) {
+    assert.ok(api.includes(route), `lib/app.js doit déclarer ${route}`);
+  }
+  assert.ok(!existsSync(path.join(RACINE, "api/plateforme")), "aucun nouveau fichier api/ (limite Hobby)");
+  const plateforme = lire("lib/plateforme.js");
+  assert.match(plateforme, /PLATEFORME_PREMIER_ADMIN_JETON/);
+  assert.match(plateforme, /timingSafeEqual/, "jeton comparé en temps constant");
+  assert.match(plateforme, /ON CONFLICT \(cle\) DO NOTHING/, "création atomique");
+  assert.match(lire("db/schema.sql"), /CREATE TABLE IF NOT EXISTS plateforme_amorcage/);
+  const html = lire("plateforme.html");
+  for (const id of ["amorcagePanel", "amorcageForm", "amorcageJeton", "amorcageEmail", "amorcageNom", "amorcagePassword", "amorcageButton"]) {
+    assert.match(html, new RegExp(`id="${id}"`), `plateforme.html doit exposer #${id}`);
+  }
+  assert.match(lire("js/plateforme.js"), /\/api\/plateforme\/amorcage/);
+  assert.match(lire("package.json"), /"plateforme-admin": "node db\/plateforme-admin.js"/, "le script reste disponible");
+
+  // Docs.
+  const readme = lire("README.md");
+  for (const motif of [/PLATEFORME_PREMIER_ADMIN_JETON/, /SASPAY_MODE_FRAIS/, /SESSION_SECRET/, /n'encaisse jamais/i]) assert.match(readme, motif);
+  assert.match(lire("docs/architecture.md"), /LOT 8/);
+  assert.match(lire("docs/ameliorations.md"), /LOT 8/);
+  assert.match(lire("docs/ameliorations.md"), /clé SasPay par agence/i, "option future notée");
 });

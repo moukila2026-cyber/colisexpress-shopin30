@@ -2096,54 +2096,57 @@ test("suivi personnalisé : réglages du gérant, logo vérifié, habillage publ
   assert.equal((await anonyme.get(`/api/suivi/${parcel.trackingCode}`)).data.tracking.marque, undefined);
 });
 
-test("paiement en ligne (simulation) : reste à payer d'un colis encaissé une seule fois, en caisse « Paiement SasPay »", async () => {
+test("LOT 8 : le paiement en ligne d'un colis est refusé (403) — l'agence encaisse au guichet, la caisse ne change pas", async () => {
   const a = client();
   const b = client();
-  const c = client();
   await creerAgence(a, "Agence PaieA", "Abidjan");
   const agenceB = await creerAgence(b, "Agence PaieB", "Bouaké");
-  await creerAgence(c, "Agence PaieC", "Korhogo");
   const parcel = await colisAvecReste(a, agenceB.id, 3);
 
   const config = await b.get("/api/paiements");
   assert.deepEqual([config.data.configuration.mode, config.data.configuration.actif], ["simulation", true]);
 
-  // La destination encaisse à l'arrivée (même règle qu'au guichet).
-  const cree = await b.post("/api/paiements", { objet: "colis", parcelId: parcel.id });
-  assert.equal(cree.status, 201, JSON.stringify(cree.data));
-  const paiement = cree.data.paiement;
-  assert.deepEqual([paiement.objet, paiement.montantFCFA, paiement.mode, paiement.statut], ["colis", 3500, "simulation", "en_attente"]);
-  assert.equal(paiement.checkoutUrl, `/paiement-simulation.html?id=${paiement.id}`);
-  assert.equal(paiement.retour, `/colis.html?id=${parcel.id}&paiement=${paiement.id}`);
-  assert.equal((await b.post("/api/paiements", { objet: "colis", parcelId: parcel.id })).data.paiement.id, paiement.id, "double-clic : même session");
-
-  assert.equal((await c.post("/api/paiements", { objet: "colis", parcelId: parcel.id })).status, 404, "agence étrangère au colis");
-  assert.equal((await c.post("/api/paiements/verifier", { id: paiement.id })).status, 404);
-  assert.equal((await c.post("/api/paiements/simulation", { id: paiement.id, resultat: "succes" })).status, 404);
-  assert.equal((await b.post("/api/paiements/simulation", { id: paiement.id, resultat: "bof" })).status, 400);
-
-  const echec = await b.post("/api/paiements/simulation", { id: paiement.id, resultat: "echec" });
-  assert.equal(echec.data.paiement.statut, "echec");
-  assert.deepEqual(await encaissementsDuJour(b), [], "un échec n'encaisse rien");
-  const succes = await b.post("/api/paiements/simulation", { id: paiement.id, resultat: "succes" });
-  assert.equal(succes.data.paiement.statut, "paye", "nouvelle tentative réussie sur la même session");
-  assert.match(succes.data.paiement.transactionReference, /^SIM-/);
-  for (let i = 0; i < 2; i += 1) {
-    assert.equal((await b.post("/api/paiements/verifier", { id: paiement.id })).data.paiement.statut, "paye");
-    await b.post("/api/paiements/simulation", { id: paiement.id, resultat: "succes" });
+  for (const clientHttp of [a, b]) {
+    const refus = await clientHttp.post("/api/paiements", { objet: "colis", parcelId: parcel.id });
+    assert.equal(refus.status, 403, JSON.stringify(refus.data));
+    assert.match(refus.data.error, /guichet/);
+    assert.match(refus.data.error, /abonnement et les recharges/);
   }
+  assert.equal((await b.post("/api/paiements", { objet: "colis" })).status, 403, "même sans colis indiqué : règle métier avant validation");
+  const { rows: aucun } = await query("SELECT count(*)::int AS n FROM paiements_en_ligne WHERE parcel_id = $1", [parcel.id]);
+  assert.equal(aucun[0].n, 0, "aucune session créée");
+  assert.deepEqual(await encaissementsDuJour(b), []);
+
+  // L'encaissement au guichet (LOT 2) ne change pas.
+  const guichet = await b.post(`/api/colis/${parcel.id}/encaisser`, { amountFCFA: 3500, mode: "mobile_money" });
+  assert.equal(guichet.status, 201, JSON.stringify(guichet.data));
   const caisse = await encaissementsDuJour(b);
-  assert.equal(caisse.length, 1, "appliqué une seule fois");
-  assert.deepEqual([caisse[0].amountFCFA, caisse[0].mode, caisse[0].label], [3500, "mobile_money", "Paiement SasPay (simulation)"]);
-  assert.deepEqual(await encaissementsDuJour(a), [], "la caisse de l'agence qui encaisse, pas l'autre");
-  const apres = (await a.get(`/api/colis/${parcel.id}`)).data.parcel;
-  assert.deepEqual([apres.paymentStatus, apres.paidAmountFCFA], ["regle", 3500]);
-  const deja = await b.post("/api/paiements", { objet: "colis", parcelId: parcel.id });
-  assert.equal(deja.status, 400);
-  assert.match(deja.data.error, /déjà entièrement réglé/);
-  const historique = await b.get(`/api/paiements?parcelId=${parcel.id}`);
-  assert.deepEqual(historique.data.paiements.map((p) => p.statut), ["paye"]);
-  assert.equal(historique.data.paiements[0].checkoutUrl, null, "plus de lien une fois payé");
+  assert.equal(caisse.length, 1);
+  assert.deepEqual([caisse[0].amountFCFA, caisse[0].mode], [3500, "mobile_money"]);
+  assert.deepEqual([guichet.data.parcel.paymentStatus, guichet.data.parcel.paidAmountFCFA], ["regle", 3500]);
+
+  // Lignes historiques LOT 7 (objet « colis ») : lisibles, et un paiement déjà
+  // confirmé reste appliqué une seule fois (le webhook ne plante pas dessus).
+  const parcel2 = await colisAvecReste(a, agenceB.id, 4);
+  const idHisto = "histo-colis-1";
+  await query(
+    `INSERT INTO paiements_en_ligne (id, agency_id, objet, parcel_id, montant_fcfa, libelle, mode, session_id, checkout_url, retour_chemin,
+       statut, simulation_statut, acteur_id, acteur_nom, created_at_iso)
+     VALUES ($1, $2, 'colis', $3, 3500, 'Reste à payer — historique', 'simulation', $4, '/paiement-simulation.html?id=histo', '/colis.html?id=x',
+       'en_attente', 'PAID', $2, 'Historique', $5)`,
+    [idHisto, agenceB.id, parcel2.id, `sim_${idHisto}`, new Date().toISOString()]
+  );
+  const historique = await b.get(`/api/paiements?parcelId=${parcel2.id}`);
+  assert.equal(historique.status, 200);
+  assert.deepEqual(historique.data.paiements.map((p) => [p.objet, p.statut]), [["colis", "en_attente"]]);
+  for (let i = 0; i < 2; i += 1) {
+    const verif = await b.post("/api/paiements/verifier", { id: idHisto });
+    assert.equal(verif.status, 200, JSON.stringify(verif.data));
+    assert.equal(verif.data.paiement.statut, "paye");
+  }
+  const caisse2 = await encaissementsDuJour(b);
+  assert.equal(caisse2.length, 2, "ligne historique appliquée une seule fois");
+  assert.equal(caisse2.find((e) => e.label?.startsWith("Paiement SasPay"))?.amountFCFA, 3500);
   assert.equal((await fetch(`${BASE}/api/paiements`, { method: "DELETE" })).status, 404);
 });
 
@@ -2229,26 +2232,25 @@ async function envoyerWebhook(corps, { secret = "whsec_test_colis", horodatage =
   return { status: res.status, data: await res.json().catch(() => ({})) };
 }
 
-test("SasPay en mode TEST : session hébergée sans donnée client, webhook HMAC vérifié, application après vérification serveur", async () => {
+test("SasPay en mode TEST : session hébergée sans donnée client, mode de frais transmis, webhook HMAC vérifié, application après vérification serveur", async () => {
   const faux = await fauxSaspay();
   const variables = {
     SASPAY_SECRET_KEY: "sk_test_colisexpress_cle",
     SASPAY_API_URL: faux.url,
     SASPAY_WEBHOOK_SECRET: "whsec_test_colis",
+    SASPAY_MODE_FRAIS: "DEDUCTED",
     APP_URL: "https://colisexpress.example"
   };
   Object.assign(process.env, variables);
   try {
     const a = client();
-    const b = client();
     const agenceA = await creerAgence(a, "Agence SasA", "Abidjan");
-    const agenceB = await creerAgence(b, "Agence SasB", "Bouaké");
-    const parcel = await colisAvecReste(a, agenceB.id, 5);
     const configuration = (await a.get("/api/paiements")).data.configuration;
     assert.deepEqual([configuration.mode, configuration.actif], ["test", true]);
     assert.ok(!JSON.stringify(configuration).includes("sk_test_colisexpress_cle"), "la clé n'est jamais renvoyée");
 
-    const cree = await a.post("/api/paiements", { objet: "colis", parcelId: parcel.id });
+    assert.equal((await a.post("/api/paiements", { objet: "colis", parcelId: "x" })).status, 403, "jamais de colis, même en mode TEST");
+    const cree = await a.post("/api/paiements", { objet: "recharge", montantFCFA: 3500 });
     assert.equal(cree.status, 201, JSON.stringify(cree.data));
     const paiement = cree.data.paiement;
     assert.equal(paiement.mode, "test");
@@ -2257,12 +2259,12 @@ test("SasPay en mode TEST : session hébergée sans donnée client, webhook HMAC
     assert.equal(creation.chemin, "/api/v1/checkout-sessions/");
     assert.equal(creation.autorisation, "Bearer sk_test_colisexpress_cle");
     assert.deepEqual(
-      [creation.corps.amount, creation.corps.currency, creation.corps.country, creation.corps.customer_name, creation.corps.customer_email],
-      ["3500.00", "XOF", "CI", "Agence SasA", agenceA.email],
-      "le « client » de la session est l'agence"
+      [creation.corps.amount, creation.corps.currency, creation.corps.country, creation.corps.customer_name, creation.corps.customer_email, creation.corps.fee_charge_mode],
+      ["3500.00", "XOF", "CI", "Agence SasA", agenceA.email, "DEDUCTED"],
+      "le « client » de la session est l'agence ; SASPAY_MODE_FRAIS → fee_charge_mode"
     );
-    assert.deepEqual(creation.corps.metadata, { paiement_id: paiement.id, objet: "colis" });
-    assert.equal(creation.corps.return_url, `https://colisexpress.example/colis.html?id=${parcel.id}&paiement=${paiement.id}`);
+    assert.deepEqual(creation.corps.metadata, { paiement_id: paiement.id, objet: "recharge" });
+    assert.equal(creation.corps.return_url, `https://colisexpress.example/abonnement.html?paiement=${paiement.id}`);
     aucuneDonneePersonnelle(creation.corps, "session SasPay");
 
     assert.equal((await a.post("/api/paiements/simulation", { id: paiement.id, resultat: "succes" })).status, 409, "aucune simulation avec une clé configurée");
@@ -2282,32 +2284,48 @@ test("SasPay en mode TEST : session hébergée sans donnée client, webhook HMAC
     assert.equal((await a.get(`/api/paiements?id=${paiement.id}`)).data.paiement.statut, "en_attente", "le contenu du webhook ne suffit jamais");
     // Session payée mais montant vérifié différent : rien n'est appliqué.
     faux.etat.sessions.set("sess-1", { id: "sess-1", status: "PAID", transaction_id: "txn-1", transaction_status: "SUCCESS", transaction_reference: "ref-1" });
-    faux.etat.transactions.set("txn-1", { id: "txn-1", status: "SUCCESS", requested_amount: "100.00", net_amount: "100.00", currency: "XOF", reference: "TXN-TEST-1" });
+    faux.etat.transactions.set("txn-1", { id: "txn-1", status: "SUCCESS", requested_amount: "100.00", debited_amount: "100.00", net_amount: "98.50", fee_charge_mode: "DEDUCTED", currency: "XOF", reference: "TXN-TEST-1" });
     assert.equal((await envoyerWebhook(evenement)).status, 200);
     assert.equal((await a.get(`/api/paiements?id=${paiement.id}`)).data.paiement.statut, "en_attente");
-    assert.deepEqual(await encaissementsDuJour(a), []);
-    // Vérification conforme : appliqué, une seule fois même si le webhook est rejoué.
-    faux.etat.transactions.set("txn-1", { id: "txn-1", status: "SUCCESS", requested_amount: "3500.00", net_amount: "3412.50", currency: "XOF", reference: "TXN-TEST-1" });
+    assert.equal((await facturation(a)).portefeuille.soldeFCFA, 0);
+    // Vérification conforme en DEDUCTED (net reversé 3447.50 < 3500) : appliqué
+    // au montant demandé, une seule fois même si le webhook est rejoué.
+    faux.etat.transactions.set("txn-1", { id: "txn-1", status: "SUCCESS", requested_amount: "3500.00", debited_amount: "3500.00", net_amount: "3447.50", fee_charge_mode: "DEDUCTED", currency: "XOF", reference: "TXN-TEST-1" });
     const recu = await envoyerWebhook(evenement, { chemin: "/api/paiements?action=webhook" });
     assert.equal(recu.status, 200, "forme repliée Vercel, corps brut conservé");
     assert.equal(recu.data.verifies, 1);
     assert.equal((await envoyerWebhook(evenement)).status, 200);
     const final = (await a.get(`/api/paiements?id=${paiement.id}`)).data.paiement;
     assert.deepEqual([final.statut, final.transactionReference], ["paye", "TXN-TEST-1"]);
-    const caisse = await encaissementsDuJour(a);
-    assert.equal(caisse.length, 1);
-    assert.deepEqual([caisse[0].amountFCFA, caisse[0].label], [3500, "Paiement SasPay (test)"]);
+    const etat = await facturation(a);
+    assert.equal(etat.portefeuille.soldeFCFA, 3500, "crédité du montant demandé, pas du net après frais");
+    assert.equal(etat.portefeuille.mouvements.filter((m) => m.acteurNom === "SasPay").length, 1, "appliqué une seule fois");
     const { rows: journalWebhooks } = await query("SELECT * FROM paiements_webhooks");
     assert.ok(journalWebhooks.length >= 4);
     assert.ok(!JSON.stringify(journalWebhooks).includes("2250700000099"), "le numéro débité n'est jamais conservé");
 
+    // Mode ADD_ON : le client paie 3500 + frais, le marchand reçoit 3500 — conforme aussi.
+    process.env.SASPAY_MODE_FRAIS = "ADD_ON";
+    const cree2 = await a.post("/api/paiements", { objet: "recharge", montantFCFA: 2000 });
+    assert.equal(cree2.status, 201, JSON.stringify(cree2.data));
+    assert.equal(faux.etat.requetes.filter((r) => r.methode === "POST").at(-1).corps.fee_charge_mode, "ADD_ON");
+    faux.etat.sessions.set("sess-2", { id: "sess-2", status: "PAID", transaction_id: "txn-2", transaction_status: "SUCCESS", transaction_reference: "ref-2" });
+    faux.etat.transactions.set("txn-2", { id: "txn-2", status: "SUCCESS", requested_amount: "2000.00", debited_amount: "2030.00", net_amount: "2000.00", fee_charge_mode: "ADD_ON", currency: "XOF", reference: "TXN-TEST-2" });
+    assert.equal((await a.post("/api/paiements/verifier", { id: cree2.data.paiement.id })).data.paiement.statut, "paye");
+    assert.equal((await facturation(a)).portefeuille.soldeFCFA, 5500);
+
+    // Sans SASPAY_MODE_FRAIS : fee_charge_mode absent (réglage du compte).
+    delete process.env.SASPAY_MODE_FRAIS;
+    const cree3 = await a.post("/api/paiements", { objet: "recharge", montantFCFA: 1500 });
+    assert.equal(cree3.status, 201);
+    assert.equal("fee_charge_mode" in faux.etat.requetes.filter((r) => r.methode === "POST").at(-1).corps, false);
+
     // Prestataire en erreur : message clair, aucune session orpheline en attente.
     faux.etat.erreurCreation = 401;
-    const parcel2 = await colisAvecReste(a, agenceB.id, 6);
-    const refus = await a.post("/api/paiements", { objet: "colis", parcelId: parcel2.id });
+    const refus = await a.post("/api/paiements", { objet: "recharge", montantFCFA: 7777 });
     assert.equal(refus.status, 502);
     assert.match(refus.data.error, /refusé la configuration/);
-    const { rows: annules } = await query("SELECT statut FROM paiements_en_ligne WHERE parcel_id = $1", [parcel2.id]);
+    const { rows: annules } = await query("SELECT statut FROM paiements_en_ligne WHERE montant_fcfa = 7777");
     assert.deepEqual(annules.map((r) => r.statut), ["annule"]);
   } finally {
     for (const nom of Object.keys(variables)) delete process.env[nom];
@@ -2315,15 +2333,36 @@ test("SasPay en mode TEST : session hébergée sans donnée client, webhook HMAC
   }
 });
 
-test("configuration des paiements : simulation sans clé, désactivé en production sans clé, clés validées", async () => {
-  assert.equal(configurationPaiements({}).mode, "simulation");
-  assert.equal(configurationPaiements({ DATABASE_URL: "postgres://x" }).mode, "desactive", "jamais de simulation gratuite en production");
-  assert.equal(configurationPaiements({ DATABASE_URL: "postgres://x", PAIEMENTS_SIMULATION: "1" }).mode, "simulation", "simulation explicite (préproduction)");
-  assert.equal(configurationPaiements({ SASPAY_SECRET_KEY: "sk_test_abc" }).mode, "test");
-  assert.equal(configurationPaiements({ SASPAY_SECRET_KEY: "sk_live_abc", DATABASE_URL: "postgres://x" }).mode, "live");
-  const invalide = configurationPaiements({ SASPAY_SECRET_KEY: "pk_abc_secret" });
-  assert.equal(invalide.mode, "desactive");
-  assert.ok(!invalide.raison.includes("pk_abc_secret"), "la valeur de la clé n'apparaît jamais");
+test("garde-fous de paiement (LOT 8) : matrice VERCEL_ENV × clé × simulation, sans jamais révéler la clé", async () => {
+  const cas = [
+    // [env, mode attendu, commentaire]
+    [{}, "simulation", "local sans base : simulation par défaut"],
+    [{ DATABASE_URL: "postgres://x" }, "desactive", "vraie base hors Vercel sans clé"],
+    [{ DATABASE_URL: "postgres://x", PAIEMENTS_SIMULATION: "1" }, "simulation", "simulation explicite hors production"],
+    [{ SASPAY_SECRET_KEY: "sk_test_abc" }, "test", "clé de test en local"],
+    [{ SASPAY_SECRET_KEY: "sk_live_abc", DATABASE_URL: "postgres://x" }, "live", "clé réelle sur une vraie base hors Vercel"],
+    [{ SASPAY_SECRET_KEY: "sk_live_abc" }, "desactive", "clé réelle sans base réelle : jamais d'argent réel sur une base de test"],
+    [{ VERCEL_ENV: "production", DATABASE_URL: "postgres://x", SASPAY_SECRET_KEY: "sk_live_abc" }, "live", "production + clé réelle"],
+    [{ VERCEL_ENV: "production", DATABASE_URL: "postgres://x", SASPAY_SECRET_KEY: "sk_test_abc" }, "desactive", "clé de test en production"],
+    [{ VERCEL_ENV: "production", DATABASE_URL: "postgres://x", PAIEMENTS_SIMULATION: "1" }, "desactive", "simulation en production"],
+    [{ VERCEL_ENV: "production", DATABASE_URL: "postgres://x" }, "desactive", "production sans clé"],
+    [{ VERCEL_ENV: "preview", DATABASE_URL: "postgres://preview", SASPAY_SECRET_KEY: "sk_test_abc" }, "test", "préversion + clé de test"],
+    [{ VERCEL_ENV: "preview", DATABASE_URL: "postgres://preview", SASPAY_SECRET_KEY: "sk_live_abc" }, "desactive", "clé réelle en préversion"],
+    [{ VERCEL_ENV: "preview", DATABASE_URL: "postgres://preview", PAIEMENTS_SIMULATION: "1" }, "simulation", "simulation en préversion"],
+    [{ VERCEL_ENV: "development", SASPAY_SECRET_KEY: "sk_live_abc" }, "desactive", "clé réelle en développement"],
+    [{ SASPAY_SECRET_KEY: "pk_abc_secret" }, "desactive", "clé mal formée"]
+  ];
+  for (const [env, attendu, commentaire] of cas) {
+    const config = configurationPaiements(env);
+    assert.equal(config.mode, attendu, commentaire);
+    assert.equal(config.actif, attendu !== "desactive", commentaire);
+    assert.ok(config.raison.length > 10, `raison explicite : ${commentaire}`);
+    assert.ok(!/sk_(test|live)_abc|pk_abc_secret/.test(config.raison), "la valeur de la clé n'apparaît jamais");
+  }
+  assert.match(configurationPaiements({ VERCEL_ENV: "production", DATABASE_URL: "postgres://x", SASPAY_SECRET_KEY: "sk_test_abc" }).raison, /sk_live_/);
+  assert.match(configurationPaiements({ VERCEL_ENV: "preview", SASPAY_SECRET_KEY: "sk_live_abc" }).raison, /préversion/);
+  assert.equal(configurationPaiements({ SASPAY_SECRET_KEY: "sk_test_abc", SASPAY_MODE_FRAIS: "deducted" }).modeFrais, "DEDUCTED");
+  assert.equal(configurationPaiements({ SASPAY_SECRET_KEY: "sk_test_abc", SASPAY_MODE_FRAIS: "n'importe" }).modeFrais, null);
 
   process.env.SASPAY_SECRET_KEY = "cle-mal-formee";
   try {
@@ -2337,6 +2376,111 @@ test("configuration des paiements : simulation sans clé, désactivé en product
     assert.match(refus.data.error, /invalide/);
   } finally {
     delete process.env.SASPAY_SECRET_KEY;
+  }
+});
+
+/* ------------------------------ LOT 8 — sessions ------------------------------ */
+
+const { etatSecretSession, LONGUEUR_MIN_SECRET_SESSION } = await import("../lib/auth.js");
+
+test("SESSION_SECRET (LOT 8) : exigée (32 caractères) dès qu'une vraie base ou la production est en jeu, jamais de secret de secours", async () => {
+  assert.equal(LONGUEUR_MIN_SECRET_SESSION, 32);
+  assert.deepEqual([etatSecretSession({}).ok, etatSecretSession({}).exige], [true, false], "démo locale : rien d'exigé");
+  assert.equal(etatSecretSession({ DATABASE_URL: "postgres://x" }).ok, false, "vraie base sans secret");
+  assert.equal(etatSecretSession({ DATABASE_URL: "postgres://x", SESSION_SECRET: "court" }).ok, false, "vraie base, secret trop court");
+  assert.equal(etatSecretSession({ VERCEL_ENV: "production", SESSION_SECRET: "x".repeat(31) }).ok, false, "production, 31 caractères");
+  assert.equal(etatSecretSession({ VERCEL_ENV: "production", SESSION_SECRET: "x".repeat(32) }).ok, true);
+  assert.equal(etatSecretSession({ DATABASE_URL: "postgres://x", SESSION_SECRET: "x".repeat(40) }).ok, true);
+  assert.ok(!etatSecretSession({ DATABASE_URL: "postgres://x", SESSION_SECRET: "ma-valeur-trop-courte" }).raison.includes("ma-valeur"), "la valeur n'apparaît jamais");
+
+  const g = client();
+  const agence = await creerAgence(g, "Agence Secret", "Abidjan");
+  const { p, email } = await consolePlateforme();
+
+  // Simule la production (VERCEL_ENV) sans SESSION_SECRET, puis avec une trop courte.
+  const avant = process.env.SESSION_SECRET;
+  for (const secret of [undefined, "trop-court"]) {
+    process.env.VERCEL_ENV = "production";
+    if (secret === undefined) delete process.env.SESSION_SECRET; else process.env.SESSION_SECRET = secret;
+    try {
+      const connexion = await client().post("/api/login", { email: agence.email, password: "secret12" });
+      assert.equal(connexion.status, 503, JSON.stringify(connexion.data));
+      assert.match(connexion.data.error, /SESSION_SECRET/);
+      assert.match(connexion.data.error, secret === undefined ? /absente/ : /trop courte/);
+      assert.equal((await g.get("/api/me")).status, 503, "route agence authentifiée refusée (cookie signé par le secret démo jamais accepté)");
+      assert.equal((await g.get("/api/colis")).status, 503);
+      assert.equal((await p.get("/api/plateforme")).status, 503, "console refusée aussi");
+      assert.equal((await client().post("/api/plateforme/connexion", { email, password: "console-secret-123" })).status, 503);
+      assert.equal((await client().post("/api/register", { name: "Agence X", city: "Abidjan", phone: "0700000001", email: compteUnique("sec"), password: "secret12" })).status, 503);
+      assert.equal((await fetch(`${BASE}/api/suivi/CLI-ABSENT`)).status, 404, "le suivi public, sans session, fonctionne toujours");
+      assert.equal((await fetch(`${BASE}/api/health`)).status, 200);
+    } finally {
+      delete process.env.VERCEL_ENV;
+      if (avant === undefined) delete process.env.SESSION_SECRET; else process.env.SESSION_SECRET = avant;
+    }
+  }
+  // Retour au mode démo : tout refonctionne.
+  assert.equal((await g.get("/api/me")).status, 200);
+  assert.equal((await p.get("/api/plateforme")).status, 200);
+});
+
+/* ------------------ LOT 8 — amorçage du premier administrateur ------------------ */
+
+test("amorçage console (LOT 8) : fermé si un administrateur existe, jeton exigé et comparé, mot de passe ≥ 12, création atomique puis fermeture définitive", async () => {
+  const JETON = "jeton-amorcage-de-test-0123456789abcdef";
+  // Des administrateurs ont été créés par les tests précédents : amorçage fermé.
+  process.env.PLATEFORME_PREMIER_ADMIN_JETON = JETON;
+  try {
+    assert.deepEqual((await client().get("/api/plateforme/amorcage")).data, { disponible: false, motif: "ferme" });
+    const refuseFerme = await client().post("/api/plateforme/amorcage", { jeton: JETON, email: "a@shopin30.ci", nom: "Admin", password: "motdepasse-long-12" });
+    assert.equal(refuseFerme.status, 409);
+
+    // Plus aucun administrateur actif (désactivation, jamais de suppression).
+    await query("UPDATE plateforme_admins SET active = FALSE");
+    assert.deepEqual((await client().get("/api/plateforme/amorcage")).data, { disponible: true, motif: "ouvert" });
+    assert.deepEqual((await client().get("/api/plateforme?action=amorcage")).data, { disponible: true, motif: "ouvert" }, "forme repliée Vercel");
+
+    // Jeton absent ou trop court dans l'environnement : indisponible.
+    process.env.PLATEFORME_PREMIER_ADMIN_JETON = "court";
+    assert.deepEqual((await client().get("/api/plateforme/amorcage")).data, { disponible: false, motif: "jeton_absent" });
+    assert.equal((await client().post("/api/plateforme/amorcage", { jeton: "court", email: "a@shopin30.ci", nom: "Admin", password: "motdepasse-long-12" })).status, 409);
+    process.env.PLATEFORME_PREMIER_ADMIN_JETON = JETON;
+
+    const base = { email: "premier@shopin30.ci", nom: "Première admin", password: "motdepasse-long-12" };
+    const faux = await client().post("/api/plateforme/amorcage", { ...base, jeton: `${JETON}x` });
+    assert.equal(faux.status, 403);
+    assert.ok(!JSON.stringify(faux.data).includes(JETON), "le jeton n'est jamais renvoyé");
+    assert.equal((await client().post("/api/plateforme/amorcage", { ...base, jeton: JETON, password: "court-11car" })).status, 400);
+    assert.equal((await client().post("/api/plateforme/amorcage", { ...base, jeton: JETON, email: "pas-un-mail" })).status, 400);
+    assert.equal((await client().post("/api/plateforme/amorcage", { ...base, jeton: JETON, nom: "A" })).status, 400);
+    const { rows: aucun } = await query("SELECT count(*)::int AS n FROM plateforme_admins WHERE active = TRUE");
+    assert.equal(aucun[0].n, 0, "aucune création sur un refus");
+
+    // Double création concurrente : une seule réussit.
+    const concurrents = await Promise.all(
+      [1, 2, 3].map((i) => client().post("/api/plateforme/amorcage", { ...base, email: `premier${i}@shopin30.ci`, jeton: JETON }))
+    );
+    const codes = concurrents.map((r) => r.status).sort();
+    assert.deepEqual(codes, [201, 409, 409], JSON.stringify(concurrents.map((r) => r.data)));
+    const gagnant = concurrents.find((r) => r.status === 201);
+    assert.match(gagnant.data.aFaire, /PLATEFORME_PREMIER_ADMIN_JETON/);
+    const { rows: actifs } = await query("SELECT email FROM plateforme_admins WHERE active = TRUE");
+    assert.equal(actifs.length, 1);
+    assert.equal(actifs[0].email, gagnant.data.admin.email);
+    const { rows: verrou } = await query("SELECT admin_id FROM plateforme_amorcage");
+    assert.deepEqual(verrou.map((v) => v.admin_id), [gagnant.data.admin.id]);
+
+    // Le compte créé ouvre la console ; l'amorçage est fermé pour toujours.
+    const p = client();
+    assert.equal((await p.post("/api/plateforme/connexion", { email: gagnant.data.admin.email, password: base.password })).status, 200);
+    assert.equal((await p.get("/api/plateforme")).status, 200);
+    assert.deepEqual((await client().get("/api/plateforme/amorcage")).data, { disponible: false, motif: "ferme" });
+    await query("UPDATE plateforme_admins SET active = FALSE");
+    assert.deepEqual((await client().get("/api/plateforme/amorcage")).data, { disponible: false, motif: "ferme" }, "même sans administrateur actif, l'amorçage ayant servi reste fermé");
+    assert.equal((await client().post("/api/plateforme/amorcage", { ...base, email: "encore@shopin30.ci", jeton: JETON })).status, 409);
+  } finally {
+    delete process.env.PLATEFORME_PREMIER_ADMIN_JETON;
+    await query("UPDATE plateforme_admins SET active = TRUE");
   }
 });
 

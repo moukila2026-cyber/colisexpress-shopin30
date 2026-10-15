@@ -73,13 +73,21 @@ plus aucune dépendance à Firebase.
   suivi public des colis qu'elle expédie (nom affiché, couleurs, logo
   PNG/JPEG/WebP) depuis Paramètres — facultatif, sans aucune donnée
   personnelle ; sinon, l'apparence COLIS EXPRESS par défaut
-- **Paiements en ligne SasPay (LOT 7)** : payer le **reste à payer** d'un
-  colis (encaissé dans la caisse du jour, « Paiement SasPay »),
-  l'**abonnement** du mois ou une **recharge** du portefeuille, sur la page
-  de paiement hébergée SasPay (mobile money, carte). Un paiement n'est
-  appliqué qu'après vérification côté serveur (session payée, transaction
-  « SUCCESS » au bon montant) ; webhook signé (HMAC) vérifié côté serveur ;
-  mode **SIMULATION** tant qu'aucune clé n'est configurée
+- **Paiements en ligne SasPay (LOT 7, resserré au LOT 8)** : payer
+  l'**abonnement** du mois ou une **recharge** du portefeuille sur la page de
+  paiement hébergée SasPay (mobile money, carte), compte marchand de
+  Shopin30. **Shopin30 n'encaisse jamais l'argent des colis** : les agences
+  encaissent elles-mêmes au guichet (espèces ou mobile money, caisse du
+  jour) — le paiement en ligne d'un colis est refusé (403). Un paiement
+  n'est appliqué qu'après vérification côté serveur (session payée,
+  transaction « SUCCESS » au bon montant) ; webhook signé (HMAC) vérifié
+  côté serveur ; mode **SIMULATION** tant qu'aucune clé n'est configurée
+- **Sécurité avant la mise en production (LOT 8)** : garde-fous de paiement
+  selon l'environnement Vercel (clé de test ou simulation refusées en
+  production, clé réelle refusée en préversion), mode de frais SasPay
+  (`SASPAY_MODE_FRAIS`), `SESSION_SECRET` forte obligatoire dès qu'une vraie
+  base est branchée, et **premier administrateur de la console créé sans
+  terminal** avec un jeton d'amorçage à usage unique
 
 ## Arborescence
 
@@ -155,8 +163,39 @@ tests/                 Tests automatisés (node --test)
      ligne est **désactivé** (une simulation ne doit jamais créditer une vraie
      caisse) — sauf `PAIEMENTS_SIMULATION=1` pour une préproduction.
      N'utilisez une clé `sk_test_` que hors production : ses paiements de
-     test créditent réellement la caisse et le portefeuille de
-     l'environnement.
+     test créditent réellement le portefeuille de l'environnement.
+   - **Garde-fous du LOT 8** (`configurationPaiements`, selon `VERCEL_ENV`
+     que Vercel définit tout seul) : en **Production**, une clé `sk_test_`
+     ou `PAIEMENTS_SIMULATION=1` → paiement **désactivé** avec la raison
+     affichée ; en **Preview** ou **Development**, une clé `sk_live_` →
+     désactivé (jamais d'argent réel sur une base de test). En local sans
+     `DATABASE_URL`, la simulation reste le défaut.
+   - `SASPAY_MODE_FRAIS` (facultative, `ADD_ON` ou `DEDUCTED`) : transmise
+     à SasPay en `fee_charge_mode` à la création de chaque session. `ADD_ON`
+     = les frais s'ajoutent au montant débité au payeur (Shopin30 reçoit le
+     montant plein) ; `DEDUCTED` = le payeur est débité exactement du
+     montant, les frais sont retenus sur le net reversé à Shopin30. Dans les
+     deux cas, le montant vérifié est le montant **demandé**
+     (`requested_amount`) et le portefeuille de l'agence est crédité de ce
+     montant. Absente → réglage par défaut du compte SasPay (SasPay ignore
+     aussi la valeur si « Autoriser le choix du mode de frais par l'API »
+     n'est pas activé dans Paramètres → Frais).
+   - **`SESSION_SECRET` (LOT 8)** : dès que `DATABASE_URL` est définie ou que
+     `VERCEL_ENV` vaut `production`, une valeur d'**au moins 32 caractères**
+     est obligatoire ; sinon les connexions et toutes les routes
+     authentifiées (agences et console) répondent 503 avec un message clair
+     — la valeur de secours du code ne sert plus qu'à la démo locale. Pour
+     générer une valeur sans terminal : console du navigateur sur une page
+     https → `crypto.randomUUID() + crypto.randomUUID()`.
+   - **Premier administrateur de la console sans terminal (LOT 8)** : si
+     aucun administrateur actif n'existe **et** que
+     `PLATEFORME_PREMIER_ADMIN_JETON` (au moins 32 caractères) est définie,
+     `/plateforme.html` affiche « Créer le premier administrateur » (jeton,
+     e-mail, nom, mot de passe d'au moins 12 caractères). Le jeton est
+     comparé à temps constant, la création est atomique (une seule possible,
+     même en parallèle), puis l'amorçage est **fermé définitivement** :
+     supprimez alors la variable dans Vercel. `npm run plateforme-admin`
+     reste disponible pour les autres comptes.
 
 > `DATABASE_URL` est un secret : ne la commitez pas, ne la partagez jamais
 > dans une conversation ou un ticket.
