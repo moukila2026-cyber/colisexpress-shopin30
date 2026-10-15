@@ -2,6 +2,7 @@ import { api } from "./api.js";
 import { requireAgency } from "./auth.js";
 import { agencySidebar, initAgencyLayout, mobileAgencyHeader } from "./layout.js";
 import { TRANCHES_DEFAUT, trancheLibelle, validerTarif } from "./metier-tarifs.js";
+import { initMarque } from "./parametres-marque.js";
 import {
   clearPageMessage,
   errorMessage,
@@ -317,6 +318,8 @@ async function boot() {
   }
   await chargerEquipe();
   await chargerTarifs();
+  // LOT 7 — personnalisation du suivi public (gérant ; garde serveur).
+  await initMarque({ member: currentMember, agency });
 }
 
 async function saveAgency(event) {

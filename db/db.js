@@ -11,6 +11,7 @@ import { notificationsPourAgences } from "../js/metier-notifications.js";
 import { calculerEcheance, clePeriode, libellePeriode } from "../js/metier-plans.js";
 import { hashPassword } from "../lib/auth.js";
 import { stockerObjet } from "../lib/photos.js";
+import { logoDemoPng } from "./logo-demo.js";
 
 const ICI = path.dirname(fileURLToPath(import.meta.url));
 const SCHEMA = readFileSync(path.join(ICI, "schema.sql"), "utf8");
@@ -446,6 +447,21 @@ async function seedDemo(db) {
     `INSERT INTO plateforme_admins (id, email, name, password_hash, active, created_at_iso)
      VALUES ('demo-plateforme', 'plateforme@colisexpress.ci', 'Console Shopin30', $1, TRUE, $2)`,
     [hash, now]
+  );
+
+  // LOT 7 — suivi personnalisé : Shopin30 Abidjan habille le suivi public de
+  // ses colis (bleu et or, logo stocké via lib/photos.js) ; Bouaké garde
+  // l'apparence COLIS EXPRESS par défaut. Comparez CLI-DEMO01 et CLI-DEMO03.
+  const cleLogo = await stockerObjet({
+    key: "marques/demo-abidjan/logo-demo.png",
+    buffer: logoDemoPng({ fond: [29, 58, 138], ruban: [245, 179, 1] }),
+    contentType: "image/png"
+  });
+  await db.query(
+    `UPDATE agencies SET marque_active = TRUE, marque_nom = 'Shopin30 Abidjan', marque_couleur = '#1d3a8a',
+       marque_couleur_2 = '#f5b301', marque_logo_cle = $1, marque_logo_type = 'image/png', marque_maj_iso = $2
+     WHERE id = 'demo-abidjan'`,
+    [cleLogo, now]
   );
 
   // LOT 4 — photo de preuve de démonstration (prise en charge de CLI-DEMO01) :

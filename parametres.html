@@ -84,6 +84,27 @@
             </div>
           </form>
         </section>
+
+        <section class="settings-card" id="marqueSection" aria-labelledby="marqueTitle">
+          <div class="settings-summary">
+            <div>
+              <h2 id="marqueTitle">Personnalisation du suivi</h2>
+              <p>Habillez la page de suivi public des colis que vous expédiez : nom affiché, couleurs et logo. Aucune donnée personnelle n'y figure ; désactivée, la page garde les couleurs COLIS EXPRESS.</p>
+            </div>
+          </div>
+          <div class="page-message" id="marqueMessage" hidden role="alert"></div>
+          <div class="marque-apercu" id="marqueApercu" aria-live="polite"></div>
+          <form id="marqueForm" class="form-stack" novalidate>
+            <div class="field"><label class="switch-field" for="marqueActive"><input type="checkbox" id="marqueActive" name="active"><span>Activer la personnalisation sur le suivi public de mes colis</span></label></div>
+            <div class="form-grid">
+              <div class="field"><label for="marqueNom">Nom affiché</label><input id="marqueNom" name="nom" type="text" maxlength="60" autocomplete="organization" placeholder="Nom de votre agence"></div>
+              <div class="field"><label for="marqueCouleur">Couleur principale</label><input id="marqueCouleur" name="couleur" type="color" value="#0b5d46"></div>
+              <div class="field"><label for="marqueCouleur2">Couleur d'accent</label><input id="marqueCouleur2" name="couleur2" type="color" value="#f27622"></div>
+              <div class="field"><label for="marqueLogo">Logo (PNG, JPEG ou WebP)</label><input id="marqueLogo" name="logo" type="file" accept="image/png,image/jpeg,image/webp"><small class="field-help">Redimensionné à 256 px dans le navigateur, 300 Ko maximum.</small><label class="switch-field" for="marqueRetirerLogo"><input type="checkbox" id="marqueRetirerLogo" name="retirerLogo"><span>Retirer le logo actuel</span></label></div>
+            </div>
+            <div class="form-footer"><a class="button button-outline" id="marqueVoir" href="suivi.html" target="_blank" rel="noopener">Voir le suivi public</a><button class="button button-primary" id="saveMarqueButton" type="submit">Enregistrer la personnalisation</button></div>
+          </form>
+        </section>
       </div>
     </main>
   </div>

@@ -46,7 +46,17 @@
 
         <section class="panel-card parcels-panel">
           <div class="panel-title-row"><h2>Portefeuille — mouvements</h2><span id="mouvementsCount">—</span></div>
-          <p class="panel-note" id="rechargeNote">Recharger le portefeuille : envoyez le montant par mobile money à Shopin30 en indiquant le nom de votre agence (<a class="table-link" href="https://wa.me/2250501303343" target="_blank" rel="noopener noreferrer">WhatsApp +225 0501303343</a>) ; la recharge est créditée depuis la console plateforme avec la référence de votre transaction.</p>
+          <div class="panel-note" id="rechargeNote">
+            <form id="rechargeEnLigneForm" class="recharge-form" novalidate hidden>
+              <label for="rechargeMontant">Recharger en ligne : mobile money ou carte, sur la page sécurisée SasPay</label>
+              <div class="recharge-row">
+                <input id="rechargeMontant" name="montantFCFA" type="number" min="100" max="1000000" step="1" inputmode="numeric" placeholder="Montant en FCFA">
+                <button class="button button-orange" id="rechargeEnLigneButton" type="submit">Recharger en ligne</button>
+              </div>
+              <small class="field-help" id="rechargeModeNote"></small>
+            </form>
+            <p>Autre possibilité : envoyez le montant par mobile money à Shopin30 en indiquant le nom de votre agence (<a class="table-link" href="https://wa.me/2250501303343" target="_blank" rel="noopener noreferrer">WhatsApp +225 0501303343</a>) ; la recharge est alors créditée depuis la console plateforme avec la référence de votre transaction.</p>
+          </div>
           <div id="mouvementsList"><div class="loading-state">Chargement…</div></div>
         </section>
 

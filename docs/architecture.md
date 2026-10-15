@@ -28,7 +28,8 @@ Navigateur  ── fetch /api/* ──►  lib/app.js (Express)
   navigateur et par le serveur — une seule source de vérité. Idem pour
   `js/metier-tarifs.js` (LOT 2), `js/metier-bordereau.js`,
   `js/metier-incidents.js` et `js/metier-alertes.js` (LOT 4),
-  `js/metier-notifications.js` (LOT 5), `js/metier-plans.js` (LOT 6).
+  `js/metier-notifications.js` (LOT 5), `js/metier-plans.js` (LOT 6),
+  `js/metier-marque.js` et `js/metier-paiements.js` (LOT 7).
 - **Photos de preuve** (`lib/photos.js`) : le stockage objet est isolé derrière
   `stockerObjet()` / `lireObjet()` — Vercel Blob si `BLOB_READ_WRITE_TOKEN`
   est défini, sinon disque local (`PHOTOS_DIR`, défaut `uploads/photos`).
@@ -41,7 +42,9 @@ Navigateur  ── fetch /api/* ──►  lib/app.js (Express)
   `bordereaux`, `photos`, `incidents` + colonnes `bordereau_id`/`retour_*`
   sur `parcels` (LOT 4), `notifications` (LOT 5), colonnes de plan et de
   portefeuille sur `agencies`, `facturation_periodes`,
-  `portefeuille_mouvements`, `plateforme_admins` (LOT 6).
+  `portefeuille_mouvements`, `plateforme_admins` (LOT 6), colonnes
+  `marque_*` sur `agencies`, `paiements_en_ligne`, `paiements_webhooks`
+  (LOT 7).
 
 ### `agencies`
 
@@ -256,6 +259,50 @@ l'expéditeur) — les 5 statuts officiels du colis ne changent jamais.
 - **Vercel** : `/api/facturation/:action` et `/api/plateforme/:action` sont
   repliées par rewrites sur `api/[...path].js` — toujours 10 fonctions.
 
+### Suivi personnalisé et paiements SasPay (LOT 7)
+
+- **Marque d'agence** (colonnes `marque_*` sur `agencies`, facultatives) :
+  `PUT /api/marque` (gérant) valide nom affiché (2–60), couleurs `#rrggbb`
+  (`validerMarque()` + contrainte SQL `~ '^#[0-9a-f]{6}$'`) et logo
+  (`validerLogo()` : PNG/JPEG/WebP reconnus sur leurs octets, ≤ 300 Ko,
+  jamais de SVG) stocké par `lib/photos.js`. Le suivi public
+  (`GET /api/suivi/:code`) ajoute `marque` (nom, couleurs, couleur de texte
+  lisible, présence d'un logo) de l'agence **expéditrice** si elle est
+  active ; le logo est servi par `GET /api/suivi/:code/logo`
+  (`nosniff`, CSP `default-src 'none'`). Côté navigateur, `variablesMarque()`
+  revalide les couleurs avant l'attribut `style`.
+- **Abstraction de paiement** (`lib/paiements.js`) : `configurationPaiements()`
+  (simulation sans clé en démo/dev/tests ou avec `PAIEMENTS_SIMULATION=1` ;
+  désactivé en production sans clé ; `sk_test_` → test ; `sk_live_` → réel),
+  `fournisseurPaiement(mode)` → `{ creerSession, statutSession,
+  verifierTransaction }` (SasPay : `POST /checkout-sessions/`,
+  `GET /checkout-sessions/{id}/status/`, `GET /payments/{id}/verify/`, clé en
+  Bearer côté serveur, montants « 3500.00 », XOF, pays CI ; simulation : page
+  `paiement-simulation.html`, état en base).
+- **Cycle** (`paiements_en_ligne`) : création (`en_attente`, mode figé,
+  session réutilisée 30 min contre les doubles clics — SasPay n'accepte pas
+  d'`Idempotency-Key` sur cette route) → confirmation `confirmerPaiement()`
+  déclenchée par le retour navigateur (`POST /api/paiements/verifier`), le
+  webhook ou un rafraîchissement : statut de session `PAID` puis `verify`
+  `SUCCESS` au montant exact et en XOF (`transactionConforme()`), sinon rien
+  n'est appliqué. Effet appliqué **une seule fois** : le drapeau
+  `effet_applique` bascule dans la même instruction SQL que l'écriture
+  (encaissement « Paiement SasPay » + mise à jour du colis, ou crédit du
+  portefeuille journalisé puis `reglerAbonnement()`).
+- **Webhook** `POST /api/paiements/webhook` (public) : corps brut conservé
+  par le middleware JSON, `X-Webhook-Signature` = HMAC-SHA256 hex de
+  « horodatage.corps » avec `SASPAY_WEBHOOK_SECRET`, `X-Webhook-Timestamp`
+  à ± 300 s, `timingSafeEqual` ; 403 sinon (503 sans secret). Il ne fait que
+  déclencher la vérification des paiements concernés ; journal minimal
+  (`paiements_webhooks` : événement + identifiant de transaction, jamais le
+  numéro débité).
+- **Données personnelles** : le « client » transmis à SasPay est l'agence
+  (nom et e-mail professionnels) ; le payeur saisit son numéro sur la page
+  SasPay.
+- **Vercel** : rewrites `/api/paiements/:action` et
+  `/api/suivi/:code/:action` ; `/api/marque` est une route à un segment —
+  toujours 10 fonctions.
+
 ## Autorisations (ex-`firestore.rules`)
 
 | Ancienne règle Firestore | Équivalent serveur |
@@ -271,6 +318,9 @@ l'expéditeur) — les 5 statuts officiels du colis ne changent jamais.
 | incidents visibles aux deux bouts | `WHERE owner_id = $1 OR destination_agency_id = $1` |
 | quota : la destination ne paie jamais | `reserverCreation({ agencyId: session })` uniquement dans `POST /api/colis` ; aucune autre route ne lit la facturation |
 | abonnement : gérant seul | `requireGerantFacturation` sur `POST /api/facturation/*` ; plan Réseau réservé à la console |
+| suivi personnalisé : gérant seul, rien de personnel | `PUT /api/marque` refusé aux agents ; `marquePublique()` ne projette ni contact ni clé de stockage |
+| paiement appliqué une seule fois, après vérification | `confirmerPaiement()` (session `PAID` + `verify` `SUCCESS`, montant exact) et drapeau `effet_applique` dans la même instruction que l'écriture |
+| webhook authentique | `verifierSignatureWebhook()` : HMAC du corps brut, ± 300 s, temps constant |
 | console plateforme : compte séparé | `requirePlateforme` (cookie `ce_plateforme`, domaine de signature distinct, compte actif) |
 | notifications : chaque agence son journal | `WHERE agency_id = $session` en lecture comme en marquage « lu » ; destinataires calculés côté serveur (`agencesConcernees()`) |
 
@@ -310,7 +360,11 @@ journal cloisonné, bordereau arrivé / écart, souffrance et retour,
 jamais bloquante ; LOT 6 : quota puis dépassement prépayé et refus 402,
 destination jamais comptée, colis en cours jamais bloqués par un impayé,
 abonnement Pro et échéances, retour au Gratuit au mois suivant, console
-plateforme séparée, concurrence sur le compteur et le portefeuille). Les règles pures sont testées dans
+plateforme séparée, concurrence sur le compteur et le portefeuille ; LOT 7 :
+suivi personnalisé et logo vérifié, paiement simulé du reste d'un colis
+appliqué une seule fois, abonnement et recharge, mode TEST contre un faux
+SasPay local — requête sans donnée client, webhooks signés, rejeu et
+signature refusés, montant vérifié). Les règles pures sont testées dans
 `tests/metier-*.test.mjs` et le câblage Vercel dans
 `tests/integration-page.test.mjs`.
 

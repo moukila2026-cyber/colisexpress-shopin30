@@ -421,3 +421,27 @@ l'inverse ».
   facturation = création autorisée et journalisée (continuité de service).
 - Suite naturelle (LOT 7) : recharge du portefeuille et paiement de
   l'abonnement en ligne (SasPay), puis relevés mensuels téléchargeables.
+
+## 15. Livré : LOT 7 — suivi personnalisé et paiements SasPay
+
+- **Suivi personnalisé par agence** : nom affiché, couleurs et logo sur la
+  page de suivi public des colis expédiés par l'agence (Paramètres, gérant),
+  avec un aperçu en direct. Facultatif ; aucune donnée personnelle ; couleurs
+  et logos strictement contrôlés (pas d'injection CSS, pas de SVG).
+- **Paiements en ligne SasPay** derrière `lib/paiements.js` (paiement
+  hébergé) : reste à payer d'un colis (caisse du jour, « Paiement SasPay »),
+  abonnement du mois et recharge du portefeuille.
+- **Sûreté** : clé secrète côté serveur uniquement ; paiement appliqué une
+  seule fois et seulement après vérification serveur (session payée +
+  transaction « SUCCESS » au montant exact) ; webhook HMAC vérifié sur le
+  corps brut, anti-rejeu à 300 s ; aucune donnée client transmise (le client
+  de la session est l'agence) ; numéro débité jamais conservé.
+- **Modes** : SIMULATION sans clé (démo, développement, tests), TEST avec
+  `sk_test_`, réel avec `sk_live_` ; en production sans clé, paiement en
+  ligne désactivé (pas de crédit gratuit).
+- Choix simples, réversibles : l'abonnement payé en ligne transite par le
+  portefeuille (crédit puis règlement automatique) ; un paiement d'abonnement
+  ou de recharge est tracé dans le portefeuille, pas dans la caisse du jour
+  (qui reste la caisse des colis).
+- Suites possibles : paiement direct mobile money (softpay SasPay) au
+  guichet, QR code du lien de paiement sur le reçu, relevé mensuel PDF.

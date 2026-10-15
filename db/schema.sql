@@ -337,3 +337,61 @@ CREATE TABLE IF NOT EXISTS plateforme_admins (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   created_at_iso  TEXT NOT NULL
 );
+
+-- LOT 7 — suivi personnalisé par agence (additif, idempotent). Facultatif et
+-- désactivé par défaut : nom affiché, couleurs « #rrggbb » (contrôlées côté
+-- serveur), logo PNG/JPEG/WebP stocké via lib/photos.js (la clé de stockage
+-- n'est jamais exposée ; le logo public passe par /api/suivi/:code/logo).
+ALTER TABLE agencies ADD COLUMN IF NOT EXISTS marque_active BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE agencies ADD COLUMN IF NOT EXISTS marque_nom TEXT;
+ALTER TABLE agencies ADD COLUMN IF NOT EXISTS marque_couleur TEXT
+  CHECK (marque_couleur IS NULL OR marque_couleur ~ '^#[0-9a-f]{6}$');
+ALTER TABLE agencies ADD COLUMN IF NOT EXISTS marque_couleur_2 TEXT
+  CHECK (marque_couleur_2 IS NULL OR marque_couleur_2 ~ '^#[0-9a-f]{6}$');
+ALTER TABLE agencies ADD COLUMN IF NOT EXISTS marque_logo_cle TEXT;
+ALTER TABLE agencies ADD COLUMN IF NOT EXISTS marque_logo_type TEXT
+  CHECK (marque_logo_type IS NULL OR marque_logo_type IN ('image/png', 'image/jpeg', 'image/webp'));
+ALTER TABLE agencies ADD COLUMN IF NOT EXISTS marque_maj_iso TEXT;
+
+-- LOT 7 — paiements en ligne (SasPay, paiement hébergé). Un paiement n'est
+-- appliqué (caisse ou portefeuille) qu'une fois vérifié auprès du prestataire ;
+-- `effet_applique` bascule dans la même instruction que l'écriture métier
+-- (application unique, même si retour navigateur et webhook arrivent ensemble).
+-- Mode figé à la création : simulation (sans clé), test (sk_test_), live.
+CREATE TABLE IF NOT EXISTS paiements_en_ligne (
+  id                     TEXT PRIMARY KEY,
+  agency_id              TEXT NOT NULL REFERENCES agencies(id),
+  objet                  TEXT NOT NULL CHECK (objet IN ('colis', 'abonnement', 'recharge')),
+  parcel_id              TEXT REFERENCES parcels(id),
+  periode                TEXT,
+  montant_fcfa           INTEGER NOT NULL CHECK (montant_fcfa > 0),
+  libelle                TEXT NOT NULL,
+  mode                   TEXT NOT NULL CHECK (mode IN ('simulation', 'test', 'live')),
+  session_id             TEXT UNIQUE,
+  checkout_url           TEXT,
+  retour_chemin          TEXT,
+  statut                 TEXT NOT NULL DEFAULT 'en_attente'
+                         CHECK (statut IN ('en_attente', 'paye', 'echec', 'expire', 'annule')),
+  simulation_statut      TEXT CHECK (simulation_statut IS NULL OR simulation_statut IN ('PENDING', 'PAID', 'FAILED')),
+  transaction_id         TEXT,
+  transaction_reference  TEXT,
+  effet_applique         BOOLEAN NOT NULL DEFAULT FALSE,
+  acteur_id              TEXT,
+  acteur_nom             TEXT,
+  confirme_le_iso        TEXT,
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at_iso         TEXT NOT NULL,
+  updated_at             TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS paiements_en_ligne_agency_idx ON paiements_en_ligne (agency_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS paiements_en_ligne_transaction_idx ON paiements_en_ligne (transaction_id);
+
+-- Journal minimal des webhooks dont la signature est VALIDE (événement et
+-- identifiant de transaction seulement : jamais le numéro débité).
+CREATE TABLE IF NOT EXISTS paiements_webhooks (
+  id              TEXT PRIMARY KEY,
+  evenement       TEXT NOT NULL,
+  transaction_id  TEXT,
+  recu_le_iso     TEXT NOT NULL,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);

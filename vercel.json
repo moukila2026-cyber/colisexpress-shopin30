@@ -33,6 +33,14 @@
     {
       "source": "/api/plateforme/:action",
       "destination": "/api/plateforme?action=:action"
+    },
+    {
+      "source": "/api/paiements/:action",
+      "destination": "/api/paiements?action=:action"
+    },
+    {
+      "source": "/api/suivi/:code/:action",
+      "destination": "/api/suivi/:code?action=:action"
     }
   ]
 }

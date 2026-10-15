@@ -17,6 +17,7 @@ import {
   libelleStatutEcheance,
   periodeSuivante
 } from "./metier-plans.js";
+import { libelleModePaiement } from "./metier-paiements.js";
 import {
   clearPageMessage,
   errorMessage,
@@ -24,6 +25,7 @@ import {
   formatDateTime,
   formatFCFA,
   formatShortDate,
+  getQueryParam,
   setButtonLoading,
   showPageMessage,
   showToast
@@ -34,6 +36,8 @@ const LIEN_DEVIS_RESEAU = `https://wa.me/2250501303343?text=${encodeURIComponent
 const message = document.getElementById("pageMessage");
 const alerteTarget = document.getElementById("abonnementAlerte");
 let facturation = null;
+// LOT 7 — paiement en ligne SasPay (abonnement dû, recharge du portefeuille).
+let paiementsEnLigne = { actif: false, mode: null, raison: "" };
 
 function mountLayout() {
   document.getElementById("sidebarMount").innerHTML = agencySidebar();
@@ -87,10 +91,19 @@ function renderSynthese() {
     : `${periode.compteur} sur ${periode.quotaEffectif} colis inclus · ${periode.inclusRestants} restant${periode.inclusRestants > 1 ? "s" : ""}`;
 
   const actions = document.getElementById("abonnementActions");
-  actions.innerHTML = periode.abonnement.statut === "du" && facturation.peutModifier
-    ? `<button class="button button-primary" type="button" id="reglerAbonnement">Régler l'abonnement (${escapeHTML(formatFCFA(periode.abonnement.montantFCFA))}) depuis le portefeuille</button>`
+  const du = periode.abonnement.statut === "du" && facturation.peutModifier;
+  const mode = paiementsEnLigne.mode && paiementsEnLigne.mode !== "live" ? ` (${escapeHTML(libelleModePaiement(paiementsEnLigne.mode).toLowerCase())})` : "";
+  actions.innerHTML = du
+    ? `<button class="button button-primary" type="button" id="reglerAbonnement">Régler l'abonnement (${escapeHTML(formatFCFA(periode.abonnement.montantFCFA))}) depuis le portefeuille</button>${paiementsEnLigne.actif ? `<button class="button button-orange" type="button" id="payerAbonnementEnLigne">Payer en ligne avec SasPay${mode}</button>` : ""}`
     : "";
   document.getElementById("reglerAbonnement")?.addEventListener("click", reglerAbonnement);
+  document.getElementById("payerAbonnementEnLigne")?.addEventListener("click", (event) => payerEnLigne(event.currentTarget, { objet: "abonnement" }));
+
+  const recharge = document.getElementById("rechargeEnLigneForm");
+  recharge.hidden = !(paiementsEnLigne.actif && facturation.peutModifier);
+  document.getElementById("rechargeModeNote").textContent = paiementsEnLigne.actif
+    ? `${paiementsEnLigne.mode === "live" ? "Paiement réel." : `Mode ${libelleModePaiement(paiementsEnLigne.mode).toLowerCase()} : aucune somme réelle n'est prélevée.`} Le portefeuille est crédité dès la confirmation, et un abonnement dû est réglé automatiquement.`
+    : "";
 }
 
 function boutonPlan(plan) {
@@ -224,6 +237,41 @@ async function changerPlan(button) {
   }
 }
 
+/** Paiement hébergé SasPay : redirection vers la page de paiement (simulée sans clé). */
+async function payerEnLigne(bouton, corps) {
+  setButtonLoading(bouton, true, "Préparation…");
+  try {
+    const { paiement } = await api("/api/paiements", { method: "POST", body: corps });
+    window.location.href = paiement.checkoutUrl;
+  } catch (error) {
+    showToast(errorMessage(error), "error");
+    setButtonLoading(bouton, false);
+  }
+}
+
+async function rechargerEnLigne(event) {
+  event.preventDefault();
+  const montant = Number(document.getElementById("rechargeMontant").value);
+  if (!Number.isInteger(montant) || montant < 100 || montant > 1_000_000) {
+    showToast("Indiquez un montant entier entre 100 et 1 000 000 FCFA.", "error");
+    return;
+  }
+  await payerEnLigne(document.getElementById("rechargeEnLigneButton"), { objet: "recharge", montantFCFA: montant });
+}
+
+/** Retour de la page de paiement : vérification côté serveur, puis nettoyage de l'adresse. */
+async function verifierRetourPaiement(id) {
+  window.history.replaceState(null, "", "abonnement.html");
+  try {
+    const { paiement } = await api("/api/paiements/verifier", { method: "POST", body: { id } });
+    if (paiement.statut === "paye") showToast(`Paiement en ligne confirmé : ${formatFCFA(paiement.montantFCFA)} crédités au portefeuille.`);
+    else if (paiement.statut === "echec") showToast("Le paiement en ligne a échoué. Vous pouvez réessayer.", "error");
+    else if (paiement.statut === "en_attente") showToast("Paiement en attente de confirmation par SasPay : actualisez dans un instant.");
+  } catch (error) {
+    showToast(errorMessage(error), "error");
+  }
+}
+
 async function reglerAbonnement(event) {
   const button = event.currentTarget;
   setButtonLoading(button, true, "Règlement…");
@@ -245,6 +293,15 @@ async function boot() {
   const agency = await initAgencyLayout(user, "abonnement");
   if (!agency) return;
   document.getElementById("refreshAbonnement")?.addEventListener("click", charger);
+  document.getElementById("rechargeEnLigneForm")?.addEventListener("submit", rechargerEnLigne);
+  try {
+    const { configuration } = await api(`/api/paiements?_=${Date.now()}`);
+    paiementsEnLigne = configuration || paiementsEnLigne;
+  } catch {
+    // Paiement en ligne indisponible : le portefeuille reste rechargeable par la console.
+  }
+  const retour = getQueryParam("paiement");
+  if (retour) await verifierRetourPaiement(retour);
   await charger();
 }
 
