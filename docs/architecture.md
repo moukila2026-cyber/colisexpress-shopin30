@@ -206,13 +206,20 @@ câblage Vercel dans `tests/integration-page.test.mjs`.
   Vercel convertit tout segment entre crochets en `([^/]+)` (un seul
   segment d'URL, pas de catch-all multi-segments) : `api/[...path].js`
   couvre les routes à un segment (`/api/health`, `/api/colis`…), et chaque
-  route imbriquée a son fichier (`api/colis/[id].js`,
-  `api/colis/[id]/attach.js`, `api/colis/[id]/progress.js`,
-  `api/suivi/[code].js`, `api/clients/[id].js`,
-  `api/bordereaux/[id]/controle.js`, `api/colis/[id]/incidents.js`,
-  `api/photos/[id].js`…) — sinon elle renvoie le
-  404 NOT_FOUND de la plateforme au lieu d'atteindre Express. Toute nouvelle
-  route imbriquée doit recevoir son point d'entrée (verrouillé par
-  `npm test`).
+  route à deux segments a son fichier (`api/colis/[id].js`,
+  `api/suivi/[code].js`, `api/clients/[id].js`, `api/photos/[id].js`…) —
+  sinon elle renvoie le 404 NOT_FOUND de la plateforme au lieu d'atteindre
+  Express.
+  Le plan **Hobby limite un déploiement à 12 fonctions serverless** : les
+  routes à trois segments (`/api/colis/:id/attach`,
+  `/api/bordereaux/:id/remettre`, `/api/caisse/cloture`…) n'ont donc PAS
+  chacune leur fichier. Elles sont repliées par les `rewrites` de
+  `vercel.json` sur la fonction de leur route parente avec l'action en
+  paramètre (`/api/colis/:id/:action → /api/colis/:id?action=:action`), et le
+  premier middleware de `lib/app.js` redéplie l'URL réelle avant le routage
+  Express — les URL publiques, le frontend et les tests ne changent pas.
+  Toute nouvelle route à trois segments doit passer par ce mécanisme ;
+  `npm test` verrouille les points d'entrée, les rewrites et le compte de
+  fonctions (≤ 12).
 - **Autre hébergeur Node** : `npm start` sert API + fichiers statiques
   (`server.js`).

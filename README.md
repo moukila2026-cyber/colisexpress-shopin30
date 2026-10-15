@@ -263,13 +263,21 @@ npm test
   et que l'URL finale contient bien `?id=…`.
 - **Fiche colis ou suivi QR en erreur sur le site déployé (mais OK en local)** :
   si le navigateur reçoit un **404 NOT_FOUND** (page Vercel, pas le JSON de
-  l'API) sur `/api/colis/…` ou `/api/suivi/…`, il manque le point d'entrée
-  Vercel de cette route. Hors Next.js, un segment entre crochets ne capte
-  qu'un seul segment d'URL : `api/[...path].js` couvre les routes à un
-  segment (`/api/health`, `/api/colis`…), et chaque route imbriquée a son
-  fichier (`api/colis/[id].js`, `api/colis/[id]/attach.js`,
-  `api/colis/[id]/progress.js`, `api/suivi/[code].js`). Toute nouvelle route
-  imbriquée doit recevoir le sien ; un test (`npm test`) verrouille ces
-  fichiers.
+  l'API) sur `/api/colis/…` ou `/api/suivi/…`, la route n'est captée par
+  aucun point d'entrée Vercel. Hors Next.js, un segment entre crochets ne
+  capte qu'un seul segment d'URL : `api/[...path].js` couvre les routes à un
+  segment (`/api/health`, `/api/colis`…), et chaque route à deux segments a
+  son fichier (`api/colis/[id].js`, `api/suivi/[code].js`…). Les routes à
+  **trois segments** (`/api/colis/:id/attach`, `/api/bordereaux/:id/controle`,
+  `/api/caisse/cloture`…) n'ont **pas** de fichier : le plan Hobby limite un
+  déploiement à **12 fonctions serverless**, elles sont repliées par les
+  `rewrites` de `vercel.json` sur la fonction parente (`?action=…`) puis
+  redépliées par le premier middleware de `lib/app.js`. Toute nouvelle route
+  à trois segments doit passer par ce mécanisme (jamais par un nouveau
+  fichier) ; `npm test` verrouille les fichiers, les rewrites et la limite
+  de 12 fonctions.
+- **Chaque déploiement Vercel échoue avec « No more than 12 Serverless
+  Functions… »** : le dossier `api/` contient plus de 12 fichiers. Repliez
+  les routes concernées via les `rewrites` de `vercel.json` (voir ci-dessus).
 
 Conçu par **Shopin30** — support : [WhatsApp +225 0501303343](https://wa.me/2250501303343).

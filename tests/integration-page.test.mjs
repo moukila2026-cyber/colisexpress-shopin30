@@ -254,33 +254,63 @@ test("les points d'entrée Vercel captent les routes API à un segment et imbriq
   // colis », dashboard) et suivi QR en panne sur le site déployé, alors que
   // tout passait en local via server.js. Chaque forme de route imbriquée a
   // donc son fichier, qui réexporte la même application Express.
+  // LOT 4 — mais le plan Hobby de Vercel limite un déploiement à 12 fonctions
+  // serverless : avec un fichier par route imbriquée, on atteignait 19 et
+  // CHAQUE déploiement échouait (« No more than 12 Serverless Functions… »).
+  // Les routes à 3 segments sont donc repliées par les rewrites de
+  // vercel.json sur la fonction parente (?action=…), et le premier
+  // middleware de lib/app.js redéplie l'URL réelle avant le routage Express.
   assert.ok(existsSync(path.join(RACINE, "api/[...path].js")), "api/[...path].js doit exister (routes à un segment)");
   assert.ok(!existsSync(path.join(RACINE, "api/[[...path]].js")), "api/[[...path]].js ne capte qu'un seul segment hors Next.js : les routes imbriquées finissent en 404 plateforme");
   assert.match(lire("api/[...path].js"), /lib\/app\.js/, "le point d'entrée Vercel doit exporter l'application Express");
 
+  // Garde-fou : jamais plus de 12 fonctions serverless (limite Hobby).
+  const fichiersApi = [];
+  (function parcourir(dossier) {
+    for (const entree of readdirSync(path.join(RACINE, dossier), { withFileTypes: true })) {
+      const chemin = `${dossier}/${entree.name}`;
+      if (entree.isDirectory()) parcourir(chemin);
+      else if (entree.name.endsWith(".js")) fichiersApi.push(chemin);
+    }
+  })("api");
+  assert.ok(fichiersApi.length <= 12, `plan Hobby : 12 fonctions serverless max, or api/ en contient ${fichiersApi.length} — replier les nouvelles routes imbriquées via les rewrites vercel.json (?action=…)`);
+
+  // Les rewrites qui replient les routes à 3 segments sur leur fonction parente.
+  const vercelJson = JSON.parse(lire("vercel.json"));
+  const rewrites = vercelJson.rewrites ?? [];
+  for (const [source, destination] of [
+    ["/api/colis/:id/:action", "/api/colis/:id?action=:action"],
+    ["/api/bordereaux/:id/:action", "/api/bordereaux/:id?action=:action"],
+    ["/api/caisse/:action", "/api/caisse?action=:action"]
+  ]) {
+    assert.ok(
+      rewrites.some((r) => r.source === source && r.destination === destination),
+      `vercel.json doit replier ${source} vers ${destination} (limite Hobby de 12 fonctions)`
+    );
+  }
+  // Le middleware qui redéplie ?action=… dans lib/app.js.
+  assert.match(lire("lib/app.js"), /req\.query\?\.action/, "lib/app.js doit redéplier l'action des rewrites Vercel avant le routage");
+
   const entreesImbriquees = {
     "api/colis/[id].js": "../../lib/app.js",
-    "api/colis/[id]/attach.js": "../../../lib/app.js",
-    "api/colis/[id]/progress.js": "../../../lib/app.js",
     "api/suivi/[code].js": "../../lib/app.js",
-    "api/agents/[id].js": "../../../lib/app.js",
-    "api/colis/[id]/encaisser.js": "../../../lib/app.js",
+    "api/agents/[id].js": "../../lib/app.js",
     "api/tarifs/[id].js": "../../lib/app.js",
-    "api/caisse/cloture.js": "../../lib/app.js",
     "api/clients/[id].js": "../../lib/app.js",
     "api/bordereaux/[id].js": "../../lib/app.js",
-    "api/bordereaux/[id]/remettre.js": "../../../lib/app.js",
-    "api/bordereaux/[id]/controle.js": "../../../lib/app.js",
     "api/suivi-bordereau/[code].js": "../../lib/app.js",
-    "api/colis/[id]/incidents.js": "../../../lib/app.js",
-    "api/colis/[id]/photos.js": "../../../lib/app.js",
-    "api/colis/[id]/retour.js": "../../../lib/app.js",
     "api/incidents/[id].js": "../../lib/app.js",
     "api/photos/[id].js": "../../lib/app.js"
   };
   for (const [fichier, cible] of Object.entries(entreesImbriquees)) {
     assert.ok(existsSync(path.join(RACINE, fichier)), `${fichier} doit exister : sinon Vercel répond 404 NOT_FOUND sur cette route`);
     assert.ok(lire(fichier).includes(cible), `${fichier} doit réexporter ${cible} (l'application Express)`);
+    // La profondeur du chemin relatif doit réellement tomber sur lib/app.js :
+    // un « ../ » de trop fait sortir du dépôt et casse la fonction sur Vercel.
+    assert.ok(
+      existsSync(path.resolve(path.join(RACINE, fichier), "..", cible)),
+      `${fichier} : ${cible} doit résoudre vers lib/app.js depuis son dossier`
+    );
   }
 
   // Les routes imbriquées appelées par le front doivent exister côté Express.

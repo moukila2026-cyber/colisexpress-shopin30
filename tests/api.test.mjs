@@ -1353,6 +1353,29 @@ test("alertes « colis qui dorment » : 48 h sans mouvement, 72 h non retiré, 7
   assert.equal((await b.get("/api/souffrance")).data.souffrance.length, 1);
 });
 
+test("limite Hobby Vercel : les rewrites ?action=… sont redépliés vers les routes imbriquées", async () => {
+  const a = client();
+  await creerAgence(a, "Agence PliAction", "Abidjan");
+  const cree = await a.post("/api/colis", {
+    agencyNotRegistered: true,
+    values: valeurs({ destinationCity: "Man", declaredAgencyName: "Flash Pli", declaredAgencyCity: "Man", declaredAgencyPhone: "0700000188" })
+  });
+  const id = cree.data.parcel.id;
+
+  // La forme repliée (celle que Vercel sert après rewrite) avance le colis.
+  const via = await a.post(`/api/colis/${id}?action=progress`, {});
+  assert.equal(via.status, 200, JSON.stringify(via.data));
+  assert.equal(via.data.parcel.status, "Expédié");
+
+  // L'URL directe fonctionne toujours telle quelle (local, npm start, tests).
+  const direct = await a.post(`/api/colis/${id}/progress`, {});
+  assert.equal(direct.status, 200);
+  assert.equal(direct.data.parcel.status, "En transit");
+
+  // Une action inconnue ne crée aucune route.
+  assert.equal((await a.post(`/api/colis/${id}?action=inconnue`, {})).status, 404);
+});
+
 test.after(() => {
   server.close();
 });
