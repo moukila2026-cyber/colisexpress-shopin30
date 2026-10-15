@@ -131,6 +131,8 @@ lib/photos.js          Stockage des photos de preuve (Vercel Blob ou disque loca
 lib/notifications.js   Notifications : WhatsApp → Orange SMS → simulation, journal
 lib/pdf.js             Générateur PDF A4 en Node pur, police WinAnsi
 lib/releves.js         Relevés mensuels agence : génération, téléchargement et archivage
+lib/taches-quotidiennes.js Tâche quotidienne (Cron) : échéances, rappels, archivage, journal
+lib/vercel-depliage.js Dépliage des URLs repliées par les rewrites Vercel (?action=…)
 lib/facturation.js     Plans, quotas, portefeuille prépayé, abonnements (écritures atomiques)
 lib/plateforme.js      Console plateforme : vue d'ensemble en lecture seule, amorçage du premier administrateur
 lib/mise-en-service.js Diagnostic de configuration (console) : états ✓/⚠/✗ sans aucune valeur de secret
@@ -148,6 +150,11 @@ tests/                 Tests automatisés (node --test)
 > **Mise en service sans terminal** : suivez
 > [`docs/mise-en-service.md`](docs/mise-en-service.md), puis contrôlez le
 > panneau « Mise en service » de la console plateforme.
+>
+> **Vue d'ensemble du projet** :
+> [`docs/recapitulatif-global.md`](docs/recapitulatif-global.md) — les 13 lots,
+> toutes les pull requests, la liste complète des variables Vercel (par
+> environnement) et les étapes restantes côté plateforme.
 
 ## 1. Base de données (Neon)
 

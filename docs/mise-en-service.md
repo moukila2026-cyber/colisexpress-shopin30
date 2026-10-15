@@ -271,10 +271,15 @@ elles ne sont jamais perdues.
 4. Les relevés mensuels PDF ne nécessitent aucune variable Vercel : ils sont
    téléchargeables depuis Abonnement et la console, et le Cron archive le
    mois précédent le 1er de chaque mois.
-4. Préversion : empreinte de base différente, mode de paiement `test`,
+5. Préversion : empreinte de base différente, mode de paiement `test`,
    `APP_URL` vide.
-5. Les variables d'amorçage (`PLATEFORME_PREMIER_ADMIN_JETON`) ont été
+6. Les variables d'amorçage (`PLATEFORME_PREMIER_ADMIN_JETON`) ont été
    supprimées.
+
+> **Vue d'ensemble** : [`docs/recapitulatif-global.md`](recapitulatif-global.md)
+> résume les 13 lots, toutes les pull requests, la liste complète des
+> variables Vercel (par environnement) et les étapes restantes côté
+> plateforme.
 
 ---
 
