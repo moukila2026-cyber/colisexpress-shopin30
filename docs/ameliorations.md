@@ -398,3 +398,26 @@ l'inverse ».
   SMS local) dans `TRANSPORTS`, puis, si besoin, une tâche planifiée
   (Vercel Cron) qui appelle le même balayage pour les agences qui
   n'ouvrent pas l'application.
+
+## 14. Livré : LOT 6 — plans, quotas, portefeuille, console plateforme
+
+- **Plans par agence** : Gratuit (50 colis/mois, puis 30 FCFA par colis
+  prépayés), Pro (10 000 FCFA/mois, 500 colis inclus), Réseau (sur devis :
+  quota et prix négociés depuis la console).
+- **Règles d'équité** : seule l'agence expéditrice est comptée — l'agence de
+  destination ne paie jamais ; seule la création d'un nouveau colis peut être
+  refusée (quota atteint et portefeuille insuffisant) ; un solde impayé ne
+  bloque jamais un colis en cours (lecture, progression, réception,
+  contrôle, retour, suivi public).
+- **Facturation mensuelle** : compteur atomique par agence et par mois,
+  portefeuille prépayé (journal immuable, solde jamais négatif), abonnement
+  et échéance (J+7), quota ramené à celui du Gratuit en cas d'impayé après
+  l'échéance, page « Abonnement » et rappel du quota sur le formulaire.
+- **Console plateforme** sur un compte séparé : file des incidents ouverts
+  depuis plus de 7 jours, litiges, agences, volumes ; plan Réseau et recharge
+  des portefeuilles (règlement automatique d'un abonnement dû).
+- Choix simples, réversibles : dépassement du Pro au même prix (30 FCFA) ;
+  impayé = quota Gratuit pour les créations ; panne inattendue de la
+  facturation = création autorisée et journalisée (continuité de service).
+- Suite naturelle (LOT 7) : recharge du portefeuille et paiement de
+  l'abonnement en ligne (SasPay), puis relevés mensuels téléchargeables.
