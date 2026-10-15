@@ -135,5 +135,12 @@ npm test
 - **« Voir le colis » ouvre une fiche sans colis** : l'identifiant a été perdu
   en route. Vérifiez que `cleanUrls` n'est pas activé sur Vercel (voir section 3)
   et que l'URL finale contient bien `?id=…`.
+- **Fiche colis ou suivi QR en erreur sur le site déployé (mais OK en local)** :
+  si le navigateur reçoit un **404 NOT_FOUND** (page Vercel, pas le JSON de
+  l'API) sur `/api/colis/…` ou `/api/suivi/…`, le point d'entrée Vercel ne capte
+  pas les routes imbriquées. Il doit s'appeler `api/[...path].js` (catch-all) :
+  `api/[[...path]].js` ne capte qu'un seul segment hors Next.js, donc
+  `/api/health` répond mais pas `/api/colis/:id`. Un test (`npm test`)
+  verrouille ce nom de fichier.
 
 Conçu par **Shopin30** — support : [WhatsApp +225 0501303343](https://wa.me/2250501303343).
