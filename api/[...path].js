@@ -1,16 +1,17 @@
 /*
- * Point d'entrée Vercel : la totalité de /api/* arrive sur cette application
- * Express (routes, sessions et autorisations dans lib/app.js).
+ * Point d'entrée Vercel des routes API à un segment : /api/health,
+ * /api/register, /api/login, /api/logout, /api/me, /api/agences, /api/colis.
+ * Toute la logique (routes, sessions, autorisations) est dans lib/app.js.
  *
- * Le nom de fichier compte : hors Next.js, Vercel ne connaît que le segment
- * dynamique simple `[param]` et le catch-all `[...param]`. L'ancien nom
- * `[[...path]].js` (catch-all optionnel, syntaxe Next.js) était interprété
- * comme un segment simple : `/api/health` ou `/api/colis` répondaient, mais
- * toute route imbriquée (`/api/colis/:id`, `/api/colis/:id/attach`,
- * `/api/suivi/:code`…) tombait sur le 404 NOT_FOUND de la plateforme, sans
- * jamais atteindre Express — d'où la fiche colis et le suivi QR en panne sur
- * le site déployé alors que tout passait en local. `[...path]` capte un ou
- * plusieurs segments : toutes les routes appelées par le front ont au moins
- * un segment après /api, le compte est bon.
+ * Le nom de fichier compte : hors Next.js, Vercel convertit tout segment
+ * entre crochets (`[param]`, `[...param]`, `[[...param]]`) en `([^/]+)` —
+ * un seul segment d'URL, jamais un catch-all multi-segments. Les routes
+ * imbriquées ont donc leurs propres fichiers, qui réexportent la même
+ * application Express : api/colis/[id].js, api/colis/[id]/attach.js,
+ * api/colis/[id]/progress.js et api/suivi/[code].js. Sans eux,
+ * /api/colis/:id et /api/suivi/:code tombaient sur le 404 NOT_FOUND de la
+ * plateforme sans atteindre Express (fiche colis et QR code en panne sur
+ * le site déployé, alors que tout passait en local via server.js).
+ * Toute nouvelle route imbriquée doit recevoir son fichier ici.
  */
 export { default } from "../lib/app.js";
