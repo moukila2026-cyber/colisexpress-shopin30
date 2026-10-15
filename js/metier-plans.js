@@ -338,3 +338,105 @@ export function echeancesFacturation({ periode, plan, planSuivant = null, quotaN
 export function libelleStatutEcheance(statut) {
   return { en_retard: "Échéance dépassée", a_regler: "À régler", a_venir: "À venir" }[statut] ?? "—";
 }
+
+/* ------------------------ LOT 10 — compteur temps réel ------------------------ */
+
+/** Part du quota à partir de laquelle le compteur passe en « alerte » (80 %). */
+export const SEUIL_ALERTE_COMPTEUR = 0.8;
+
+/**
+ * Compteur « Colis ce mois » prêt à afficher (barre latérale, tableau de
+ * bord, console). Entrée : le résumé renvoyé par /api/resume ou
+ * /api/facturation?resume=1 (compteur, quotaEffectif, soldeFCFA, enRetard,
+ * prochainColis, colisPrepayes). Sortie : libellé, détail, niveau
+ * (normal | alerte | danger), pourcentage et besoin de recharge.
+ */
+export function affichageCompteur(resume = {}) {
+  const compteur = Math.max(0, Number(resume.compteur) || 0);
+  const quota = resume.quotaEffectif === null || resume.quotaEffectif === undefined ? null : Number(resume.quotaEffectif);
+  const soldeFCFA = Math.max(0, Number(resume.soldeFCFA) || 0);
+  const prochain = resume.prochainColis || decisionCreation({ rang: compteur + 1, quota });
+  const colisPrepayes = Number.isFinite(Number(resume.colisPrepayes))
+    ? Number(resume.colisPrepayes)
+    : Math.floor(soldeFCFA / PRIX_DEPASSEMENT_FCFA);
+  const enRetard = resume.enRetard === true;
+
+  if (quota === null) {
+    return {
+      libelle: `Colis ce mois : ${formatNombre(compteur)}`,
+      detail: "Illimité (plan Réseau)",
+      niveau: "normal",
+      pourcentage: 0,
+      illimite: true,
+      recharger: false,
+      restants: null
+    };
+  }
+
+  const restants = Math.max(0, quota - compteur);
+  const pourcentage = Math.min(100, Math.round((compteur / Math.max(1, quota)) * 100));
+  const libelle = `Colis ce mois : ${formatNombre(compteur)} / ${formatNombre(quota)}`;
+
+  if (prochain.type === "depassement") {
+    const insuffisant = soldeFCFA < prochain.montantFCFA;
+    return {
+      libelle,
+      detail: insuffisant
+        ? `Quota atteint — portefeuille insuffisant (${formatNombre(soldeFCFA)} FCFA)`
+        : `Hors forfait : ${PRIX_DEPASSEMENT_FCFA} FCFA par colis — votre solde couvre ${formatNombre(colisPrepayes)} colis`,
+      niveau: "danger",
+      pourcentage: 100,
+      illimite: false,
+      recharger: true,
+      restants: 0
+    };
+  }
+
+  const alerte = enRetard || compteur >= Math.ceil(quota * SEUIL_ALERTE_COMPTEUR);
+  return {
+    libelle,
+    detail: enRetard
+      ? `Abonnement impayé : quota Gratuit appliqué — reste ${formatNombre(restants)} inclus`
+      : `Reste ${formatNombre(restants)} colis inclus`,
+    niveau: alerte ? "alerte" : "normal",
+    pourcentage,
+    illimite: false,
+    recharger: alerte,
+    restants
+  };
+}
+
+/**
+ * Phrase permanente du formulaire « Nouveau colis » : ce que coûtera le
+ * prochain enregistrement. Le serveur reste seul juge (POST /api/colis).
+ */
+export function phraseProchainColis(resume = {}) {
+  const compteur = Math.max(0, Number(resume.compteur) || 0);
+  const quota = resume.quotaEffectif === null || resume.quotaEffectif === undefined ? null : Number(resume.quotaEffectif);
+  const soldeFCFA = Math.max(0, Number(resume.soldeFCFA) || 0);
+  const rang = compteur + 1;
+  const decision = decisionCreation({ rang, quota });
+  const ordinal = rang === 1 ? "1er" : `${formatNombre(rang)}e`;
+  if (quota === null) {
+    return { texte: `Ce colis sera le ${ordinal} du mois — plan Réseau, sans limite.`, niveau: "normal", bloque: false };
+  }
+  if (decision.type === "inclus") {
+    return {
+      texte: `Ce colis sera le ${ordinal} sur ${formatNombre(quota)} inclus ce mois-ci.`,
+      niveau: rang >= Math.ceil(quota * SEUIL_ALERTE_COMPTEUR) ? "alerte" : "normal",
+      bloque: false
+    };
+  }
+  if (soldeFCFA < decision.montantFCFA) {
+    return {
+      texte: `Quota atteint (${formatNombre(quota)} colis) et portefeuille insuffisant (${formatNombre(soldeFCFA)} FCFA) : l'enregistrement sera refusé jusqu'à la recharge. Les colis en cours ne sont jamais bloqués.`,
+      niveau: "danger",
+      bloque: true
+    };
+  }
+  return {
+    texte: `Ce colis sera hors forfait : ${decision.montantFCFA} FCFA débités du portefeuille (solde après : ${formatNombre(soldeFCFA - decision.montantFCFA)} FCFA).`,
+    niveau: "alerte",
+    bloque: false
+  };
+}

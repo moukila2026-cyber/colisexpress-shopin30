@@ -858,3 +858,40 @@ dd { margin: 4px 0 0; color: var(--ink); overflow-wrap: anywhere; font-size: .88
 .mes-attention .mes-etat { color: #9b4d10; background: var(--orange-light); }
 .mes-erreur .mes-etat { color: #fff; background: var(--danger); }
 .mes-table td { vertical-align: top; }
+
+/* LOT 10 — compteur de colis en temps réel */
+.compteur-colis { display: grid; gap: 6px; margin: -8px 0 16px; padding: 11px 12px; border-radius: 12px; background: rgba(255,255,255,.07); color: #fff; }
+.compteur-colis strong { font-size: .86rem; letter-spacing: .01em; }
+.compteur-colis small { color: rgba(255,255,255,.72); font-size: .74rem; line-height: 1.35; }
+.compteur-barre { height: 7px; border-radius: 99px; background: rgba(255,255,255,.14); overflow: hidden; }
+.compteur-barre span { display: block; height: 100%; width: 0; border-radius: inherit; background: #4ec995; transition: width .5s ease; }
+.compteur-colis[data-niveau="alerte"] .compteur-barre span { background: var(--orange, #f27622); }
+.compteur-colis[data-niveau="danger"] .compteur-barre span { background: #e5484d; }
+.compteur-colis[data-niveau="danger"] { background: rgba(229,72,77,.18); }
+.compteur-colis[data-niveau="danger"] small, .compteur-colis[data-niveau="danger"] strong { color: #fff; }
+.compteur-recharger { justify-self: start; margin-top: 2px; padding: 4px 10px; border-radius: 99px; background: #fff; color: var(--green, #126656); font-size: .74rem; font-weight: 800; text-decoration: none; }
+.compteur-court { flex: 0 0 auto; padding: 4px 9px; border-radius: 99px; background: #e6f3ee; color: #126656; font-size: .76rem; font-weight: 800; text-decoration: none; white-space: nowrap; }
+.compteur-court[data-niveau="alerte"] { background: #fff1e6; color: #b24f0a; }
+.compteur-court[data-niveau="danger"] { background: #fde8e8; color: #a3262b; }
+
+.forfait-card { display: grid; gap: 8px; }
+.forfait-card .forfait-chiffre { font-size: 1.6rem; font-weight: 900; line-height: 1.1; }
+.forfait-card .compteur-barre { background: #e6ebe8; }
+.forfait-card[data-niveau="normal"] .compteur-barre span { background: #126656; }
+.forfait-card[data-niveau="alerte"] .compteur-barre span { background: var(--orange, #f27622); }
+.forfait-card[data-niveau="danger"] .compteur-barre span { background: #e5484d; }
+.forfait-card[data-niveau="danger"] { border-color: #f3b4b6; background: #fff7f7; }
+.forfait-card small { color: var(--muted, #5b6b64); }
+.forfait-card .forfait-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.prochain-colis { margin: 0 0 12px; padding: 10px 13px; border-radius: 10px; background: #e6f3ee; color: #0f4d41; font-size: .9rem; }
+.prochain-colis[data-niveau="alerte"] { background: #fff1e6; color: #8a3d05; }
+.prochain-colis[data-niveau="danger"] { background: #fde8e8; color: #8d1f24; font-weight: 700; }
+
+.console-quota { display: grid; gap: 4px; min-width: 120px; }
+.console-quota .compteur-barre { background: #e6ebe8; }
+.console-quota[data-niveau="normal"] .compteur-barre span { background: #126656; }
+.console-quota[data-niveau="alerte"] .compteur-barre span { background: var(--orange, #f27622); }
+.console-quota[data-niveau="danger"] .compteur-barre span { background: #e5484d; }
+.console-quota[data-niveau="alerte"] strong, .console-quota[data-niveau="danger"] strong { color: #b24f0a; }
+.console-quota[data-niveau="danger"] strong { color: #a3262b; }

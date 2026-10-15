@@ -376,6 +376,33 @@ l'expéditeur) — les 5 statuts officiels du colis ne changent jamais.
   console (`plateforme.html`, `js/plateforme.js`).
 - Guide pas à pas : `docs/mise-en-service.md`.
 
+### Compteur de colis en temps réel (LOT 10)
+
+- **Pourquoi pas de WebSocket** : Vercel Hobby (fonctions serverless) ne
+  tient pas de connexion persistante ; le « temps réel » est obtenu par
+  (1) le compteur renvoyé **dans la réponse** de `POST /api/colis`
+  (`compteur`), (2) une requête légère `GET /api/resume` (compteur + badge
+  notifications, `Cache-Control: no-store`, sans balayage des échéances)
+  toutes les 20 s **si l'onglet est visible** et à chaque retour sur
+  l'onglet, (3) un `BroadcastChannel` (`colisexpress-compteur`) qui
+  propage la mise à jour aux autres onglets de la même agence.
+- `js/metier-plans.js` : `affichageCompteur(resume)` → `{ libelle, detail,
+  niveau: normal|alerte|danger, pourcentage, illimite, recharger, restants }`
+  (`SEUIL_ALERTE_COMPTEUR = 0.8`) ; `phraseProchainColis(resume)` → la
+  phrase du formulaire (« Ce colis sera le 38e sur 50 inclus », « hors
+  forfait : 30 FCFA débités… (solde après …) », refus annoncé). Partagé par
+  la barre latérale, le tableau de bord, le formulaire et la console.
+- `js/layout.js` : widget `[data-compteur]` dans la barre latérale et pastille
+  `[data-compteur-court]` dans l'en-tête mobile ; `surCompteur(cb)` permet à
+  une page de suivre le compteur (carte « Mon forfait », formulaire) ;
+  `diffuserCompteur(compteur)` publie un compteur reçu du serveur.
+- `lib/app.js` : `resumeCompteur(agencyId)` sert `/api/resume`,
+  `/api/facturation?resume=1` et la réponse de création. Seule
+  l'agence **expéditrice** est comptée ; le serveur reste seul juge du refus
+  (402). Aucune route d'écriture, aucun nouveau fichier `api/`.
+- Console : `celluleCompteur()` (barre, mise en évidence ≥ 80 %), tableau
+  rafraîchi toutes les 30 s onglet visible.
+
 ## Autorisations (ex-`firestore.rules`)
 
 | Ancienne règle Firestore | Équivalent serveur |

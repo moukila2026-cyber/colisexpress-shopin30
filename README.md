@@ -90,6 +90,17 @@ plus aucune dépendance à Firebase.
   ✓ / ⚠ / ✗ par point de configuration avec l'action à faire, sans jamais
   afficher la valeur d'un secret (empreinte non réversible de l'hôte de la
   base pour distinguer Preview et Production)
+- **Compteur de colis en temps réel (LOT 10)** : sur chaque page agence,
+  « Colis ce mois : 37 / 50 » avec barre de progression et détail (« reste
+  13 inclus », « hors forfait : 30 FCFA par colis — votre solde couvre N
+  colis », « illimité ») en trois niveaux (normal, alerte dès 80 %, danger)
+  et lien « Recharger » pour le gérant ; carte **Mon forfait** sur le
+  tableau de bord ; ligne permanente « Ce colis sera le 38e sur 50 inclus »
+  dans le formulaire ; sans WebSocket : une requête légère `GET /api/resume`
+  toutes les 20 s quand l'onglet est visible, mise à jour immédiate après
+  chaque enregistrement (le compteur revient avec le colis) et entre onglets
+  (`BroadcastChannel`) ; console : barre par agence, rafraîchie toutes les
+  30 s
 - **Sécurité avant la mise en production (LOT 8)** : garde-fous de paiement
   selon l'environnement Vercel (clé de test ou simulation refusées en
   production, clé réelle refusée en préversion), mode de frais SasPay

@@ -484,3 +484,20 @@ l'inverse ».
   vérifier que Preview et Production sont bien séparées.
 - Table additive `taches_executions` préparée pour la tâche quotidienne
   (LOT 11).
+
+## 18. Livré : LOT 10 — compteur de colis en temps réel
+
+- Barre latérale et en-tête mobile de toutes les pages agence : « Colis ce
+  mois : 37 / 50 », barre de progression, détail (reste inclus / hors
+  forfait et colis couverts par le solde / illimité), trois niveaux
+  (normal, alerte ≥ 80 %, danger) et lien « Recharger » pour le gérant.
+- Tableau de bord : carte « Mon forfait » ; formulaire : ligne permanente
+  « Ce colis sera le 38e sur 50 inclus » / « débité de 30 FCFA (solde
+  après …) » / « Quota atteint et solde insuffisant ».
+- Sans WebSocket (incompatible Vercel Hobby) : compteur renvoyé avec le
+  colis créé, `GET /api/resume` toutes les 20 s onglet visible et au retour
+  sur l'onglet, `BroadcastChannel` entre onglets.
+- Console : barre par agence, mise en évidence dès 80 %, rafraîchie toutes
+  les 30 s.
+- Piste future : notification au gérant (LOT 5) au passage de 80 % et à
+  l'épuisement du quota, une fois par mois.

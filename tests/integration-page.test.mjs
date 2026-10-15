@@ -862,3 +862,43 @@ test("le LOT 9 (mise en service assistée) est câblé de bout en bout", () => {
   assert.match(lire("docs/architecture.md"), /LOT 9/);
   assert.match(lire("docs/ameliorations.md"), /LOT 9/);
 });
+
+test("le LOT 10 (compteur de colis en temps réel) est câblé de bout en bout", () => {
+  // Une route légère, lecture seule, sans nouveau fichier api/.
+  const api = lire("lib/app.js");
+  assert.ok(api.includes('app.get("/api/resume"'), "route /api/resume");
+  assert.doesNotMatch(api, /app\.(post|put|patch)\("\/api\/resume"/, "lecture seule");
+  assert.ok(!existsSync(path.join(RACINE, "api/resume.js")), "aucun nouveau fichier api/");
+  assert.match(api, /compteur = await resumeCompteur\(req\.agency\.id\)/, "POST /api/colis renvoie le compteur à jour");
+
+  // Logique d'affichage partagée et testée dans js/metier-plans.js.
+  const metier = lire("js/metier-plans.js");
+  for (const motif of [/export function affichageCompteur/, /export function phraseProchainColis/, /SEUIL_ALERTE_COMPTEUR = 0\.8/]) assert.match(metier, motif);
+
+  // Barre latérale + en-tête mobile : rafraîchissement 20 s onglet visible, retour sur l'onglet, BroadcastChannel.
+  const layout = lire("js/layout.js");
+  for (const motif of [/data-compteur/, /data-compteur-court/, /INTERVALLE_RESUME_MS = 20000/, /BroadcastChannel/, /visibilitychange/, /\/api\/resume/, /export function diffuserCompteur/, /export function surCompteur/]) {
+    assert.match(layout, motif);
+  }
+  assert.doesNotMatch(layout, /new (WebSocket|EventSource)\(/, "pas de WebSocket ni de SSE (Vercel Hobby)");
+
+  // Tableau de bord : carte « Mon forfait » ; formulaire : ligne permanente du prochain colis.
+  const dashboard = lire("dashboard.html");
+  for (const id of ["forfaitCard", "forfaitChiffre", "forfaitBarre", "forfaitDetail", "forfaitRecharger"]) assert.ok(dashboard.includes(`id="${id}"`), id);
+  assert.match(lire("js/dashboard.js"), /surCompteur\(/);
+  assert.ok(lire("nouveau-colis.html").includes('id="prochainColis"'));
+  const nouveau = lire("js/nouveau-colis.js");
+  assert.match(nouveau, /phraseProchainColis/);
+  assert.match(nouveau, /diffuserCompteur\(compteur\)/, "le compteur renvoyé par POST /api/colis est diffusé");
+
+  // Console : barre par agence, rafraîchissement 30 s.
+  const console_ = lire("js/plateforme.js");
+  assert.match(console_, /affichageCompteur/);
+  assert.match(console_, /console-quota/);
+  assert.match(console_, /30_000/);
+  const css = lire("assets/css/style.css");
+  for (const classe of [".compteur-colis", ".compteur-barre", ".forfait-card", ".prochain-colis", ".console-quota"]) assert.ok(css.includes(classe), classe);
+  assert.match(lire("README.md"), /LOT 10/);
+  assert.match(lire("docs/architecture.md"), /LOT 10/);
+  assert.match(lire("docs/ameliorations.md"), /LOT 10/);
+});
