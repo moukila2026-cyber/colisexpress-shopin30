@@ -2623,6 +2623,8 @@ test("mise en service (LOT 9) : panneau réservé à la console, aucun secret da
   const bon = await diagnosticMiseEnService({ env: envProd, hoteRequete: "https://colisexpress-shopin30.vercel.app" });
   for (const cle of ["base", "session", "blob", "paiement", "webhook_secret", "app_url"]) assert.equal(etat(bon, cle), "ok", `${cle} ok`);
   assert.equal(etat(bon, "cron"), "attention", "CRON_SECRET présente mais aucune exécution encore");
+  const sansSecretAvecExecution = await diagnosticMiseEnService({ env: { VERCEL_ENV: "production", VERCEL: "1" } });
+  assert.equal(etat(sansSecretAvecExecution, "cron"), "erreur", "une exécution manuelle ne compense pas un CRON_SECRET absent en production");
   assert.match(bon.lignes.find((l) => l.cle === "paiement").detail, /Mode live · frais DEDUCTED/);
   const texte = JSON.stringify(bon) + JSON.stringify(mauvais) + JSON.stringify(demo.data);
   for (const valeur of Object.values(secrets)) {
@@ -2658,6 +2660,55 @@ test("mise en service (LOT 9) : panneau réservé à la console, aucun secret da
   assert.equal(etat(quotas, "quotas"), "attention");
   assert.match(quotas.lignes.find((l) => l.cle === "quotas").detail, /Agence MES : 41\/50/);
   assert.equal(periode.periode.quota, 50);
+});
+
+test("LOT 11 : cron protégé, traitement quotidien journalisé et commandes console", async () => {
+  const ancienSecret = process.env.CRON_SECRET;
+  try {
+    delete process.env.CRON_SECRET;
+    const refuseSansSecret = await fetch(`${BASE}/api/taches/quotidienne`);
+  assert.equal(refuseSansSecret.status, 401);
+  assert.deepEqual(await refuseSansSecret.json(), { error: "Tâche non autorisée." });
+
+  const secret = "cron-secret-de-test-32-caracteres-minimum-123";
+  process.env.CRON_SECRET = secret;
+  const refuseMauvaisSecret = await fetch(`${BASE}/api/taches/quotidienne`, {
+    headers: { Authorization: "Bearer mauvais-secret" }
+  });
+  assert.equal(refuseMauvaisSecret.status, 401);
+
+  // Forme reçue après le rewrite Vercel /api/taches/:action → ?action=.
+  const cron = await fetch(`${BASE}/api/taches?action=quotidienne`, {
+    headers: { Authorization: `Bearer ${secret}` }
+  });
+  assert.equal(cron.status, 200);
+  const { execution } = await cron.json();
+  assert.equal(execution.declencheur, "cron");
+  assert.ok(["ok", "partiel"].includes(execution.statut), JSON.stringify(execution));
+  assert.ok(execution.resultats.agences >= 0);
+  assert.ok(execution.dureeMs >= 0);
+  assert.equal("CRON_SECRET" in execution, false);
+
+  const agence = client();
+  await creerAgence(agence, "Agence Cron", "Abidjan");
+  assert.equal((await agence.get("/api/plateforme/taches")).status, 401, "une agence ne lit pas le journal plateforme");
+  const { p } = await consolePlateforme();
+  const liste = await p.get("/api/plateforme/taches");
+  assert.equal(liste.status, 200, JSON.stringify(liste.data));
+  assert.ok(liste.data.executions.length >= 1);
+  assert.ok(liste.data.executions.length <= 10);
+
+  const manuel = await p.post("/api/plateforme/taches", {});
+  assert.equal(manuel.status, 200, JSON.stringify(manuel.data));
+  assert.equal(manuel.data.execution.declencheur, "manuel_plateforme");
+  assert.ok(["ok", "partiel"].includes(manuel.data.execution.statut));
+  const apres = await p.get("/api/plateforme/taches");
+  assert.equal(apres.data.executions[0].declencheur, "manuel_plateforme");
+
+  } finally {
+    if (ancienSecret === undefined) delete process.env.CRON_SECRET;
+    else process.env.CRON_SECRET = ancienSecret;
+  }
 });
 
 test.after(() => {

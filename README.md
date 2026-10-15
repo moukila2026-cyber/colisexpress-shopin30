@@ -101,6 +101,13 @@ plus aucune dépendance à Firebase.
   chaque enregistrement (le compteur revient avec le colis) et entre onglets
   (`BroadcastChannel`) ; console : barre par agence, rafraîchie toutes les
   30 s
+- **Tâche quotidienne (LOT 11)** : Cron Vercel à 05:00 UTC, une fois par
+  jour, protégé par `CRON_SECRET` (comparaison en temps constant) ; ouvre la
+  période mensuelle pour toutes les agences, balaie les escalades d'incident
+  24 h / 7 j, les colis qui dorment et les colis en souffrance, puis envoie
+  les rappels d'abonnement à J-2, le jour de l'échéance et en retard. Les
+  exécutions sont journalisées dans `taches_executions` ; la console affiche
+  les dix dernières et permet à un administrateur de lancer la tâche.
 - **Sécurité avant la mise en production (LOT 8)** : garde-fous de paiement
   selon l'environnement Vercel (clé de test ou simulation refusées en
   production, clé réelle refusée en préversion), mode de frais SasPay
@@ -499,6 +506,12 @@ npm test
   à trois segments doit passer par ce mécanisme (jamais par un nouveau
   fichier) ; `npm test` verrouille les fichiers, les rewrites et la limite
   de 12 fonctions.
+- **Tâche quotidienne non exécutée** : dans Vercel → *Settings* →
+  *Environment Variables*, vérifiez `CRON_SECRET` (Production, au moins
+  32 caractères), puis redéployez. Console plateforme → « Tâche quotidienne »
+  → **Exécuter maintenant** ; la ligne « Tâche quotidienne » du panneau
+  « Mise en service » doit passer à ✓. Le Cron Vercel se déclenche ensuite à
+  05:00 UTC chaque jour.
 - **Chaque déploiement Vercel échoue avec « No more than 12 Serverless
   Functions… »** : le dossier `api/` contient plus de 12 fichiers. Repliez
   les routes concernées via les `rewrites` de `vercel.json` (voir ci-dessus).

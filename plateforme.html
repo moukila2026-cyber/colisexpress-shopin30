@@ -63,6 +63,13 @@
         <div id="miseEnServiceList"></div>
       </section>
 
+      <section class="panel-card parcels-panel" id="tachesQuotidiennesPanel">
+        <div class="panel-title-row"><h2>Tâche quotidienne</h2><button class="button button-outline button-small" id="executerTacheButton" type="button">Exécuter maintenant</button></div>
+        <p class="muted-note">Balayage des échéances et rappels d'abonnement chaque jour à 05:00 UTC. La tâche peut aussi être lancée manuellement par un administrateur de la plateforme.</p>
+        <div id="tachesMessage" class="empty-inline panel-empty" aria-live="polite">Chargement des exécutions…</div>
+        <div id="tachesExecutions"></div>
+      </section>
+
       <section class="panel-card parcels-panel">
         <div class="panel-title-row"><h2>File plateforme : incidents ouverts depuis plus de 7 jours</h2><span id="fileCount">—</span></div>
         <div id="fileList"></div>

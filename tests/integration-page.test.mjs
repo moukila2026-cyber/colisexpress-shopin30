@@ -269,6 +269,8 @@ test("les points d'entrée Vercel captent les routes API à un segment et imbriq
   assert.ok(existsSync(path.join(RACINE, "api/plateforme.js")), "api/plateforme.js garantit le point d'entrée Vercel dédié de /api/plateforme");
   assert.match(lire("api/plateforme.js"), /lib\/app\.js/, "la fonction plateforme réutilise l'application Express");
   assert.match(lire("api/plateforme.js"), /deplierRequeteVercel/, "la fonction plateforme traite le ?action= et les en-têtes Vercel");
+  assert.ok(existsSync(path.join(RACINE, "api/taches.js")), "api/taches.js fournit le point d'entrée parent pour le cron replié");
+  assert.match(lire("api/taches.js"), /deplierRequeteVercel/, "le handler taches re-déplie ?action=");
   assert.match(lire("api/[...path].js"), /lib\/app\.js/, "le point d'entrée Vercel générique réutilise l'application Express");
 
   // Garde-fou : jamais plus de 12 fonctions serverless (limite Hobby).
@@ -288,7 +290,8 @@ test("les points d'entrée Vercel captent les routes API à un segment et imbriq
   for (const [source, destination] of [
     ["/api/colis/:id/:action", "/api/colis/:id?action=:action"],
     ["/api/bordereaux/:id/:action", "/api/bordereaux/:id?action=:action"],
-    ["/api/caisse/:action", "/api/caisse?action=:action"]
+    ["/api/caisse/:action", "/api/caisse?action=:action"],
+    ["/api/taches/:action", "/api/taches?action=:action"]
   ]) {
     assert.ok(
       rewrites.some((r) => r.source === source && r.destination === destination),
@@ -864,6 +867,34 @@ test("le LOT 9 (mise en service assistée) est câblé de bout en bout", () => {
   assert.match(lire("README.md"), /mise-en-service\.md/);
   assert.match(lire("docs/architecture.md"), /LOT 9/);
   assert.match(lire("docs/ameliorations.md"), /LOT 9/);
+});
+
+test("le LOT 11 (tâche quotidienne Vercel Cron) est câblé de bout en bout", () => {
+  const vercel = JSON.parse(lire("vercel.json"));
+  assert.deepEqual(vercel.crons, [{ path: "/api/taches/quotidienne", schedule: "0 5 * * *" }]);
+  assert.ok(vercel.rewrites.some((r) => r.source === "/api/taches/:action" && r.destination === "/api/taches?action=:action"));
+  assert.ok(existsSync(path.join(RACINE, "api/taches.js")));
+  assert.doesNotMatch(lire("api/taches.js"), /quotidienne\.js/, "aucune fonction ajoutée pour la route à trois segments");
+
+  const api = lire("lib/app.js");
+  assert.match(api, /app\.get\("\/api\/taches\/quotidienne"/);
+  assert.match(api, /verifierAutorisationCron\(req\)/);
+  assert.match(api, /timingSafeEqual/, "CRON_SECRET comparée en temps constant");
+  assert.match(api, /app\.(get|post)\("\/api\/plateforme\/taches"/);
+  const taches = lire("lib/taches-quotidiennes.js");
+  for (const motif of [/balayerEcheances/, /ouvrirPeriode/, /niveauRappelAbonnement/, /taches_executions/, /LIMIT 10/]) assert.match(taches, motif);
+  assert.match(lire("js/metier-notifications.js"), /abonnement_jmoins2/);
+  assert.match(lire("js/metier-notifications.js"), /abonnement_echeance/);
+  assert.match(lire("js/metier-notifications.js"), /abonnement_retard/);
+
+  const html = lire("plateforme.html");
+  for (const id of ["tachesQuotidiennesPanel", "executerTacheButton", "tachesExecutions"]) assert.match(html, new RegExp(`id="${id}"`));
+  assert.match(lire("js/plateforme.js"), /\/api\/plateforme\/taches/);
+  assert.match(lire("lib/mise-en-service.js"), /05:00 UTC/);
+  assert.match(lire("docs/mise-en-service.md"), /CRON_SECRET/);
+  assert.match(lire("README.md"), /tâche quotidienne/i);
+  assert.match(lire("docs/architecture.md"), /LOT 11/);
+  assert.match(lire("docs/ameliorations.md"), /LOT 11/);
 });
 
 test("le LOT 10 (compteur de colis en temps réel) est câblé de bout en bout", () => {

@@ -229,13 +229,78 @@ async function chargerMiseEnService() {
   }
 }
 
+function renderTaches(executions = []) {
+  const target = document.getElementById("tachesExecutions");
+  const messageTaches = document.getElementById("tachesMessage");
+  if (!target || !messageTaches) return;
+  if (!executions.length) {
+    messageTaches.textContent = "Aucune exécution enregistrée pour l'instant.";
+    target.innerHTML = "";
+    return;
+  }
+  messageTaches.textContent = `${executions.length} dernière${executions.length > 1 ? "s" : ""} exécution${executions.length > 1 ? "s" : ""}`;
+  const statut = { en_cours: "En cours", ok: "Réussie", partiel: "Partielle", erreur: "Erreur" };
+  const declencheur = { cron: "Vercel Cron", manuel_plateforme: "Manuelle (console)" };
+  target.innerHTML = `<div class="table-wrap"><table class="parcel-table plateforme-table">
+    <thead><tr><th>Déclencheur</th><th>Démarrée le</th><th>Durée</th><th>État</th><th>Résultat</th></tr></thead>
+    <tbody>${executions.map((item) => {
+      const r = item.resultats || {};
+      const resume = [
+        `${Number(r.agences) || 0} agences`,
+        `${Number(r.colisBalayes) || 0} colis balayés`,
+        `${Number(r.notificationsEcheance) || 0} alertes`,
+        `${Number(r.rappelsAbonnement) || 0} rappels`,
+        `${Number(r.incidentsAArbitrer) || 0} incidents > 7 j`
+      ].join(" · ");
+      const duree = Number.isFinite(Number(item.dureeMs)) ? `${Number(item.dureeMs)} ms` : "—";
+      return `<tr>
+        <td>${escapeHTML(declencheur[item.declencheur] || "Automatique")}</td>
+        <td>${escapeHTML(formatDateTime(item.demarreeLeISO))}</td>
+        <td>${escapeHTML(duree)}</td>
+        <td><span class="status-badge">${escapeHTML(statut[item.statut] || item.statut)}</span></td>
+        <td class="cell-wrap"><small>${escapeHTML(resume)}${r.erreurs?.length ? ` · ${r.erreurs.length} étape(s) en échec` : ""}</small></td>
+      </tr>`;
+    }).join("")}</tbody></table></div>`;
+}
+
+async function chargerTaches() {
+  const target = document.getElementById("tachesExecutions");
+  const messageTaches = document.getElementById("tachesMessage");
+  if (!target || !messageTaches) return;
+  try {
+    const data = await api(`/api/plateforme/taches?_=${Date.now()}`);
+    renderTaches(data.executions || []);
+  } catch (error) {
+    messageTaches.textContent = errorMessage(error);
+    target.innerHTML = "";
+  }
+}
+
+async function executerTacheMaintenant() {
+  const button = document.getElementById("executerTacheButton");
+  const target = document.getElementById("tachesMessage");
+  setButtonLoading(button, true, "Exécution…");
+  target.textContent = "La tâche s'exécute. Cela peut prendre quelques instants.";
+  try {
+    const data = await api("/api/plateforme/taches", { method: "POST", body: {} });
+    showToast(data.execution?.statut === "erreur" ? "La tâche a rencontré une erreur." : "Tâche quotidienne terminée.");
+    await chargerTaches();
+    await chargerMiseEnService();
+  } catch (error) {
+    target.textContent = errorMessage(error);
+    showToast(errorMessage(error), "error");
+  } finally {
+    setButtonLoading(button, false);
+  }
+}
+
 async function charger({ silencieux = false } = {}) {
   try {
     vue = await api(`/api/plateforme?_=${Date.now()}`);
     clearPageMessage(message);
     afficherConsole();
     renderAll();
-    await chargerMiseEnService();
+    await Promise.all([chargerMiseEnService(), chargerTaches()]);
   } catch (error) {
     if (error.status === 401) {
       vue = null;
@@ -358,6 +423,7 @@ function boot() {
   document.getElementById("amorcageForm").addEventListener("submit", amorcer);
   document.getElementById("logoutPlateforme").addEventListener("click", deconnexion);
   document.getElementById("refreshConsole").addEventListener("click", () => charger());
+  document.getElementById("executerTacheButton").addEventListener("click", executerTacheMaintenant);
   document.getElementById("closeAgenceModal").addEventListener("click", fermerAgence);
   modal.addEventListener("click", (event) => {
     if (event.target === modal) fermerAgence();
