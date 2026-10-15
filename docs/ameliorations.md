@@ -470,3 +470,17 @@ l'inverse ».
   l'argent transite par Shopin30. Ce serait la seule façon saine de rouvrir
   le paiement en ligne des colis ; elle demande un KYC par agence chez
   SasPay, le chiffrement des clés au repos et un webhook par agence.
+
+## 17. Livré : LOT 9 — mise en service assistée, sans terminal
+
+- `docs/mise-en-service.md` : guide pas à pas pour un non-développeur, dans
+  l'ordre (Blob, base de préversion séparée, `SESSION_SECRET`, premier
+  compte console, SasPay avec KYC / clés / webhook / `APP_URL` / mode de
+  frais, variables à venir, vérifications finales) avec un contrôle à chaque
+  étape et un tableau des variables sans aucune valeur réelle.
+- Panneau « Mise en service » dans la console : lecture seule, une ligne
+  ✓ / ⚠ / ✗ par point avec l'action à faire ; aucun secret affiché, même
+  partiellement ; empreinte non réversible de l'hôte de la base pour
+  vérifier que Preview et Production sont bien séparées.
+- Table additive `taches_executions` préparée pour la tâche quotidienne
+  (LOT 11).

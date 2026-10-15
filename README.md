@@ -82,6 +82,14 @@ plus aucune dépendance à Firebase.
   n'est appliqué qu'après vérification côté serveur (session payée,
   transaction « SUCCESS » au bon montant) ; webhook signé (HMAC) vérifié
   côté serveur ; mode **SIMULATION** tant qu'aucune clé n'est configurée
+- **Mise en service assistée (LOT 9)** : guide pas à pas sans terminal
+  [`docs/mise-en-service.md`](docs/mise-en-service.md) (Blob, base de
+  préversion séparée, `SESSION_SECRET`, premier compte console, SasPay,
+  variables à venir, vérifications finales, tableau des variables) et
+  panneau **« Mise en service »** dans la console plateforme : une ligne
+  ✓ / ⚠ / ✗ par point de configuration avec l'action à faire, sans jamais
+  afficher la valeur d'un secret (empreinte non réversible de l'hôte de la
+  base pour distinguer Preview et Production)
 - **Sécurité avant la mise en production (LOT 8)** : garde-fous de paiement
   selon l'environnement Vercel (clé de test ou simulation refusées en
   production, clé réelle refusée en préversion), mode de frais SasPay
@@ -98,7 +106,8 @@ lib/auth.js            Hachage des mots de passe (scrypt) et cookies signés
 lib/photos.js          Stockage des photos de preuve (Vercel Blob ou disque local)
 lib/notifications.js   Notifications : fonction d'envoi unique, transports (simulation par défaut), journal
 lib/facturation.js     Plans, quotas, portefeuille prépayé, abonnements (écritures atomiques)
-lib/plateforme.js      Console plateforme : vue d'ensemble en lecture seule
+lib/plateforme.js      Console plateforme : vue d'ensemble en lecture seule, amorçage du premier administrateur
+lib/mise-en-service.js Diagnostic de configuration (console) : états ✓/⚠/✗ sans aucune valeur de secret
 lib/paiements.js       Paiements en ligne : abstraction SasPay (simulation / test / réel), webhook signé
 db/schema.sql          Schéma PostgreSQL (agences, colis, agents, tarifs, caisse, clients, bordereaux, photos, incidents, notifications, facturation)
 db/init-db.js          npm run init-db : applique le schéma sur la base Neon
@@ -109,6 +118,10 @@ server.js              Serveur local (API + fichiers statiques)
 js/                    Frontend statique (modules ES, aucune dépendance externe)
 tests/                 Tests automatisés (node --test)
 ```
+
+> **Mise en service sans terminal** : suivez
+> [`docs/mise-en-service.md`](docs/mise-en-service.md), puis contrôlez le
+> panneau « Mise en service » de la console plateforme.
 
 ## 1. Base de données (Neon)
 

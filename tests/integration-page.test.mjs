@@ -828,3 +828,37 @@ test("le LOT 8 (sécurité avant la mise en production) est câblé de bout en b
   assert.match(lire("docs/ameliorations.md"), /LOT 8/);
   assert.match(lire("docs/ameliorations.md"), /clé SasPay par agence/i, "option future notée");
 });
+
+test("le LOT 9 (mise en service assistée) est câblé de bout en bout", () => {
+  // Guide pas à pas pour non-développeur, avec tableau des variables sans valeur réelle.
+  const guide = lire("docs/mise-en-service.md");
+  for (const motif of [
+    /BLOB_READ_WRITE_TOKEN/, /branche Neon|Branches/, /Schema only/i, /SESSION_SECRET/, /PLATEFORME_PREMIER_ADMIN_JETON/,
+    /KYC/, /sk_test_/, /sk_live_/, /\/api\/paiements\/webhook/, /transaction\.success/, /transaction\.failed/, /transaction\.cancelled/,
+    /SASPAY_WEBHOOK_SECRET/, /APP_URL/, /SASPAY_MODE_FRAIS/, /CRON_SECRET/, /WHATSAPP_TOKEN/, /ORANGE_SMS_CLIENT_ID/,
+    /crypto\.randomUUID\(\) \+ crypto\.randomUUID\(\)/, /## Tableau des variables/, /Vérifications finales/
+  ]) {
+    assert.match(guide, motif, `docs/mise-en-service.md doit mentionner ${motif}`);
+  }
+  assert.doesNotMatch(guide, /sk_live_[A-Za-z0-9]{8,}|postgresql:\/\/[^\s…]+:[^\s…]+@/, "aucune valeur réelle dans le guide");
+
+  // Panneau console en lecture seule, route repliée, aucun nouveau fichier api/.
+  const api = lire("lib/app.js");
+  assert.ok(api.includes('app.get("/api/plateforme/mise-en-service"'), "route du panneau");
+  assert.doesNotMatch(api, /app\.(post|put|patch)\("\/api\/plateforme\/mise-en-service"/, "lecture seule");
+  assert.ok(!existsSync(path.join(RACINE, "api/plateforme")), "aucun nouveau fichier api/");
+  const lib = lire("lib/mise-en-service.js");
+  for (const motif of [/empreinteHoteBase/, /sha256/, /etatSecretSession/, /configurationPaiements/, /configurationNotifications/, /paiements_webhooks/, /taches_executions/, /SEUIL_ALERTE_QUOTA = 0\.8/]) {
+    assert.match(lib, motif);
+  }
+  assert.doesNotMatch(lib, /env\.SASPAY_SECRET_KEY|env\.SESSION_SECRET\b(?!\s*\?\?)/, "le module ne manipule pas les valeurs de secret");
+  assert.match(lire("db/schema.sql"), /CREATE TABLE IF NOT EXISTS taches_executions/);
+  const html = lire("plateforme.html");
+  for (const id of ["miseEnServicePanel", "miseEnServiceResume", "miseEnServiceList"]) {
+    assert.match(html, new RegExp(`id="${id}"`), `plateforme.html doit exposer #${id}`);
+  }
+  assert.match(lire("js/plateforme.js"), /\/api\/plateforme\/mise-en-service/);
+  assert.match(lire("README.md"), /mise-en-service\.md/);
+  assert.match(lire("docs/architecture.md"), /LOT 9/);
+  assert.match(lire("docs/ameliorations.md"), /LOT 9/);
+});

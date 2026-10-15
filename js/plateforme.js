@@ -185,12 +185,39 @@ function renderAll() {
   renderVolumes();
 }
 
+const ETATS_MISE_EN_SERVICE = { ok: ["✓", "mes-ok", "OK"], attention: ["⚠", "mes-attention", "À vérifier"], erreur: ["✗", "mes-erreur", "À corriger"] };
+
+/** LOT 9 — panneau « Mise en service » (lecture seule, aucun secret). */
+async function chargerMiseEnService() {
+  const target = document.getElementById("miseEnServiceList");
+  const resume = document.getElementById("miseEnServiceResume");
+  try {
+    const diagnostic = await api(`/api/plateforme/mise-en-service?_=${Date.now()}`);
+    resume.textContent = `${diagnostic.environnement} · ${diagnostic.resume.ok} ✓ · ${diagnostic.resume.attention} ⚠ · ${diagnostic.resume.erreur} ✗`;
+    target.innerHTML = `<div class="table-wrap"><table class="parcel-table plateforme-table mes-table">
+      <thead><tr><th>État</th><th>Point de contrôle</th><th>Constat</th><th>Action à faire</th></tr></thead>
+      <tbody>${diagnostic.lignes.map((l) => {
+        const [symbole, classe, libelle] = ETATS_MISE_EN_SERVICE[l.etat] || ETATS_MISE_EN_SERVICE.attention;
+        return `<tr class="${classe}">
+          <td><span class="mes-etat" aria-label="${libelle}">${symbole}</span></td>
+          <td><strong>${escapeHTML(l.libelle)}</strong></td>
+          <td class="cell-wrap"><small>${escapeHTML(l.detail)}</small></td>
+          <td class="cell-wrap"><small>${escapeHTML(l.action || "—")}</small></td>
+        </tr>`;
+      }).join("")}</tbody></table></div>`;
+  } catch (error) {
+    resume.textContent = "—";
+    target.innerHTML = `<div class="empty-inline panel-empty">${escapeHTML(errorMessage(error))}</div>`;
+  }
+}
+
 async function charger({ silencieux = false } = {}) {
   try {
     vue = await api(`/api/plateforme?_=${Date.now()}`);
     clearPageMessage(message);
     afficherConsole();
     renderAll();
+    await chargerMiseEnService();
   } catch (error) {
     if (error.status === 401) {
       vue = null;

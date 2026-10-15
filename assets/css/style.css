@@ -851,3 +851,10 @@ dd { margin: 4px 0 0; color: var(--ink); overflow-wrap: anywhere; font-size: .88
 .simulation-details dt { color: var(--muted); font-size: .8rem; }
 .simulation-details dd { margin: 0; color: var(--green-950); font-size: .86rem; text-align: right; }
 .simulation-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+
+/* LOT 9 — panneau « Mise en service » */
+.mes-etat { display: inline-flex; width: 26px; height: 26px; align-items: center; justify-content: center; border-radius: 50%; font-weight: 800; }
+.mes-ok .mes-etat { color: var(--green-800); background: var(--green-100); }
+.mes-attention .mes-etat { color: #9b4d10; background: var(--orange-light); }
+.mes-erreur .mes-etat { color: #fff; background: var(--danger); }
+.mes-table td { vertical-align: top; }
