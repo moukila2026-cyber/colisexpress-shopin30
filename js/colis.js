@@ -24,6 +24,7 @@ import {
   agenceDeclaree,
   agencesRattachables,
   etapeValideeParExpediteur,
+  libelleEtatPaiement,
   peutRattacher,
   prochaineEtape,
   villeDivergente
@@ -199,6 +200,100 @@ async function rattacherAgence(agencyId, destinationCity) {
 
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ */
+/* Paiement : état du colis et encaissement du solde (LOT 2)          */
+/* ------------------------------------------------------------------ */
+
+function etatPaiement(parcel) {
+  return libelleEtatPaiement(parcel.paymentStatus ?? null, {
+    priceFCFA: parcel.priceFCFA,
+    paidAmountFCFA: parcel.paidAmountFCFA ?? 0
+  });
+}
+
+function paymentCardHtml(parcel) {
+  const etat = etatPaiement(parcel);
+  const regle = etat.reste <= 0;
+  return `
+    <section class="info-card payment-card" aria-labelledby="paymentCardTitle">
+      <h2 id="paymentCardTitle">Paiement</h2>
+      <p class="payment-status ${regle ? "payment-status-ok" : etat.cle ? "payment-status-due" : ""}">${escapeHTML(etat.label)}</p>
+      <dl class="person-data">
+        <div><dt>Prix du colis</dt><dd>${escapeHTML(formatFCFA(parcel.priceFCFA))}</dd></div>
+        <div><dt>Encaissé</dt><dd>${escapeHTML(formatFCFA(parcel.paidAmountFCFA ?? 0))}</dd></div>
+        <div><dt>Reste à payer</dt><dd>${escapeHTML(formatFCFA(etat.reste))}</dd></div>
+      </dl>
+      ${regle ? '<p class="muted-note">Aucun montant restant dû.</p>' : '<div class="payment-actions"><button class="button button-primary button-small" id="openEncaisser" type="button">Encaisser le solde</button></div>'}
+    </section>`;
+}
+
+function openPaymentModal() {
+  if (!currentParcel) return;
+  const etat = etatPaiement(currentParcel);
+  document.getElementById("encaisserAmount").value = String(etat.reste);
+  document.getElementById("encaisserResteHint").textContent = `Reste à encaisser : ${formatFCFA(etat.reste)} sur ${formatFCFA(currentParcel.priceFCFA)}.`;
+  document.getElementById("paymentCollectMessage").hidden = true;
+  document.getElementById("paymentModal").hidden = false;
+  document.body.classList.add("modal-open");
+  document.getElementById("encaisserAmount").focus();
+}
+
+function closePaymentModal() {
+  document.getElementById("paymentModal").hidden = true;
+  document.body.classList.remove("modal-open");
+  clearPageMessage(document.getElementById("paymentCollectMessage"));
+}
+
+async function encaisserSolde(event) {
+  event.preventDefault();
+  if (!currentParcel || updateInProgress) return;
+  const cible = document.getElementById("paymentCollectMessage");
+  clearPageMessage(cible);
+  const values = Object.fromEntries(new FormData(document.getElementById("encaisserForm")));
+  const montant = Math.round(Number(values.encaisserAmount));
+  const etat = etatPaiement(currentParcel);
+  if (!Number.isFinite(montant) || montant <= 0) {
+    showPageMessage(cible, "Indiquez le montant encaissé (supérieur à 0 FCFA).");
+    return;
+  }
+  if (montant > etat.reste) {
+    showPageMessage(cible, `Le montant dépasse le reste à encaisser (${formatFCFA(etat.reste)}).`);
+    return;
+  }
+  const mode = values.encaisserMode;
+  if (mode !== "especes" && mode !== "mobile_money") {
+    showPageMessage(cible, "Choisissez le mode de paiement : espèces ou mobile money.");
+    return;
+  }
+
+  updateInProgress = true;
+  const trigger = document.querySelector("#encaisserForm button[type=submit]");
+  setButtonLoading(trigger, true, "Encaissement…");
+  try {
+    const { parcel } = await api(`/api/colis/${encodeURIComponent(parcelId)}/encaisser`, {
+      method: "POST",
+      body: { amountFCFA: montant, mode }
+    });
+    currentParcel = parcel;
+    renderDetail(parcel);
+    closePaymentModal();
+    document.getElementById("encaisserForm").reset();
+    showToast(`Encaissement de ${formatFCFA(montant)} enregistré dans la caisse du jour.`);
+  } catch (error) {
+    showPageMessage(cible, errorMessage(error));
+  } finally {
+    updateInProgress = false;
+    setButtonLoading(trigger, false);
+  }
+}
+
+function bindPaymentForm() {
+  document.getElementById("openEncaisser")?.addEventListener("click", openPaymentModal);
+  document.getElementById("closePayment")?.addEventListener("click", closePaymentModal);
+  document.getElementById("cancelEncaisser")?.addEventListener("click", closePaymentModal);
+  document.getElementById("encaisserForm")?.addEventListener("submit", encaisserSolde);
+}
+
 function renderDetail(parcel) {
   const nextStatus = canMoveToNext(parcel);
   const canNotify = whatsappLink(parcel);
@@ -261,6 +356,8 @@ function renderDetail(parcel) {
         </dl>
       </section>
 
+      ${paymentCardHtml(parcel)}
+
       ${parcel.collectedBy ? `<section class="info-card collected-card"><h2>Retrait enregistré</h2><dl class="person-data"><div><dt>Retiré par</dt><dd>${escapeHTML(parcel.collectedBy.name)}</dd></div><div><dt>N° CNI présenté</dt><dd>${escapeHTML(parcel.collectedBy.cni)}</dd></div><div><dt>Date</dt><dd>${escapeHTML(formatDateTime(parcel.collectedBy.date))}</dd></div></dl></section>` : ""}
     </div>
 
@@ -293,6 +390,7 @@ function renderDetail(parcel) {
     }
   });
   bindAttachForm();
+  bindPaymentForm();
 }
 
 async function updateStatus(nextStatus, collectedBy = null) {

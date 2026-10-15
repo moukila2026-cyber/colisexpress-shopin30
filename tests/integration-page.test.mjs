@@ -23,7 +23,8 @@ const entrees = {
   "dashboard.html": "js/dashboard.js",
   "nouveau-colis.html": "js/nouveau-colis.js",
   "colis.html": "js/colis.js",
-  "parametres.html": "js/parametres.js"
+  "parametres.html": "js/parametres.js",
+  "caisse.html": "js/caisse.js"
 };
 
 const PAGES_SANS_SCRIPT = new Set(["conditions.html", "confidentialite.html", "404.html"]);
@@ -259,7 +260,10 @@ test("les points d'entrée Vercel captent les routes API à un segment et imbriq
     "api/colis/[id]/attach.js": "../../../lib/app.js",
     "api/colis/[id]/progress.js": "../../../lib/app.js",
     "api/suivi/[code].js": "../../lib/app.js",
-    "api/agents/[id].js": "../../../lib/app.js"
+    "api/agents/[id].js": "../../../lib/app.js",
+    "api/colis/[id]/encaisser.js": "../../../lib/app.js",
+    "api/tarifs/[id].js": "../../lib/app.js",
+    "api/caisse/cloture.js": "../../lib/app.js"
   };
   for (const [fichier, cible] of Object.entries(entreesImbriquees)) {
     assert.ok(existsSync(path.join(RACINE, fichier)), `${fichier} doit exister : sinon Vercel répond 404 NOT_FOUND sur cette route`);
@@ -268,7 +272,7 @@ test("les points d'entrée Vercel captent les routes API à un segment et imbriq
 
   // Les routes imbriquées appelées par le front doivent exister côté Express.
   const api = lire("lib/app.js");
-  for (const route of ["/api/colis/:id", "/api/colis/:id/attach", "/api/colis/:id/progress", "/api/suivi/:code", "/api/agents/:id"]) {
+  for (const route of ["/api/colis/:id", "/api/colis/:id/attach", "/api/colis/:id/progress", "/api/suivi/:code", "/api/agents/:id", "/api/colis/:id/encaisser", "/api/tarifs/:id", "/api/caisse/cloture"]) {
     assert.ok(api.includes(route), `lib/app.js doit déclarer ${route} (captée par son point d'entrée Vercel)`);
   }
   assert.match(lire("js/colis.js"), /\/api\/colis\//, "la fiche colis appelle les routes imbriquées /api/colis/…");
@@ -308,4 +312,51 @@ test("le LOT 1 (comptes agents) est câblé de bout en bout côté interface", (
   assert.match(app, /requireGerant/, "les écritures agents sont réservées au gérant côté serveur");
   // README : les comptes agents sont documentés.
   assert.match(lire("README.md"), /comptes agents|Agents/i, "le README documente les comptes agents");
+});
+
+test("le LOT 2 (tarifs, paiement, caisse) est câblé de bout en bout", () => {
+  // Nouveau colis : prix par menu déroulant (grille) avec repli libre, récapitulatif,
+  // et état de paiement saisi à l'enregistrement.
+  const nouveauHtml = lire("nouveau-colis.html");
+  const nouveauJs = lire("js/nouveau-colis.js");
+  assert.match(nouveauHtml, /id="priceTarif"/, "menu déroulant du prix (grille tarifaire)");
+  assert.match(nouveauHtml, /id="priceFCFA"/, "champ de repli en saisie libre");
+  assert.match(nouveauHtml, /id="priceRecap"/, "récapitulatif avant validation");
+  for (const nom of ["paymentStatus", "paidAmountFCFA", "paymentMode"]) {
+    assert.match(nouveauHtml, new RegExp(`name="${nom}"`), `nouveau-colis.html doit exposer name="${nom}" (FormData)`);
+  }
+  assert.match(nouveauJs, /optionsPrix/, "le prix vient de js/metier-tarifs.js");
+  assert.match(nouveauJs, /validerPaiement/, "l'état de paiement est validé avant envoi");
+  assert.match(nouveauJs, /priceRecap/, "le récapitulatif est rendu côté client");
+
+  // Fiche colis : encaissement du solde.
+  assert.match(lire("colis.html"), /id="encaisserForm"/, "formulaire d'encaissement du solde");
+  const colisJs = lire("js/colis.js");
+  assert.match(colisJs, /\/encaisser/, "la fiche colis appelle /api/colis/:id/encaisser");
+  assert.match(colisJs, /libelleEtatPaiement/, "la fiche colis affiche l'état de paiement");
+
+  // Paramètres > Tarifs : CRUD de la grille.
+  const parametresHtml = lire("parametres.html");
+  const parametresJs = lire("js/parametres.js");
+  assert.match(parametresHtml, /id="tarifForm"/, "formulaire de grille tarifaire");
+  for (const id of ["tarifsList", "tarifMessage", "tarifOriginCity", "tarifDestinationCity", "tarifBand", "tarifPrice", "tarifSubmitButton", "tarifCancelButton"]) {
+    assert.match(parametresHtml, new RegExp(`id="${id}"`), `parametres.html doit exposer #${id}`);
+  }
+  assert.match(parametresJs, /\/api\/tarifs/, "la grille passe par /api/tarifs");
+  assert.match(parametresJs, /validerTarif/, "validation partagée de la grille");
+
+  // Caisse du jour : page, navigation et export CSV.
+  const caisseJs = lire("js/caisse.js");
+  assert.match(caisseJs, /\/api\/caisse/, "la page caisse appelle /api/caisse");
+  assert.match(caisseJs, /\/api\/caisse\/cloture/, "la clôture appelle /api/caisse/cloture");
+  assert.match(caisseJs, /exporterCsv/, "l'export CSV est câblé");
+  for (const colonne of ["date", "code", "expéditeur", "destinataire", "prix", "payé", "reste", "mode", "agent"]) {
+    assert.ok(caisseJs.includes(colonne), `l'export CSV doit contenir la colonne « ${colonne} »`);
+  }
+  assert.match(lire("js/layout.js"), /caisse\.html/, "la barre latérale pointe vers caisse.html");
+
+  // README documente le nouveau fonctionnement.
+  const readme = lire("README.md");
+  assert.match(readme, /grille tarifaire|Tarifs/i, "le README documente la grille tarifaire");
+  assert.match(readme, /caisse/i, "le README documente la caisse");
 });

@@ -100,10 +100,32 @@ async function seedDemo(db) {
       "demo-agent-yao", "demo-abidjan", "Yao Konan", "yao@colisexpress.ci", "0700000013"
     ]
   );
+  // LOT 2 — grilles tarifaires de démonstration (les prix du formulaire
+  // « nouveau colis » sont alors proposés en menu déroulant).
+  const tarifs = [
+    ["tarif-demo-1", "demo-abidjan", "Abidjan", "Bouaké", 0, 2, 2500],
+    ["tarif-demo-2", "demo-abidjan", "Abidjan", "Bouaké", 2, 5, 3500],
+    ["tarif-demo-3", "demo-abidjan", "Abidjan", "Bouaké", 5, 10, 5000],
+    ["tarif-demo-4", "demo-abidjan", "Abidjan", "Bouaké", 10, null, 7500],
+    ["tarif-demo-5", "demo-abidjan", "Abidjan", "", 0, 2, 3000],
+    ["tarif-demo-6", "demo-abidjan", "Abidjan", "", 2, 5, 4200],
+    ["tarif-demo-7", "demo-bouake", "Bouaké", "Abidjan", 0, 2, 2500],
+    ["tarif-demo-8", "demo-bouake", "Bouaké", "Abidjan", 2, 5, 3500],
+    ["tarif-demo-9", "demo-bouake", "Bouaké", "", 0, null, 4000]
+  ];
+  for (const [id, agency, origin, destination, min, max, prix] of tarifs) {
+    await db.query(
+      `INSERT INTO tarifs (id, agency_id, origin_city, destination_city, weight_min_kg, weight_max_kg, price_fcfa, active, created_at_iso)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE, $8)`,
+      [id, agency, origin, destination, min, max, prix, now]
+    );
+  }
+
   const colis = [
     {
       id: "demo-colis-1", code: "CLI-DEMO01", owner: "demo-abidjan", dest: "demo-bouake",
       destName: "Agence Bouaké Centre", destCity: "Bouaké", status: "Expédié",
+      payStatus: "paye", paid: 3500,
       history: [
         { status: "Enregistré", date: now, agencyName: "Shopin30 Abidjan", city: "Abidjan", actorId: "demo-agent-koffi", actorName: "Koffi N'Guessan" },
         { status: "Expédié", date: now, agencyName: "Shopin30 Abidjan", city: "Abidjan", actorId: "demo-agent-koffi", actorName: "Koffi N'Guessan" }
@@ -112,12 +134,14 @@ async function seedDemo(db) {
     {
       id: "demo-colis-2", code: "CLI-DEMO02", owner: "demo-abidjan", dest: null,
       destName: "Flash Korhogo", destCity: "Korhogo", status: "Enregistré",
+      payStatus: "arrivee", paid: 0,
       history: [{ status: "Enregistré", date: now, agencyName: "Shopin30 Abidjan", city: "Abidjan" }],
       unreg: { name: "Flash Korhogo", city: "Korhogo", phone: "0700000009" }
     },
     {
       id: "demo-colis-3", code: "CLI-DEMO03", owner: "demo-bouake", dest: "demo-abidjan",
       destName: "Shopin30 Abidjan", destCity: "Abidjan", status: "Arrivé à l'agence de destination",
+      payStatus: "arrivee", paid: 0,
       history: [
         { status: "Enregistré", date: now, agencyName: "Agence Bouaké Centre", city: "Bouaké" },
         { status: "Expédié", date: now, agencyName: "Agence Bouaké Centre", city: "Bouaké", actorId: "demo-agent-aicha", actorName: "Aïcha Touré" },
@@ -131,8 +155,8 @@ async function seedDemo(db) {
       `INSERT INTO parcels (id, tracking_code, owner_id, owner_agency_name, owner_agency_city,
         destination_agency_id, destination_agency_name, destination_agency_city,
         unregistered_destination_agency, sender, recipient, package_nature, weight_kg, price_fcfa,
-        origin_city, destination_city, status, history, created_at_iso)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
+        origin_city, destination_city, status, history, payment_status, paid_amount_fcfa, created_at_iso)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
       [
         c.id, c.code, c.owner,
         c.owner === "demo-abidjan" ? "Shopin30 Abidjan" : "Agence Bouaké Centre",
@@ -143,8 +167,19 @@ async function seedDemo(db) {
         JSON.stringify({ firstName: "Ibrahim", lastName: "Koné", phone: "0500000002" }),
         "Vêtements", 2.5, 3500,
         c.owner === "demo-abidjan" ? "Abidjan" : "Bouaké", c.destCity,
-        c.status, JSON.stringify(c.history), now
+        c.status, JSON.stringify(c.history), c.payStatus, c.paid, now
       ]
     );
   }
+
+  // LOT 2 — encaissement du jour (caisse de démonstration) : le colis 1 a été
+  // payé au départ en espèces par l'agent Koffi.
+  const jour = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Abidjan", year: "numeric", month: "2-digit", day: "2-digit"
+  }).format(new Date());
+  await db.query(
+    `INSERT INTO encaissements (id, parcel_id, agency_id, agent_id, agent_name, amount_fcfa, mode, date_key, created_at_iso)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    ["demo-enc-1", "demo-colis-1", "demo-abidjan", "demo-agent-koffi", "Koffi N'Guessan", 3500, "especes", jour, now]
+  );
 }

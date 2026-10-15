@@ -270,7 +270,7 @@ date de création de l'incident moins la date d'arrivée du bordereau.
 - Le contrat client ↔ API est couvert par les tests : ajouter une ressource (bordereaux, photos, incidents)
   se fera avec le même niveau de preuve.
 
-## 9. Livré : LOT 1 — comptes agents nommés (chantier 7 de la priorité P0)
+## 9. Livrés : LOT 1 — comptes agents nommés (chantier 7 de la priorité P0)
 
 La table `agents` (1 agence = N agents, gérant = compte agence existant) permet
 la connexion par agent, l'activation/désactivation par le gérant (Paramètres >
@@ -279,3 +279,25 @@ affichée « Par … » dans la fiche colis, **jamais** dans le suivi public
 (projection `etapePublique()`). Contrôles serveur (`requireGerant`,
 session agent invalidée à la désactivation), tests API + métier + intégrité
 statique au vert.
+
+## 10. Livré : LOT 2 — grille tarifaire, paiement et caisse (chantier 14 « reste
+à payer (COD) + encaissement » de la priorité P2)
+
+- **Grille tarifaire** (Paramètres > Tarifs, gérant) : axe ville départ →
+  ville arrivée (ou « toutes destinations ») × tranche de poids → prix FCFA.
+  Le prix du « nouveau colis » est **choisi dans un menu déroulant** alimenté
+  par la grille (récapitulatif avant validation) ; le serveur **recalcule et
+  impose** ce prix (`optionsPrix()` partagé) — saisie libre uniquement si la
+  grille est vide ou non applicable (aucune régression pour les colis
+  existants). Sortie de grille par désactivation, jamais de suppression.
+- **État de paiement** à l'enregistrement : « Payé au départ », « Partiel »
+  (montant + mode), « À payer à l'arrivée » ; encaissement du solde à la
+  remise par l'agence concernée (« Encaisser le solde » sur la fiche colis).
+- **Caisse du jour** par agence : encaissements journalisés (montant, mode,
+  agent acteur), totaux espèces / mobile money, restes à encaisser, clôture
+  avec total compté validé par l'agent (écart conservé, une par jour) et
+  export CSV (date, code, expéditeur, destinataire, prix, payé, reste, mode,
+  agent).
+- Règles d'or respectées : la caisse et les encaissements n'existent que du
+  côté des deux agences déjà concernées par le colis ; un impayé n'empêche ni
+  la lecture ni l'avancement du colis.

@@ -15,11 +15,15 @@ import {
   construireColis,
   construireSuiviPublic,
   etapeValideeParExpediteur,
+  etatApresEncaissement,
+  libelleEtatPaiement,
   lireAgenceDeclaree,
   peutRattacher,
   prochaineEtape,
   resoudreDestination,
+  resteAPayer,
   validerColis,
+  validerPaiement,
   villeDivergente
 } from "../js/metier-colis.js";
 
@@ -399,6 +403,53 @@ test("le rattachement trace l'acteur sur son étape d'historique", () => {
     now: "2026-10-15T08:30:00.000Z"
   });
   assert.equal("actorId" in sansActeur.history[0], false);
+});
+
+/* --------------------------- paiement (LOT 2) ------------------------------ */
+
+test("validerPaiement résout les trois états saisis à l'enregistrement", () => {
+  // Payé au départ = prix intégral, mode exigé.
+  const paye = validerPaiement({ priceFCFA: 3500, payment: { status: "paye", mode: "especes" } });
+  assert.equal(paye.error, undefined);
+  assert.deepEqual(paye.valeur, { status: "paye", paid: 3500, mode: "especes" });
+
+  // À payer à l'arrivée = 0 encaissé, aucun mode.
+  const arrivee = validerPaiement({ priceFCFA: 3500, payment: { status: "arrivee" } });
+  assert.equal(arrivee.error, undefined);
+  assert.deepEqual(arrivee.valeur, { status: "arrivee", paid: 0, mode: null });
+
+  // Partiel = montant strictement entre 0 et le prix.
+  const partiel = validerPaiement({ priceFCFA: 3500, payment: { status: "partiel", paidAmountFCFA: "1500", mode: "mobile_money" } });
+  assert.equal(partiel.error, undefined);
+  assert.deepEqual(partiel.valeur, { status: "partiel", paid: 1500, mode: "mobile_money" });
+});
+
+test("validerPaiement refuse les incohérences (compatibilité sans paiement)", () => {
+  // Absence de paiement = colis antérieur au LOT 2 : accepté tel quel.
+  assert.deepEqual(validerPaiement({ priceFCFA: 3500, payment: null }).valeur, null);
+
+  assert.match(validerPaiement({ priceFCFA: 3500, payment: { status: "inconnu" } }).error, /état de paiement/);
+  assert.match(validerPaiement({ priceFCFA: 3500, payment: { status: "partiel", paidAmountFCFA: 0, mode: "especes" } }).error, /supérieur à 0/);
+  assert.match(validerPaiement({ priceFCFA: 3500, payment: { status: "partiel", paidAmountFCFA: 4000, mode: "especes" } }).error, /inférieur au prix/);
+  assert.match(validerPaiement({ priceFCFA: 3500, payment: { status: "paye" } }).error, /mode de paiement/);
+  assert.match(validerPaiement({ priceFCFA: 3500, payment: { status: "paye", mode: "cheque" } }).error, /mode de paiement/);
+});
+
+test("libellés et restes d'un état de paiement", () => {
+  assert.equal(libelleEtatPaiement(null, { priceFCFA: 3500, paidAmountFCFA: 0 }).label, "Non renseigné");
+  assert.equal(libelleEtatPaiement("paye", { priceFCFA: 3500, paidAmountFCFA: 3500 }).label, "Payé au départ");
+  assert.equal(libelleEtatPaiement("partiel", { priceFCFA: 3500, paidAmountFCFA: 1500 }).label, "Partiel");
+  assert.equal(libelleEtatPaiement("arrivee", { priceFCFA: 3500, paidAmountFCFA: 0 }).label, "À payer à l'arrivée");
+  assert.equal(libelleEtatPaiement("regle", { priceFCFA: 3500, paidAmountFCFA: 3500 }).label, "Réglé à l'arrivée");
+  assert.equal(resteAPayer({ priceFCFA: 3500, paidAmountFCFA: 1500 }), 2000);
+  assert.equal(resteAPayer({ priceFCFA: 3500, paidAmountFCFA: 0 }), 3500);
+  assert.equal(resteAPayer({ priceFCFA: 3500, paidAmountFCFA: 4000 }), 0, "jamais de reste négatif");
+});
+
+test("etatApresEncaissement recalcule l'état après chaque versement", () => {
+  assert.deepEqual(etatApresEncaissement({ priceFCFA: 3500, paidAmountFCFA: 0, montant: 1500 }), { status: "partiel", paid: 1500 });
+  assert.deepEqual(etatApresEncaissement({ priceFCFA: 3500, paidAmountFCFA: 1500, montant: 2000 }), { status: "regle", paid: 3500 });
+  assert.deepEqual(etatApresEncaissement({ priceFCFA: 3500, paidAmountFCFA: 1500, montant: 500 }), { status: "partiel", paid: 2000 });
 });
 
 test("le suivi public projette les étapes sans jamais exposer l'acteur", () => {

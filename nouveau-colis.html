@@ -45,7 +45,12 @@
             <div class="form-grid">
               <div class="field field-full"><label for="packageNature">Nature du colis <span class="required">*</span></label><input id="packageNature" name="packageNature" type="text" placeholder="Ex. Vêtements, documents, appareil…" required></div>
               <div class="field"><label for="weightKg">Poids (kg) <span class="required">*</span></label><input id="weightKg" name="weightKg" type="number" inputmode="decimal" min="0.01" step="0.01" placeholder="0,5" required></div>
-              <div class="field"><label for="priceFCFA">Prix (FCFA) <span class="required">*</span></label><input id="priceFCFA" name="priceFCFA" type="number" inputmode="numeric" min="0" step="1" placeholder="0" required></div>
+              <div class="field" id="priceField">
+                <label for="priceTarif" id="priceLabel">Prix (FCFA) <span class="required">*</span></label>
+                <select id="priceTarif" name="priceTarif" hidden><option value="">Renseignez l'itinéraire et le poids</option></select>
+                <input id="priceFCFA" name="priceFCFA" type="number" inputmode="numeric" min="0" step="1" placeholder="0" required>
+                <small class="field-help" id="priceHelp">Saisie libre : votre agence n'a pas encore de grille tarifaire (Paramètres &gt; Tarifs).</small>
+              </div>
               <div class="field"><label for="originCity">Ville de départ <span class="required">*</span></label><input id="originCity" name="originCity" type="text" required></div>
               <div class="field"><label for="destinationCity">Ville de destination <span class="required">*</span></label><input id="destinationCity" name="destinationCity" type="text" required></div>
               <div class="field field-full">
@@ -70,6 +75,36 @@
               <div class="declared-agency-actions"><a class="button button-outline button-small" id="inviteAgencyWhatsapp" href="#" target="_blank" rel="noopener noreferrer">◉ Inviter l'agence par WhatsApp</a></div>
             </div>
           </section>
+
+          <section class="form-section">
+            <h2 class="form-section-heading"><span aria-hidden="true">4</span> Paiement</h2>
+            <div class="form-grid">
+              <div class="field">
+                <label for="paymentStatus">État du paiement <span class="required">*</span></label>
+                <select id="paymentStatus" name="paymentStatus">
+                  <option value="paye">Payé au départ</option>
+                  <option value="partiel">Partiel (montant versé maintenant)</option>
+                  <option value="arrivee">À payer à l'arrivée</option>
+                </select>
+                <small class="field-help">Choisi à l'enregistrement, mis à jour par l'agence qui encaisse le solde.</small>
+              </div>
+              <div class="field" id="paidAmountField" hidden>
+                <label for="paidAmountFCFA">Montant déjà payé (FCFA) <span class="required">*</span></label>
+                <input id="paidAmountFCFA" name="paidAmountFCFA" type="number" inputmode="numeric" min="1" step="1" placeholder="0">
+                <small class="field-help">Reste à encaisser à l'arrivée : <strong id="resteDu">—</strong></small>
+              </div>
+              <div class="field" id="paymentModeField">
+                <label for="paymentMode">Mode de paiement <span class="required">*</span></label>
+                <select id="paymentMode" name="paymentMode">
+                  <option value="especes">Espèces</option>
+                  <option value="mobile_money">Mobile Money</option>
+                </select>
+                <small class="field-help">Encaissé par l'agence expéditrice et reporté dans sa caisse du jour.</small>
+              </div>
+            </div>
+          </section>
+
+          <div class="price-recap" id="priceRecap" hidden aria-live="polite"></div>
           <div class="form-footer"><a class="button button-outline" href="dashboard.html">Annuler</a><button class="button button-primary" id="saveParcelButton" type="submit">Enregistrer et générer le reçu</button></div>
         </form>
       </div>

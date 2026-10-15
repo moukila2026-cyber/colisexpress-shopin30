@@ -2,9 +2,12 @@ import { api } from "./api.js";
 import { requireAgency } from "./auth.js";
 import { agencySidebar, initAgencyLayout, mobileAgencyHeader } from "./layout.js";
 import {
+  libelleEtatPaiement,
   resoudreDestination,
-  validerColis
+  validerColis,
+  validerPaiement
 } from "./metier-colis.js";
+import { optionsPrix } from "./metier-tarifs.js";
 import {
   clearPageMessage,
   errorMessage,
@@ -25,8 +28,13 @@ const unregisteredPanel = document.getElementById("unregisteredAgencyPanel");
 const submitButton = document.getElementById("saveParcelButton");
 const receiptModal = document.getElementById("receiptModal");
 const receiptContent = document.getElementById("receiptContent");
+const priceSelect = document.getElementById("priceTarif");
+const priceFree = document.getElementById("priceFCFA");
+const priceHelp = document.getElementById("priceHelp");
+const priceRecap = document.getElementById("priceRecap");
 let currentAgency = null;
 let agencies = [];
+let tarifs = [];
 
 function mountLayout() {
   document.getElementById("sidebarMount").innerHTML = agencySidebar();
@@ -87,6 +95,97 @@ function validate(values) {
   return validerColis({ values, agencyNotRegistered: agencyMode() });
 }
 
+/* --------------------------- prix par la grille ---------------------------- */
+
+/** Prix actuellement retenu : menu déroulant (grille) ou saisie libre. */
+function prixCourant() {
+  if (priceSelect && !priceSelect.hidden && !priceSelect.disabled && priceSelect.value !== "") {
+    return Number(priceSelect.value);
+  }
+  return Number(priceFree?.value);
+}
+
+/**
+ * Alimente le menu déroulant « prix » depuis la grille de l'agence selon
+ * destination + poids. Si la grille est vide ou non applicable, la saisie
+ * libre reste autorisée (compatibilité).
+ */
+function refreshPrix() {
+  const originCity = document.getElementById("originCity").value;
+  const destinationCity = document.getElementById("destinationCity").value;
+  const weightKg = document.getElementById("weightKg").value;
+  const options = optionsPrix({ tarifs, originCity, destinationCity, weightKg });
+
+  const enGrille = options.length > 0;
+  priceSelect.hidden = !enGrille;
+  priceSelect.disabled = !enGrille;
+  priceFree.hidden = enGrille;
+  priceFree.disabled = enGrille;
+  if (enGrille) {
+    priceSelect.innerHTML = options
+      .map((option, index) => `<option value="${option.priceFCFA}"${index === 0 ? " selected" : ""}>${escapeHTML(option.label)}</option>`)
+      .join("");
+    priceHelp.textContent = "Prix défini par la grille tarifaire de votre agence (Paramètres > Tarifs). Il sera figé sur le colis.";
+  } else if (tarifs.length > 0) {
+    priceHelp.textContent = "Aucun tarif ne correspond à cet axe et à ce poids : saisie libre autorisée (complétez votre grille dans Paramètres > Tarifs).";
+  } else {
+    priceHelp.textContent = "Saisie libre : votre agence n'a pas encore de grille tarifaire (Paramètres > Tarifs).";
+  }
+  rendreRecap();
+  rendreResteDu();
+}
+
+/** Récapitulatif affiché avant validation de l'enregistrement. */
+function rendreRecap() {
+  const originCity = document.getElementById("originCity").value.trim();
+  const destinationCity = document.getElementById("destinationCity").value.trim();
+  const weightKg = document.getElementById("weightKg").value;
+  const prix = prixCourant();
+  if (!originCity || !destinationCity || !weightKg || !Number.isFinite(prix) || prix < 0) {
+    priceRecap.hidden = true;
+    priceRecap.innerHTML = "";
+    return;
+  }
+  const enGrille = !priceSelect.hidden;
+  priceRecap.hidden = false;
+  priceRecap.innerHTML = `
+    <strong>Récapitulatif avant validation</strong>
+    <dl class="recap-grid">
+      <div><dt>Itinéraire</dt><dd>${escapeHTML(originCity)} → ${escapeHTML(destinationCity)}</dd></div>
+      <div><dt>Poids</dt><dd>${escapeHTML(String(weightKg))} kg</dd></div>
+      <div><dt>Prix</dt><dd>${escapeHTML(formatFCFA(prix))}${enGrille ? " — grille tarifaire" : " — saisie libre"}</dd></div>
+    </dl>
+    <small>Le prix sera figé sur le colis à l'enregistrement.</small>`;
+}
+
+/* --------------------------- état de paiement ----------------------------- */
+
+function syncPaiement() {
+  const status = document.getElementById("paymentStatus")?.value;
+  document.getElementById("paidAmountField").hidden = status !== "partiel";
+  document.getElementById("paymentModeField").hidden = status === "arrivee";
+  rendreResteDu();
+}
+
+function rendreResteDu() {
+  const cible = document.getElementById("resteDu");
+  if (!cible) return;
+  const prix = prixCourant();
+  const status = document.getElementById("paymentStatus")?.value;
+  if (!Number.isFinite(prix) || prix < 0) {
+    cible.textContent = "—";
+    return;
+  }
+  if (status === "arrivee") {
+    cible.textContent = formatFCFA(prix);
+  } else if (status === "partiel") {
+    const paye = Number(document.getElementById("paidAmountFCFA")?.value || 0);
+    cible.textContent = formatFCFA(Math.max(0, prix - paye));
+  } else {
+    cible.textContent = formatFCFA(0);
+  }
+}
+
 function qrCodeSvg(text) {
   if (typeof window.qrcode !== "function") return "";
   const qr = window.qrcode(0, "M");
@@ -132,6 +231,7 @@ function showReceipt(parcel) {
       <div><small>Itinéraire</small><strong>${escapeHTML(parcel.originCity)} → ${escapeHTML(parcel.destinationCity)}</strong><span>${escapeHTML(parcel.destinationAgencyName)}${parcel.destinationAgencyId === null ? " (à confirmer)" : ""}</span></div>
       <div><small>Colis</small><strong>${escapeHTML(parcel.packageNature)}</strong><span>${escapeHTML(String(parcel.weightKg))} kg · ${escapeHTML(formatFCFA(parcel.priceFCFA))}</span></div>
     </div>
+    <p class="receipt-payment">Paiement : <strong>${escapeHTML(libelleEtatPaiement(parcel.paymentStatus, { priceFCFA: parcel.priceFCFA, paidAmountFCFA: parcel.paidAmountFCFA ?? 0 }).label)}</strong>${(parcel.paidAmountFCFA ?? 0) > 0 ? ` · ${escapeHTML(formatFCFA(parcel.paidAmountFCFA))} encaissés` : ""}</p>
     ${pendingNotice}
     <p class="receipt-date">Enregistré le ${escapeHTML(new Intl.DateTimeFormat("fr-CI", { dateStyle: "long", timeStyle: "short" }).format(new Date()))}</p>`;
   renderReceiptShare(parcel);
@@ -147,11 +247,29 @@ async function saveParcel(event) {
   event.preventDefault();
   clearPageMessage(message);
   const values = Object.fromEntries(new FormData(form));
+  // En mode grille, le prix vient du menu déroulant (champ libre désactivé).
+  if (!priceSelect.hidden && !priceSelect.disabled) values.priceFCFA = priceSelect.value;
+  delete values.priceTarif;
   const invalidMessage = validate(values);
   if (invalidMessage) {
     showPageMessage(message, invalidMessage);
     return;
   }
+
+  const payment = {
+    status: values.paymentStatus,
+    paidAmountFCFA: values.paidAmountFCFA,
+    mode: values.paymentMode
+  };
+  delete values.paymentStatus;
+  delete values.paidAmountFCFA;
+  delete values.paymentMode;
+  const controlePaiement = validerPaiement({ priceFCFA: Number(values.priceFCFA), payment });
+  if (controlePaiement.error) {
+    showPageMessage(message, controlePaiement.error);
+    return;
+  }
+
   const resolution = resoudreDestination({
     values,
     agencies,
@@ -167,11 +285,17 @@ async function saveParcel(event) {
   try {
     const { parcel } = await api("/api/colis", {
       method: "POST",
-      body: { values, agencyNotRegistered: agencyMode() }
+      body: {
+        values,
+        agencyNotRegistered: agencyMode(),
+        ...(controlePaiement.valeur ? { payment: controlePaiement.valeur } : {})
+      }
     });
     form.reset();
     document.getElementById("originCity").value = currentAgency.city || "";
     syncDestinationMode();
+    refreshPrix();
+    syncPaiement();
     showReceipt(parcel);
   } catch (error) {
     showPageMessage(message, errorMessage(error));
@@ -196,10 +320,29 @@ async function boot() {
     showPageMessage(message, errorMessage(error));
   }
 
+  // Grille tarifaire de l'agence : alimente le menu déroulant « prix ».
+  try {
+    const dataTarifs = await api("/api/tarifs");
+    tarifs = dataTarifs.tarifs || [];
+  } catch {
+    tarifs = [];
+  }
+  refreshPrix();
+  syncPaiement();
+  ["originCity", "destinationCity", "weightKg"].forEach((id) => {
+    document.getElementById(id)?.addEventListener("input", refreshPrix);
+    document.getElementById(id)?.addEventListener("change", refreshPrix);
+  });
+  priceSelect?.addEventListener("change", rendreRecap);
+  priceFree?.addEventListener("input", () => { rendreRecap(); rendreResteDu(); });
+  document.getElementById("paymentStatus")?.addEventListener("change", syncPaiement);
+  document.getElementById("paidAmountFCFA")?.addEventListener("input", rendreResteDu);
+
   destinationSelect.addEventListener("change", () => {
     const agency = agencies.find((item) => item.id === destinationSelect.value);
     const cityInput = document.getElementById("destinationCity");
     if (agency && !cityInput.value.trim()) cityInput.value = agency.city || "";
+    refreshPrix();
   });
 
   unregisteredToggle?.addEventListener("change", syncDestinationMode);

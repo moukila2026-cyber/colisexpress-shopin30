@@ -31,6 +31,18 @@
       </form>
     </div>
   </div>
+
+  <div class="modal-backdrop" id="paymentModal" hidden role="dialog" aria-modal="true" aria-labelledby="paymentModalTitle">
+    <div class="modal-card">
+      <div class="modal-heading"><div><h2 id="paymentModalTitle">Encaisser le solde</h2><p id="paymentModalHint">Le montant enregistré alimente la caisse du jour de votre agence.</p></div><button class="modal-close" id="closePayment" type="button" aria-label="Fermer">×</button></div>
+      <div class="page-message" id="paymentCollectMessage" hidden role="alert"></div>
+      <form id="encaisserForm" class="form-stack" novalidate>
+        <div class="field"><label for="encaisserAmount">Montant encaissé (FCFA) <span class="required">*</span></label><input id="encaisserAmount" name="encaisserAmount" type="number" inputmode="numeric" min="1" step="1" required><small class="field-help" id="encaisserResteHint">Reste à encaisser.</small></div>
+        <div class="field"><label for="encaisserMode">Mode de paiement <span class="required">*</span></label><select id="encaisserMode" name="encaisserMode"><option value="especes">Espèces</option><option value="mobile_money">Mobile Money</option></select></div>
+        <div class="modal-actions"><button class="button button-outline" id="cancelEncaisser" type="button">Annuler</button><button class="button button-primary" type="submit">Enregistrer l'encaissement</button></div>
+      </form>
+    </div>
+  </div>
   <script type="module" src="js/colis.js"></script>
 </body>
 </html>
