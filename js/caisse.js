@@ -69,7 +69,7 @@ function renderEncaissements() {
     <thead><tr><th>Heure</th><th>Code</th><th>Expéditeur</th><th>Destinataire</th><th>Prix</th><th>Payé</th><th>Reste</th><th>Mode</th><th>Agent</th></tr></thead>
     <tbody>${state.encaissements.map((item) => `<tr>
       <td>${escapeHTML(formatDateTime(item.createdISO))}</td>
-      <td><a class="table-link" href="colis.html?id=${encodeURIComponent(item.parcelId)}">${escapeHTML(item.trackingCode)}</a></td>
+      <td><a class="table-link" href="colis.html?id=${encodeURIComponent(item.parcelId)}">${escapeHTML(item.trackingCode)}</a>${item.label ? `<br><small class="muted-note">${escapeHTML(item.label)}</small>` : ""}</td>
       <td>${escapeHTML(item.senderName || "—")}</td>
       <td>${escapeHTML(item.recipientName || "—")}</td>
       <td>${escapeHTML(formatFCFA(item.priceFCFA))}</td>

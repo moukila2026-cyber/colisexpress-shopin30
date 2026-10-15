@@ -664,3 +664,78 @@ dd { margin: 4px 0 0; color: var(--ink); overflow-wrap: anywhere; font-size: .88
 .devis-agency { display: flex; flex-direction: column; gap: 2px; font-size: .85rem; }
 .devis-agency span { color: var(--muted); font-size: .78rem; }
 .devis-card .button { align-self: stretch; }
+
+/* ------------------- LOT 4 — bordereaux, photos, incidents, alertes -------- */
+
+/* Statuts de bordereau (mêmes codes couleur que les statuts de colis). */
+.status-prepare { color: #226047; background: #e2f3e9; }
+.status-remis { color: #075c7b; background: #e1f5fc; }
+.status-en-route { color: #6b4bc4; background: #efeafc; }
+.status-arrive { color: #8a4b13; background: #fff0de; }
+.status-controle { color: #5b5961; background: #eaebed; }
+.status-ecart { color: var(--danger); background: var(--danger-light); }
+
+/* Cases à cocher (sélection de colis, contrôle d'arrivée). */
+.checklist { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; max-height: 320px; overflow-y: auto; }
+.checklist-item { display: flex; align-items: center; gap: 10px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; background: var(--green-50); font-size: .83rem; cursor: pointer; }
+.checklist-item:hover { border-color: var(--orange); }
+.checklist-item input { width: 18px; height: 18px; accent-color: var(--green-800); }
+.bordereau-parcels { margin: 6px 0 14px; }
+
+.present-flag, .ecart-flag { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 20px; font-size: .68rem; font-weight: 820; }
+.present-flag { color: #226047; background: #e2f3e9; }
+.ecart-flag { color: var(--danger); background: var(--danger-light); }
+.row-absent td { background: #fff6f5; }
+
+.notice-danger { border-color: #eec7c3; color: var(--danger); background: var(--danger-light); }
+
+/* Incidents. */
+.incident-card { border-left: 4px solid var(--line); }
+.incident-card.incident-ouvert { border-left-color: var(--danger); }
+.incident-card.incident-recherches { border-left-color: var(--warning); }
+.incident-status { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 8px; }
+.incident-type { display: inline-flex; padding: 4px 10px; border-radius: 20px; font-size: .72rem; font-weight: 820; color: var(--danger); background: var(--danger-light); }
+.incident-type-retard { color: var(--warning); background: #fff0de; }
+.incident-type-bloque, .incident-type-conteste { color: #6b4bc4; background: #efeafc; }
+.incident-note { margin: 0 0 10px; font-size: .85rem; line-height: 1.5; }
+.incident-escalade { margin: 10px 0 0; padding: 9px 11px; border-radius: 10px; background: #fff0de; color: #8a4b13; font-size: .78rem; font-weight: 700; }
+.incident-escalade-plateforme { background: var(--danger-light); color: var(--danger); }
+.incident-actions { display: grid; gap: 10px; margin-top: 12px; }
+.incident-resolve { display: grid; gap: 6px; }
+.incident-resolve label { font-size: .78rem; font-weight: 700; color: var(--muted); }
+.incident-resolve textarea { padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; }
+.incident-resolve .button { justify-self: start; }
+.incident-resolu { margin-top: 10px; font-size: .82rem; }
+.incident-resolu summary { cursor: pointer; font-weight: 700; color: var(--muted); }
+
+/* Photos de preuve. */
+.photos-etapes { display: grid; gap: 16px; grid-template-columns: 1fr; }
+@media (min-width: 760px) { .photos-etapes { grid-template-columns: 1fr 1fr; } }
+.photos-etape h3 { margin: 0 0 8px; font-size: .86rem; }
+.photos-etape h3 small { color: var(--muted); font-weight: 600; }
+.photos-grid { display: grid; gap: 9px; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); margin-bottom: 9px; }
+.photo-frame { margin: 0; }
+.photo-frame img { width: 100%; height: 110px; object-fit: cover; border: 1px solid var(--line); border-radius: 10px; background: var(--green-50); }
+.photo-frame figcaption { margin-top: 4px; color: var(--muted); font-size: .68rem; line-height: 1.35; }
+
+/* Souffrance / retour. */
+.retour-warning { margin: 0 0 10px; padding: 9px 11px; border-radius: 10px; background: var(--danger-light); color: var(--danger); font-size: .8rem; font-weight: 750; }
+
+/* Alertes « À traiter » du tableau de bord. */
+.alerts-panel { border-color: #eec7c3; }
+.alerts-panel .panel-title-row h2 { color: var(--danger); }
+.alert-group { margin-top: 12px; }
+.alert-group h3 { margin: 0 0 6px; font-size: .84rem; }
+.alert-count { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; background: var(--danger); color: #fff; font-size: .72rem; }
+.alert-items { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; }
+.alert-items li { display: flex; align-items: baseline; gap: 8px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 9px; background: #fff; font-size: .8rem; }
+.alert-items small { color: var(--muted); margin-left: auto; white-space: nowrap; }
+
+/* Bandeau sobre du suivi public (incident en cours, sans détail). */
+.tracking-notice { margin: 12px 0 0; padding: 11px 13px; border: 1px solid #e5c9a8; border-radius: 11px; background: #fff7ec; color: #7c4a12; font-size: .84rem; font-weight: 650; }
+
+/* Bordereau public. */
+.bordereau-public-meta { margin: 14px 0; }
+.bordereau-parcels-public { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 7px; }
+.bordereau-parcels-public li { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; background: var(--green-50); font-size: .82rem; }
+.bordereau-parcels-public .table-link { margin-left: auto; }

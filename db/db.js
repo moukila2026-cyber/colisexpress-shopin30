@@ -8,6 +8,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { hashPassword } from "../lib/auth.js";
+import { stockerObjet } from "../lib/photos.js";
 
 const ICI = path.dirname(fileURLToPath(import.meta.url));
 const SCHEMA = readFileSync(path.join(ICI, "schema.sql"), "utf8");
@@ -121,32 +122,37 @@ async function seedDemo(db) {
     );
   }
 
+  // LOT 4 — dates de démonstration : des colis « qui dorment » pour montrer
+  // les alertes (sans mouvement > 48 h, non rattaché > 7 j, souffrance > 7 j).
+  const joursAvant = (n) => new Date(Date.now() - n * 86400000).toISOString();
+
   const colis = [
     {
       id: "demo-colis-1", code: "CLI-DEMO01", owner: "demo-abidjan", dest: "demo-bouake",
       destName: "Agence Bouaké Centre", destCity: "Bouaké", status: "Expédié",
-      payStatus: "paye", paid: 3500,
+      payStatus: "paye", paid: 3500, cree: joursAvant(4), maj: joursAvant(3),
       history: [
-        { status: "Enregistré", date: now, agencyName: "Shopin30 Abidjan", city: "Abidjan", actorId: "demo-agent-koffi", actorName: "Koffi N'Guessan" },
-        { status: "Expédié", date: now, agencyName: "Shopin30 Abidjan", city: "Abidjan", actorId: "demo-agent-koffi", actorName: "Koffi N'Guessan" }
+        { status: "Enregistré", date: joursAvant(4), agencyName: "Shopin30 Abidjan", city: "Abidjan", actorId: "demo-agent-koffi", actorName: "Koffi N'Guessan" },
+        { status: "Remis au transporteur", date: joursAvant(3), agencyName: "Shopin30 Abidjan", city: "Abidjan", note: "Bordereau BDR-DEMO01 — Gbaka Express (car Bouaké 07 h — CI-1234-AB)", actorId: "demo-agent-koffi", actorName: "Koffi N'Guessan" },
+        { status: "Expédié", date: joursAvant(3), agencyName: "Shopin30 Abidjan", city: "Abidjan", actorId: "demo-agent-koffi", actorName: "Koffi N'Guessan" }
       ], unreg: null
     },
     {
       id: "demo-colis-2", code: "CLI-DEMO02", owner: "demo-abidjan", dest: null,
       destName: "Flash Korhogo", destCity: "Korhogo", status: "Enregistré",
-      payStatus: "arrivee", paid: 0,
-      history: [{ status: "Enregistré", date: now, agencyName: "Shopin30 Abidjan", city: "Abidjan" }],
+      payStatus: "arrivee", paid: 0, cree: joursAvant(9), maj: joursAvant(9),
+      history: [{ status: "Enregistré", date: joursAvant(9), agencyName: "Shopin30 Abidjan", city: "Abidjan" }],
       unreg: { name: "Flash Korhogo", city: "Korhogo", phone: "0700000009" }
     },
     {
       id: "demo-colis-3", code: "CLI-DEMO03", owner: "demo-bouake", dest: "demo-abidjan",
       destName: "Shopin30 Abidjan", destCity: "Abidjan", status: "Arrivé à l'agence de destination",
-      payStatus: "arrivee", paid: 0,
+      payStatus: "arrivee", paid: 0, cree: joursAvant(10), maj: joursAvant(8),
       history: [
-        { status: "Enregistré", date: now, agencyName: "Agence Bouaké Centre", city: "Bouaké" },
-        { status: "Expédié", date: now, agencyName: "Agence Bouaké Centre", city: "Bouaké", actorId: "demo-agent-aicha", actorName: "Aïcha Touré" },
-        { status: "En transit", date: now, agencyName: "Agence Bouaké Centre", city: "Bouaké", actorId: "demo-agent-aicha", actorName: "Aïcha Touré" },
-        { status: "Arrivé à l'agence de destination", date: now, agencyName: "Shopin30 Abidjan", city: "Abidjan", actorId: "demo-abidjan", actorName: "Shopin30 Abidjan" }
+        { status: "Enregistré", date: joursAvant(10), agencyName: "Agence Bouaké Centre", city: "Bouaké" },
+        { status: "Expédié", date: joursAvant(9), agencyName: "Agence Bouaké Centre", city: "Bouaké", actorId: "demo-agent-aicha", actorName: "Aïcha Touré" },
+        { status: "En transit", date: joursAvant(9), agencyName: "Agence Bouaké Centre", city: "Bouaké", actorId: "demo-agent-aicha", actorName: "Aïcha Touré" },
+        { status: "Arrivé à l'agence de destination", date: joursAvant(8), agencyName: "Shopin30 Abidjan", city: "Abidjan", note: "Contrôle d'arrivée du bordereau BDR-DEMO02", actorId: "demo-abidjan", actorName: "Shopin30 Abidjan" }
       ], unreg: null
     }
   ];
@@ -167,10 +173,83 @@ async function seedDemo(db) {
         JSON.stringify({ firstName: "Ibrahim", lastName: "Koné", phone: "0500000002" }),
         "Vêtements", 2.5, 3500,
         c.owner === "demo-abidjan" ? "Abidjan" : "Bouaké", c.destCity,
-        c.status, JSON.stringify(c.history), c.payStatus, c.paid, now
+        c.status, JSON.stringify(c.history), c.payStatus, c.paid, c.cree
       ]
     );
+    await db.query("UPDATE parcels SET updated_at = $1 WHERE id = $2", [c.maj, c.id]);
   }
+
+  // LOT 4 — bordereaux de démonstration : un lot en route (Abidjan → Bouaké)
+  // et un lot contrôlé à l'arrivée (Bouaké → Abidjan, zéro écart).
+  const bordereaux = [
+    {
+      id: "demo-bdr-1", code: "BDR-DEMO01", from: "demo-abidjan", fromName: "Shopin30 Abidjan", fromCity: "Abidjan",
+      to: "demo-bouake", toName: "Agence Bouaké Centre", toCity: "Bouaké",
+      carrier: "Gbaka Express", phone: "0700000055", vehicle: "car Bouaké 07 h — CI-1234-AB",
+      status: "En route", remis: joursAvant(3), parti: joursAvant(3), arrive: null, controle: null, cree: joursAvant(3)
+    },
+    {
+      id: "demo-bdr-2", code: "BDR-DEMO02", from: "demo-bouake", fromName: "Agence Bouaké Centre", fromCity: "Bouaké",
+      to: "demo-abidjan", toName: "Shopin30 Abidjan", toCity: "Abidjan",
+      carrier: "Union Cars", phone: "0500000055", vehicle: "car Abidjan 06 h",
+      status: "Contrôlé", remis: joursAvant(9), parti: joursAvant(9), arrive: joursAvant(8), controle: joursAvant(8), cree: joursAvant(9)
+    }
+  ];
+  for (const b of bordereaux) {
+    await db.query(
+      `INSERT INTO bordereaux (id, code, from_agency_id, from_agency_name, from_city, to_agency_id, to_agency_name, to_city,
+        carrier_name, carrier_phone, vehicle_ref, parcel_count, status,
+        handed_over_at, handed_over_by, departed_at, arrived_at, arrived_by, checked_at, checked_by,
+        missing_parcel_ids, created_at_iso)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,1,$12,$13,$14,$15,$16,$17,$18,$19,'[]',$20)`,
+      [
+        b.id, b.code, b.from, b.fromName, b.fromCity, b.to, b.toName, b.toCity,
+        b.carrier, b.phone, b.vehicle, b.status,
+        b.remis, "Koffi N'Guessan", b.parti, b.arrive, b.arrive ? "Shopin30 Abidjan" : null, b.controle, b.controle ? "Shopin30 Abidjan" : null,
+        b.cree
+      ]
+    );
+    await db.query("UPDATE bordereaux SET updated_at = $1 WHERE id = $2", [b.controle || b.parti || b.cree, b.id]);
+  }
+  await db.query("INSERT INTO bordereau_parcels (bordereau_id, parcel_id) VALUES ($1, $2), ($3, $4)",
+    ["demo-bdr-1", "demo-colis-1", "demo-bdr-2", "demo-colis-3"]);
+  await db.query("UPDATE parcels SET bordereau_id = 'demo-bdr-1' WHERE id = 'demo-colis-1'");
+  await db.query("UPDATE parcels SET bordereau_id = 'demo-bdr-2' WHERE id = 'demo-colis-3'");
+
+  // LOT 4 — incidents de démonstration : un retard ouvert (bandeau sobre sur
+  // le suivi public de CLI-DEMO02, escalade > 24 h) et un dommage résolu.
+  await db.query(
+    `INSERT INTO incidents (id, parcel_id, bordereau_id, type, state, note, opened_by_agency_id, opened_by_id, opened_by_name, opened_at_iso, resolution, updated_by_name, resolved_at_iso)
+     VALUES ($1, $2, NULL, 'retard', 'ouvert', $3, $4, $5, $6, $7, '', '', NULL),
+            ($8, $9, $10, 'endommage', 'resolu', $11, $12, $13, $14, $15, $16, $17, $18)`,
+    [
+      "demo-incident-1", "demo-colis-2",
+      "Le car de Korhogo est parti sans le colis : recherches en cours auprès du transporteur déclaré.",
+      "demo-abidjan", "demo-agent-koffi", "Koffi N'Guessan", joursAvant(2),
+      "demo-incident-2", "demo-colis-3", "demo-bdr-2",
+      "Emballage légèrement écrasé au dépotage, contenu vérifié intact avec le destinataire.",
+      "demo-abidjan", "demo-abidjan", "Shopin30 Abidjan", joursAvant(9),
+      "Colis remis en l'état au destinataire après vérification conjointe.", "Shopin30 Abidjan", joursAvant(8)
+    ]
+  );
+
+  // LOT 4 — photo de preuve de démonstration (prise en charge de CLI-DEMO01) :
+  // le contenu passe par lib/photos.js (disque local en démo, Vercel Blob en
+  // production) — jamais de base64 dans Postgres, seulement les métadonnées.
+  const pngDemo = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+    "base64"
+  );
+  const clePhoto = await stockerObjet({
+    key: "colis/demo-colis-1/prise-en-charge-demo.png",
+    buffer: pngDemo,
+    contentType: "image/png"
+  });
+  await db.query(
+    `INSERT INTO photos (id, parcel_id, etape, storage_key, content_type, size_bytes, agency_id, agent_id, agent_name, created_at_iso)
+     VALUES ($1, $2, 'prise_en_charge', $3, 'image/png', $4, $5, $6, $7, $8)`,
+    ["demo-photo-1", "demo-colis-1", clePhoto, pngDemo.length, "demo-abidjan", "demo-agent-koffi", "Koffi N'Guessan", joursAvant(4)]
+  );
 
   // LOT 3 — carnet de clients de démonstration : les expéditeurs et
   // destinataires des colis ci-dessus sont mémorisés par leur agence, plus un

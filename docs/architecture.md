@@ -25,9 +25,17 @@ Navigateur  ── fetch /api/* ──►  lib/app.js (Express)
 - **API** (`lib/app.js`) : routes `/api/*`. Toutes les anciennes règles
   Firestore sont réécrites comme des contrôles serveur.
 - **Métier** (`js/metier-colis.js`) : inchangé, importé **à la fois** par le
-  navigateur et par le serveur — une seule source de vérité.
+  navigateur et par le serveur — une seule source de vérité. Idem pour
+  `js/metier-tarifs.js` (LOT 2), `js/metier-bordereau.js`,
+  `js/metier-incidents.js` et `js/metier-alertes.js` (LOT 4).
+- **Photos de preuve** (`lib/photos.js`) : le stockage objet est isolé derrière
+  `stockerObjet()` / `lireObjet()` — Vercel Blob si `BLOB_READ_WRITE_TOKEN`
+  est défini, sinon disque local (`PHOTOS_DIR`, défaut `uploads/photos`).
+  Aucun base64 géant en base : `photos` ne stocke que la clé et les métadonnées.
 - **Base** (`db/schema.sql`) : `agencies`, `parcels`, `agents` (LOT 1),
-  `tarifs`, `encaissements`, `caisse_closures` (LOT 2), `clients` (LOT 3).
+  `tarifs`, `encaissements`, `caisse_closures` (LOT 2), `clients` (LOT 3),
+  `bordereaux`, `photos`, `incidents` + colonnes `bordereau_id`/`retour_*`
+  sur `parcels` (LOT 4).
 
 ### `agencies`
 
@@ -100,7 +108,47 @@ d'e-mail ni de donnée personnelle.
 Tous les anciens documents `colis` + `suivis` fusionnés : le suivi public est
 **calculé** par `GET /api/suivi/:code` (7 champs, aucune donnée personnelle) —
 plus de duplication à maintenir cohérente. Contraintes : `tracking_code` UNIQUE,
-`owner_id` et `destination_agency_id` référencent `agencies`.
+`owner_id` et `destination_agency_id` référencent `agencies`. LOT 4 :
+`bordereau_id` (écrit uniquement par la transaction qui crée le bordereau),
+`retour_status`/`retour_started_at`/`retour_completed_at` (retour à
+l'expéditeur) — les 5 statuts officiels du colis ne changent jamais.
+
+### `bordereaux`, `photos`, `incidents` (LOT 4 — chaîne de preuve)
+
+- **`bordereaux`** : lot de 1 à 200 colis (`bordereau_parcels`, PK
+  `(bordereau_id, parcel_id)`) partis ensemble. `code` UNIQUE `BDR-XXXXXX`,
+  transporteur (`carrier_name`, `carrier_phone`, `vehicle_ref`), statuts
+  `Préparé → Remis → En route → Arrivé → Contrôlé/Écart`
+  (`js/metier-bordereau.js`). Émargements verrouillés par acteur : remise et
+  départ = agence émettrice ; arrivée et contrôle = agence de destination
+  (ou émettrice si rien n'est rattaché). La remise expédie les colis
+  (`Enregistré → Expédié`), le départ les met `En transit`, le contrôle
+  confirme les présents (`→ Arrivé`) et chaque absent ouvre un incident
+  `perdu` automatique. Suivi public `bordereau.html?code=BDR-…`
+  (`GET /api/suivi-bordereau/:code`) : ni téléphone du transporteur, ni
+  identité des clients — liste des codes de suivi et présence après contrôle.
+- **`photos`** : 2 max par étape (`prise_en_charge` = expéditeur, `arrivee` =
+  destination), compressées côté navigateur (`js/photos.js`, ~200 Ko),
+  `image/*` seulement. Contenu **jamais public** : uniquement
+  `GET /api/photos/:id` authentifié (les deux agences concernées), aucune
+  route de suppression — la preuve est immuable.
+- **`incidents`** : état latéral du colis (`perdu`, `endommage`, `retard`,
+  `conteste`, `bloque`) avec cycle `ouvert → recherches → resolu`
+  (`js/metier-incidents.js`). Visible par les deux agences ; un seul incident
+  non résolu à la fois ; résolu = immuable. Le public ne voit qu'un bandeau
+  sobre (« Une vérification est en cours sur ce colis. »). Escalade :
+  `alerte24h` (ouvert > 24 h, les deux agences) puis `filePlateforme`
+  (> 7 j, file plateforme — lot 6).
+- **Souffrance + retour** : `GET /api/souffrance` liste les colis
+  « Arrivé non retiré depuis > 7 jours » (`estEnSouffrance()`,
+  `js/metier-alertes.js`) ; `POST /api/colis/:id/retour`
+  (`etape: decider` par l'agence détentrice, `recevoir` par l'expéditrice)
+  trace un nouveau trajet dans l'historique ; les frais de magasinage
+  éventuels alimentent la caisse du jour avec le label
+  « Frais de magasinage ».
+- **Alertes** : `GET /api/alertes` groupe par signal les « colis qui dorment »
+  (`sans_mouvement` > 48 h, `non_retire` > 72 h, `non_rattache` > 7 j,
+  `souffrance` > 7 j) — cartes « À traiter » du tableau de bord.
 
 ## Autorisations (ex-`firestore.rules`)
 
@@ -111,7 +159,10 @@ plus de duplication à maintenir cohérente. Contraintes : `tracking_code` UNIQU
 | rattachement : owner, une fois, agence inscrite | `peutRattacher()` + `agences` EXISTS + `destination_agency_id IS NULL` |
 | progression par étapes | `prochaineEtape()` (le serveur calcule le statut suivant) |
 | suivi public `hasOnly(7 clés)` | projection SQL explicite |
-| `allow delete: if false` | aucune route DELETE |
+| `allow delete: if false` | aucune route DELETE (photos/incidents inclus : preuve immuable) |
+| bordereau : émarger selon son rôle | `peutControler()` / acteur imposé côté serveur (remise = émetteur, arrivée/contrôle = destinataire) |
+| photos jamais publiques | `GET /api/photos/:id` exige une session des deux agences concernées ; clé de stockage jamais renvoyée |
+| incidents visibles aux deux bouts | `WHERE owner_id = $1 OR destination_agency_id = $1` |
 
 ## Sessions
 
@@ -140,18 +191,26 @@ plus de duplication à maintenir cohérente. Contraintes : `tracking_code` UNIQU
 `npm test` exécute la suite sur PGlite : mêmes requêtes SQL que Neon, aucune
 configuration requise. `tests/api.test.mjs` rejoue les parcours complets
 (inscription, colis inscrit/non inscrite, rattachement unique, progression,
-suivi public anonyme, refus d'accès).
+suivi public anonyme, refus d'accès ; LOT 4 : bordereau de bout en bout avec
+écart → incident automatique, destination non rattachée, incidents et
+escalade, photos de preuve, souffrance + retour + frais de magasinage,
+alertes). Les règles pures sont testées dans `tests/metier-*.test.mjs` et le
+câblage Vercel dans `tests/integration-page.test.mjs`.
 
 ## Déploiement
 
 - **Vercel** : les fichiers de `api/` exportent l'app Express, le reste est
-  statique. Variables : `DATABASE_URL`, `SESSION_SECRET`. Hors Next.js,
+  statique. Variables : `DATABASE_URL`, `SESSION_SECRET`, et pour les photos
+  `BLOB_READ_WRITE_TOKEN` (Vercel Blob ; à défaut `PHOTOS_DIR` sur disque
+  local). Hors Next.js,
   Vercel convertit tout segment entre crochets en `([^/]+)` (un seul
   segment d'URL, pas de catch-all multi-segments) : `api/[...path].js`
   couvre les routes à un segment (`/api/health`, `/api/colis`…), et chaque
   route imbriquée a son fichier (`api/colis/[id].js`,
   `api/colis/[id]/attach.js`, `api/colis/[id]/progress.js`,
-  `api/suivi/[code].js`, `api/clients/[id].js`…) — sinon elle renvoie le
+  `api/suivi/[code].js`, `api/clients/[id].js`,
+  `api/bordereaux/[id]/controle.js`, `api/colis/[id]/incidents.js`,
+  `api/photos/[id].js`…) — sinon elle renvoie le
   404 NOT_FOUND de la plateforme au lieu d'atteindre Express. Toute nouvelle
   route imbriquée doit recevoir son point d'entrée (verrouillé par
   `npm test`).
