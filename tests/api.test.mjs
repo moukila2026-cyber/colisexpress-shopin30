@@ -18,6 +18,7 @@ delete process.env.DATABASE_URL;
 process.env.PHOTOS_DIR = mkdtempSync(path.join(tmpdir(), "colis-photos-"));
 
 const { buildApp } = await import("../lib/app.js");
+const { deplierRequeteVercel } = await import("../lib/vercel-depliage.js");
 const { query } = await import("../db/db.js");
 
 const app = buildApp();
@@ -1374,6 +1375,39 @@ test("limite Hobby Vercel : les rewrites ?action=… sont redépliés vers les r
 
   // Une action inconnue ne crée aucune route.
   assert.equal((await a.post(`/api/colis/${id}?action=inconnue`, {})).status, 404);
+});
+
+test("Vercel : URL réécrite /api/plateforme?action=amorcage avant Express", async () => {
+  // La fonction serverless reçoit exactement le parent et action en query.
+  const reqVercel = {
+    url: "/api/plateforme?action=amorcage",
+    query: { action: "amorcage" },
+    headers: {}
+  };
+  deplierRequeteVercel(reqVercel);
+  assert.equal(reqVercel.url, "/api/plateforme/amorcage?action=amorcage");
+  const response = await fetch(`${BASE}${reqVercel.url}`);
+  assert.equal(response.status, 200, "l'URL repliée atteint bien la route d'amorçage Express");
+  assert.ok(Object.hasOwn(await response.json(), "disponible"));
+});
+
+test("repli Vercel : chemin original transmis par en-tête", async () => {
+  // Simulation d'une requête Vercel où l'URL reçue est la forme repliée
+  // sans ?action=, mais l'en-tête conserve le chemin d'origine.
+  const r1 = await fetch(`${BASE}/api/plateforme`, {
+    headers: { "x-vercel-original-path": "/api/plateforme/amorcage" }
+  });
+  assert.equal(r1.status, 200, "chemin original via x-vercel-original-path");
+  const d1 = await r1.json();
+  assert.ok(Object.prototype.hasOwnProperty.call(d1, "disponible"));
+
+  // Repli via x-now-route-matches (objet sérialisé) contenant l'action.
+  const r2 = await fetch(`${BASE}/api/plateforme`, {
+    headers: { "x-now-route-matches": JSON.stringify({ action: "amorcage" }) }
+  });
+  assert.equal(r2.status, 200, "action via x-now-route-matches");
+  const d2 = await r2.json();
+  assert.ok(Object.prototype.hasOwnProperty.call(d2, "disponible"));
 });
 
 /* --------------------------- notifications (LOT 5) ------------------------- */

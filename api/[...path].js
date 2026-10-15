@@ -19,5 +19,15 @@
  * premier middleware de lib/app.js redéplie l'URL réelle avant le routage.
  * Nouvelle route imbriquée = un rewrite, jamais un nouveau fichier ici
  * (garde-fou : tests/integration-page.test.mjs).
+ *
+ * Repli supplémentaire : on déplie aussi ici, avant d'appeler l'application,
+ * pour couvrir le cas où Vercel transmet l'URL repliée sans que le
+ * middleware Express n'ait encore accès à la requête (robustesse).
  */
-export { default } from "../lib/app.js";
+import app from "../lib/app.js";
+import { deplierRequeteVercel } from "../lib/vercel-depliage.js";
+
+export default function handler(req, res) {
+  deplierRequeteVercel(req);
+  return app(req, res);
+}

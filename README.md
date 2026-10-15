@@ -475,6 +475,15 @@ npm test
 - **« Voir le colis » ouvre une fiche sans colis** : l'identifiant a été perdu
   en route. Vérifiez que `cleanUrls` n'est pas activé sur Vercel (voir section 3)
   et que l'URL finale contient bien `?id=…`.
+- **Console plateforme en erreur sur le site déployé (mais OK en local)** :
+  si `/api/plateforme/amorcage` renvoie le JSON `{"error":"Ressource introuvable."}`,
+  la requête a atteint Express mais le chemin n'a pas été redéplié ; ce n'est
+  pas le 404 NOT_FOUND de Vercel. Le rewrite
+  `/api/plateforme/:action → /api/plateforme?action=:action` utilise désormais
+  le point d'entrée dédié `api/plateforme.js` ; le handler et le middleware
+  Express redéplient `?action=` et acceptent aussi les en-têtes de chemin
+  original de Vercel. Le test de régression simule
+  `/api/plateforme?action=amorcage`.
 - **Fiche colis ou suivi QR en erreur sur le site déployé (mais OK en local)** :
   si le navigateur reçoit un **404 NOT_FOUND** (page Vercel, pas le JSON de
   l'API) sur `/api/colis/…` ou `/api/suivi/…`, la route n'est captée par

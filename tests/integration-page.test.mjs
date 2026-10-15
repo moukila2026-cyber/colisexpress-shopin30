@@ -266,7 +266,10 @@ test("les points d'entrée Vercel captent les routes API à un segment et imbriq
   // middleware de lib/app.js redéplie l'URL réelle avant le routage Express.
   assert.ok(existsSync(path.join(RACINE, "api/[...path].js")), "api/[...path].js doit exister (routes à un segment)");
   assert.ok(!existsSync(path.join(RACINE, "api/[[...path]].js")), "api/[[...path]].js ne capte qu'un seul segment hors Next.js : les routes imbriquées finissent en 404 plateforme");
-  assert.match(lire("api/[...path].js"), /lib\/app\.js/, "le point d'entrée Vercel doit exporter l'application Express");
+  assert.ok(existsSync(path.join(RACINE, "api/plateforme.js")), "api/plateforme.js garantit le point d'entrée Vercel dédié de /api/plateforme");
+  assert.match(lire("api/plateforme.js"), /lib\/app\.js/, "la fonction plateforme réutilise l'application Express");
+  assert.match(lire("api/plateforme.js"), /deplierRequeteVercel/, "la fonction plateforme traite le ?action= et les en-têtes Vercel");
+  assert.match(lire("api/[...path].js"), /lib\/app\.js/, "le point d'entrée Vercel générique réutilise l'application Express");
 
   // Garde-fou : jamais plus de 12 fonctions serverless (limite Hobby).
   const fichiersApi = [];
