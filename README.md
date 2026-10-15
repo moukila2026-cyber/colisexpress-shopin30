@@ -15,7 +15,7 @@ plus aucune dépendance à Firebase.
 ## Arborescence
 
 ```text
-api/[[...path]].js     Point d'entrée Vercel (redirige vers lib/app.js)
+api/[...path].js       Point d'entrée Vercel (redirige vers lib/app.js)
 lib/app.js             API Express : routes, sessions, autorisations
 lib/auth.js            Hachage des mots de passe (scrypt) et cookies signés
 db/schema.sql          Schéma PostgreSQL (agencies, parcels)
@@ -61,7 +61,7 @@ Les données de démo sont réinitialisées à chaque redémarrage.
 
 ## 3. Déployer sur Vercel
 
-Le dépôt est déjà configuré (`vercel.json`, `api/[[...path]].js`) : le dépôt
+Le dépôt est déjà configuré (`vercel.json`, `api/[...path].js`) : le dépôt
 GitHub est détecté comme projet **Node.js**. Après le premier import :
 
 1. Renseignez `DATABASE_URL` et `SESSION_SECRET` dans *Environment Variables*.
@@ -135,5 +135,12 @@ npm test
 - **« Voir le colis » ouvre une fiche sans colis** : l'identifiant a été perdu
   en route. Vérifiez que `cleanUrls` n'est pas activé sur Vercel (voir section 3)
   et que l'URL finale contient bien `?id=…`.
+- **Fiche colis ou suivi QR en erreur sur le site déployé (mais OK en local)** :
+  si le navigateur reçoit un **404 NOT_FOUND** (page Vercel, pas le JSON de
+  l'API) sur `/api/colis/…` ou `/api/suivi/…`, le point d'entrée Vercel ne capte
+  pas les routes imbriquées. Il doit s'appeler `api/[...path].js` (catch-all) :
+  `api/[[...path]].js` ne capte qu'un seul segment hors Next.js, donc
+  `/api/health` répond mais pas `/api/colis/:id`. Un test (`npm test`)
+  verrouille ce nom de fichier.
 
 Conçu par **Shopin30** — support : [WhatsApp +225 0501303343](https://wa.me/2250501303343).
