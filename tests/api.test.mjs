@@ -2005,6 +2005,341 @@ test("facturation en concurrence : compteur et portefeuille restent exacts, jama
   assert.ok(rows[0].mini >= 0);
 });
 
+/* ------------------- LOT 7 — suivi personnalisé et paiements SasPay ------------------- */
+
+const { logoDemoPng } = await import("../db/logo-demo.js");
+const { configurationPaiements, signerWebhook } = await import("../lib/paiements.js");
+const http = await import("node:http");
+
+async function colisAvecReste(clientHttp, destinationAgencyId, i = 0) {
+  const res = await clientHttp.post("/api/colis", {
+    agencyNotRegistered: false,
+    values: valeurs({ destinationAgencyId, recipientPhone: `0500000${600 + i}` }),
+    payment: { status: "arrivee" }
+  });
+  assert.equal(res.status, 201, JSON.stringify(res.data));
+  assert.equal(res.data.parcel.paidAmountFCFA ?? 0, 0);
+  return res.data.parcel;
+}
+
+async function encaissementsDuJour(clientHttp) {
+  const res = await clientHttp.get("/api/caisse");
+  assert.equal(res.status, 200, JSON.stringify(res.data));
+  return res.data.encaissements;
+}
+
+test("suivi personnalisé : réglages du gérant, logo vérifié, habillage public sans donnée personnelle", async () => {
+  const g = client();
+  const b = client();
+  const agence = await creerAgence(g, "Agence MarqueA", "Abidjan");
+  const agenceB = await creerAgence(b, "Agence MarqueB", "Bouaké");
+  const invite = await g.post("/api/agents", { name: "Agent Marque", email: compteUnique("agentmarque"), password: "agent12" });
+  const agent = client();
+  assert.equal((await agent.post("/api/login", { email: invite.data.agent.email, password: "agent12" })).status, 200);
+
+  const initiale = await g.get("/api/marque");
+  assert.equal(initiale.status, 200);
+  assert.deepEqual(
+    [initiale.data.marque.active, initiale.data.marque.logo, initiale.data.marque.nom, initiale.data.peutModifier],
+    [false, false, "Agence MarqueA", true]
+  );
+  assert.equal((await agent.call("PUT", "/api/marque", { active: true })).status, 403, "gérant uniquement");
+
+  const logo = logoDemoPng().toString("base64");
+  for (const [corps, motif] of [
+    [{ active: true, couleur: "red;}</style>" }, /#RRGGBB/],
+    [{ active: true, logo: { type: "image/svg+xml", donnees: Buffer.from("<svg><script>alert(1)</script></svg>").toString("base64") } }, /PNG, JPEG ou WebP/],
+    [{ active: true, logo: { type: "image/png", donnees: Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4, 5, 6, 7, 8]).toString("base64") } }, /ne correspond pas/],
+    [{ active: true, logo: { type: "image/png", donnees: Buffer.concat([logoDemoPng(), Buffer.alloc(310 * 1024)]).toString("base64") } }, /300 Ko/],
+    [{ active: true, logo: { type: "image/png", donnees: "<<pas du base64>>" } }, /illisible/]
+  ]) {
+    const refus = await g.call("PUT", "/api/marque", corps);
+    assert.equal(refus.status, 400, JSON.stringify(refus.data));
+    assert.match(refus.data.error, motif);
+  }
+
+  const parcel = await colisAvecReste(g, agenceB.id, 1);
+  const anonyme = client();
+  assert.equal((await anonyme.get(`/api/suivi/${parcel.trackingCode}`)).data.tracking.marque, undefined, "désactivée par défaut");
+  assert.equal((await anonyme.brut(`/api/suivi/${parcel.trackingCode}/logo`)).status, 404);
+
+  const active = await g.call("PUT", "/api/marque", { active: true, nom: "MarqueA Express", couleur: "#1D3A8A", couleur2: "#f5b301", logo: { type: "image/png", donnees: logo } });
+  assert.equal(active.status, 200, JSON.stringify(active.data));
+  assert.deepEqual(
+    [active.data.marque.active, active.data.marque.nom, active.data.marque.couleur, active.data.marque.logo],
+    [true, "MarqueA Express", "#1d3a8a", true]
+  );
+
+  const suivi = (await anonyme.get(`/api/suivi/${parcel.trackingCode}`)).data.tracking;
+  assert.deepEqual(
+    { ...suivi.marque, version: "" },
+    { nom: "MarqueA Express", couleur: "#1d3a8a", couleur2: "#f5b301", couleurTexte: "#ffffff", logo: true, version: "" }
+  );
+  aucuneDonneePersonnelle(suivi, "suivi personnalisé");
+  assert.ok(!JSON.stringify(suivi).includes(agence.email) && !JSON.stringify(suivi).includes("marques/"), "ni e-mail ni clé de stockage");
+  const image = await anonyme.brut(`/api/suivi/${parcel.trackingCode}/logo`);
+  assert.equal(image.status, 200);
+  assert.equal(image.contentType, "image/png");
+  assert.ok(image.buffer.equals(logoDemoPng()), "le logo servi est celui téléversé");
+  assert.equal((await anonyme.brut(`/api/suivi/${parcel.trackingCode}?action=logo`)).status, 200, "forme repliée Vercel");
+  assert.equal((await g.brut("/api/marque?logo=1")).status, 200, "aperçu du logo pour l'agence");
+
+  // Les colis d'une agence non personnalisée gardent l'apparence par défaut.
+  const colisB = await colisAvecReste(b, agence.id, 2);
+  assert.equal((await anonyme.get(`/api/suivi/${colisB.trackingCode}`)).data.tracking.marque, undefined);
+
+  // Logo retiré, puis personnalisation désactivée.
+  const sansLogo = await g.call("PUT", "/api/marque", { active: true, nom: "MarqueA Express", logo: null });
+  assert.equal(sansLogo.data.marque.logo, false);
+  assert.equal((await anonyme.brut(`/api/suivi/${parcel.trackingCode}/logo`)).status, 404);
+  await g.call("PUT", "/api/marque", { active: false });
+  assert.equal((await anonyme.get(`/api/suivi/${parcel.trackingCode}`)).data.tracking.marque, undefined);
+});
+
+test("paiement en ligne (simulation) : reste à payer d'un colis encaissé une seule fois, en caisse « Paiement SasPay »", async () => {
+  const a = client();
+  const b = client();
+  const c = client();
+  await creerAgence(a, "Agence PaieA", "Abidjan");
+  const agenceB = await creerAgence(b, "Agence PaieB", "Bouaké");
+  await creerAgence(c, "Agence PaieC", "Korhogo");
+  const parcel = await colisAvecReste(a, agenceB.id, 3);
+
+  const config = await b.get("/api/paiements");
+  assert.deepEqual([config.data.configuration.mode, config.data.configuration.actif], ["simulation", true]);
+
+  // La destination encaisse à l'arrivée (même règle qu'au guichet).
+  const cree = await b.post("/api/paiements", { objet: "colis", parcelId: parcel.id });
+  assert.equal(cree.status, 201, JSON.stringify(cree.data));
+  const paiement = cree.data.paiement;
+  assert.deepEqual([paiement.objet, paiement.montantFCFA, paiement.mode, paiement.statut], ["colis", 3500, "simulation", "en_attente"]);
+  assert.equal(paiement.checkoutUrl, `/paiement-simulation.html?id=${paiement.id}`);
+  assert.equal(paiement.retour, `/colis.html?id=${parcel.id}&paiement=${paiement.id}`);
+  assert.equal((await b.post("/api/paiements", { objet: "colis", parcelId: parcel.id })).data.paiement.id, paiement.id, "double-clic : même session");
+
+  assert.equal((await c.post("/api/paiements", { objet: "colis", parcelId: parcel.id })).status, 404, "agence étrangère au colis");
+  assert.equal((await c.post("/api/paiements/verifier", { id: paiement.id })).status, 404);
+  assert.equal((await c.post("/api/paiements/simulation", { id: paiement.id, resultat: "succes" })).status, 404);
+  assert.equal((await b.post("/api/paiements/simulation", { id: paiement.id, resultat: "bof" })).status, 400);
+
+  const echec = await b.post("/api/paiements/simulation", { id: paiement.id, resultat: "echec" });
+  assert.equal(echec.data.paiement.statut, "echec");
+  assert.deepEqual(await encaissementsDuJour(b), [], "un échec n'encaisse rien");
+  const succes = await b.post("/api/paiements/simulation", { id: paiement.id, resultat: "succes" });
+  assert.equal(succes.data.paiement.statut, "paye", "nouvelle tentative réussie sur la même session");
+  assert.match(succes.data.paiement.transactionReference, /^SIM-/);
+  for (let i = 0; i < 2; i += 1) {
+    assert.equal((await b.post("/api/paiements/verifier", { id: paiement.id })).data.paiement.statut, "paye");
+    await b.post("/api/paiements/simulation", { id: paiement.id, resultat: "succes" });
+  }
+  const caisse = await encaissementsDuJour(b);
+  assert.equal(caisse.length, 1, "appliqué une seule fois");
+  assert.deepEqual([caisse[0].amountFCFA, caisse[0].mode, caisse[0].label], [3500, "mobile_money", "Paiement SasPay (simulation)"]);
+  assert.deepEqual(await encaissementsDuJour(a), [], "la caisse de l'agence qui encaisse, pas l'autre");
+  const apres = (await a.get(`/api/colis/${parcel.id}`)).data.parcel;
+  assert.deepEqual([apres.paymentStatus, apres.paidAmountFCFA], ["regle", 3500]);
+  const deja = await b.post("/api/paiements", { objet: "colis", parcelId: parcel.id });
+  assert.equal(deja.status, 400);
+  assert.match(deja.data.error, /déjà entièrement réglé/);
+  const historique = await b.get(`/api/paiements?parcelId=${parcel.id}`);
+  assert.deepEqual(historique.data.paiements.map((p) => p.statut), ["paye"]);
+  assert.equal(historique.data.paiements[0].checkoutUrl, null, "plus de lien une fois payé");
+  assert.equal((await fetch(`${BASE}/api/paiements`, { method: "DELETE" })).status, 404);
+});
+
+test("paiement en ligne (simulation) : abonnement dû et recharge du portefeuille, réservés au gérant", async () => {
+  const g = client();
+  await creerAgence(g, "Agence PaieAbo", "Abidjan");
+  const invite = await g.post("/api/agents", { name: "Agent Abo", email: compteUnique("agentabo"), password: "agent12" });
+  const agent = client();
+  await agent.post("/api/login", { email: invite.data.agent.email, password: "agent12" });
+  assert.equal((await g.post("/api/facturation/plan", { plan: "pro" })).data.facturation.periode.abonnement.statut, "du");
+
+  assert.equal((await agent.post("/api/paiements", { objet: "abonnement" })).status, 403);
+  assert.equal((await agent.post("/api/paiements", { objet: "recharge", montantFCFA: 1000 })).status, 403);
+  const abonnement = await g.post("/api/paiements", { objet: "abonnement" });
+  assert.equal(abonnement.status, 201, JSON.stringify(abonnement.data));
+  assert.equal(abonnement.data.paiement.montantFCFA, 10000);
+  assert.match(abonnement.data.paiement.libelle, /^Abonnement Pro — /);
+  assert.equal(abonnement.data.paiement.retour, `/abonnement.html?paiement=${abonnement.data.paiement.id}`);
+  assert.equal((await g.post("/api/paiements/simulation", { id: abonnement.data.paiement.id, resultat: "succes" })).data.paiement.statut, "paye");
+
+  const etat = await facturation(g);
+  assert.equal(etat.periode.abonnement.statut, "paye", "abonnement réglé dès la confirmation");
+  assert.equal(etat.portefeuille.soldeFCFA, 0);
+  const [debit, credit] = etat.portefeuille.mouvements;
+  assert.deepEqual([debit.type, debit.montantFCFA], ["abonnement", -10000]);
+  assert.deepEqual([credit.type, credit.montantFCFA, credit.acteurNom], ["recharge", 10000, "SasPay"]);
+  assert.match(credit.libelle, /^Paiement SasPay — Abonnement Pro — .* \(simulation\)$/);
+  assert.equal((await g.post("/api/paiements", { objet: "abonnement" })).status, 400, "plus rien à régler");
+
+  assert.equal((await g.post("/api/paiements", { objet: "recharge", montantFCFA: 50 })).status, 400);
+  const recharge = await g.post("/api/paiements", { objet: "recharge", montantFCFA: 2500 });
+  await g.post("/api/paiements/simulation", { id: recharge.data.paiement.id, resultat: "succes" });
+  assert.equal((await facturation(g)).portefeuille.soldeFCFA, 2500);
+});
+
+/** Faux SasPay : POST /checkout-sessions/, GET …/status/, GET /payments/…/verify/ (contrats de la doc). */
+function fauxSaspay() {
+  const etat = { requetes: [], sessions: new Map(), transactions: new Map(), erreurCreation: null, n: 0 };
+  const serveur = http.createServer(async (req, res) => {
+    let corps = "";
+    for await (const morceau of req) corps += morceau;
+    etat.requetes.push({ methode: req.method, chemin: req.url, autorisation: req.headers.authorization, corps: corps ? JSON.parse(corps) : null });
+    const repondre = (code, donnees) => {
+      res.writeHead(code, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(donnees));
+    };
+    if (req.method === "POST" && req.url === "/api/v1/checkout-sessions/") {
+      if (etat.erreurCreation) return repondre(etat.erreurCreation, { success: false, error: { message: "Clé invalide.", code: "invalid_key" }, code: etat.erreurCreation });
+      etat.n += 1;
+      const id = `sess-${etat.n}`;
+      etat.sessions.set(id, { id, slug: `slug-${etat.n}`, status: "PENDING", transaction_id: null, transaction_status: null, transaction_reference: null });
+      return repondre(201, { success: true, data: { id, checkout_url: `https://pay.saspay.me/checkout/test-${etat.n}`, status: "PENDING", transaction: null }, code: 201 });
+    }
+    let m = req.url.match(/^\/api\/v1\/checkout-sessions\/([^/]+)\/status\/$/);
+    if (req.method === "GET" && m) {
+      const session = etat.sessions.get(decodeURIComponent(m[1]));
+      return session ? repondre(200, session) : repondre(404, { message: "Introuvable.", code: "not_found" });
+    }
+    m = req.url.match(/^\/api\/v1\/payments\/([^/]+)\/verify\/$/);
+    if (req.method === "GET" && m) {
+      const transaction = etat.transactions.get(decodeURIComponent(m[1]));
+      return transaction ? repondre(200, { success: true, data: transaction, code: 200 }) : repondre(404, { message: "Transaction introuvable.", code: "not_found" });
+    }
+    return repondre(404, { message: "Route inconnue." });
+  });
+  return new Promise((resolve) => {
+    serveur.listen(0, "127.0.0.1", () => resolve({ etat, serveur, url: `http://127.0.0.1:${serveur.address().port}/api/v1` }));
+  });
+}
+
+async function envoyerWebhook(corps, { secret = "whsec_test_colis", horodatage = Math.floor(Date.now() / 1000), signature, chemin = "/api/paiements/webhook" } = {}) {
+  const brut = JSON.stringify(corps);
+  const res = await fetch(`${BASE}${chemin}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Webhook-Signature": signature ?? signerWebhook({ corpsBrut: brut, horodatage: String(horodatage), secret }),
+      "X-Webhook-Timestamp": String(horodatage),
+      "X-Webhook-Event": corps.event
+    },
+    body: brut
+  });
+  return { status: res.status, data: await res.json().catch(() => ({})) };
+}
+
+test("SasPay en mode TEST : session hébergée sans donnée client, webhook HMAC vérifié, application après vérification serveur", async () => {
+  const faux = await fauxSaspay();
+  const variables = {
+    SASPAY_SECRET_KEY: "sk_test_colisexpress_cle",
+    SASPAY_API_URL: faux.url,
+    SASPAY_WEBHOOK_SECRET: "whsec_test_colis",
+    APP_URL: "https://colisexpress.example"
+  };
+  Object.assign(process.env, variables);
+  try {
+    const a = client();
+    const b = client();
+    const agenceA = await creerAgence(a, "Agence SasA", "Abidjan");
+    const agenceB = await creerAgence(b, "Agence SasB", "Bouaké");
+    const parcel = await colisAvecReste(a, agenceB.id, 5);
+    const configuration = (await a.get("/api/paiements")).data.configuration;
+    assert.deepEqual([configuration.mode, configuration.actif], ["test", true]);
+    assert.ok(!JSON.stringify(configuration).includes("sk_test_colisexpress_cle"), "la clé n'est jamais renvoyée");
+
+    const cree = await a.post("/api/paiements", { objet: "colis", parcelId: parcel.id });
+    assert.equal(cree.status, 201, JSON.stringify(cree.data));
+    const paiement = cree.data.paiement;
+    assert.equal(paiement.mode, "test");
+    assert.equal(paiement.checkoutUrl, "https://pay.saspay.me/checkout/test-1");
+    const creation = faux.etat.requetes.find((r) => r.methode === "POST");
+    assert.equal(creation.chemin, "/api/v1/checkout-sessions/");
+    assert.equal(creation.autorisation, "Bearer sk_test_colisexpress_cle");
+    assert.deepEqual(
+      [creation.corps.amount, creation.corps.currency, creation.corps.country, creation.corps.customer_name, creation.corps.customer_email],
+      ["3500.00", "XOF", "CI", "Agence SasA", agenceA.email],
+      "le « client » de la session est l'agence"
+    );
+    assert.deepEqual(creation.corps.metadata, { paiement_id: paiement.id, objet: "colis" });
+    assert.equal(creation.corps.return_url, `https://colisexpress.example/colis.html?id=${parcel.id}&paiement=${paiement.id}`);
+    aucuneDonneePersonnelle(creation.corps, "session SasPay");
+
+    assert.equal((await a.post("/api/paiements/simulation", { id: paiement.id, resultat: "succes" })).status, 409, "aucune simulation avec une clé configurée");
+    assert.equal((await a.post("/api/paiements/verifier", { id: paiement.id })).data.paiement.statut, "en_attente");
+
+    // Sécurité du webhook : secret absent, signature fausse, horodatage périmé.
+    const evenement = { event: "transaction.success", data: { id: "txn-1", status: "SUCCESS", amount: "3500.00", currency: "XOF", msisdn: "2250700000099" } };
+    delete process.env.SASPAY_WEBHOOK_SECRET;
+    assert.equal((await envoyerWebhook(evenement)).status, 503);
+    process.env.SASPAY_WEBHOOK_SECRET = variables.SASPAY_WEBHOOK_SECRET;
+    assert.equal((await envoyerWebhook(evenement, { signature: "0".repeat(64) })).status, 403);
+    assert.equal((await envoyerWebhook(evenement, { secret: "autre-secret" })).status, 403);
+    assert.equal((await envoyerWebhook(evenement, { horodatage: Math.floor(Date.now() / 1000) - 600 })).status, 403, "rejeu refusé (> 300 s)");
+
+    // Webhook valide mais session encore en attente chez SasPay : rien n'est appliqué.
+    assert.equal((await envoyerWebhook(evenement)).status, 200);
+    assert.equal((await a.get(`/api/paiements?id=${paiement.id}`)).data.paiement.statut, "en_attente", "le contenu du webhook ne suffit jamais");
+    // Session payée mais montant vérifié différent : rien n'est appliqué.
+    faux.etat.sessions.set("sess-1", { id: "sess-1", status: "PAID", transaction_id: "txn-1", transaction_status: "SUCCESS", transaction_reference: "ref-1" });
+    faux.etat.transactions.set("txn-1", { id: "txn-1", status: "SUCCESS", requested_amount: "100.00", net_amount: "100.00", currency: "XOF", reference: "TXN-TEST-1" });
+    assert.equal((await envoyerWebhook(evenement)).status, 200);
+    assert.equal((await a.get(`/api/paiements?id=${paiement.id}`)).data.paiement.statut, "en_attente");
+    assert.deepEqual(await encaissementsDuJour(a), []);
+    // Vérification conforme : appliqué, une seule fois même si le webhook est rejoué.
+    faux.etat.transactions.set("txn-1", { id: "txn-1", status: "SUCCESS", requested_amount: "3500.00", net_amount: "3412.50", currency: "XOF", reference: "TXN-TEST-1" });
+    const recu = await envoyerWebhook(evenement, { chemin: "/api/paiements?action=webhook" });
+    assert.equal(recu.status, 200, "forme repliée Vercel, corps brut conservé");
+    assert.equal(recu.data.verifies, 1);
+    assert.equal((await envoyerWebhook(evenement)).status, 200);
+    const final = (await a.get(`/api/paiements?id=${paiement.id}`)).data.paiement;
+    assert.deepEqual([final.statut, final.transactionReference], ["paye", "TXN-TEST-1"]);
+    const caisse = await encaissementsDuJour(a);
+    assert.equal(caisse.length, 1);
+    assert.deepEqual([caisse[0].amountFCFA, caisse[0].label], [3500, "Paiement SasPay (test)"]);
+    const { rows: journalWebhooks } = await query("SELECT * FROM paiements_webhooks");
+    assert.ok(journalWebhooks.length >= 4);
+    assert.ok(!JSON.stringify(journalWebhooks).includes("2250700000099"), "le numéro débité n'est jamais conservé");
+
+    // Prestataire en erreur : message clair, aucune session orpheline en attente.
+    faux.etat.erreurCreation = 401;
+    const parcel2 = await colisAvecReste(a, agenceB.id, 6);
+    const refus = await a.post("/api/paiements", { objet: "colis", parcelId: parcel2.id });
+    assert.equal(refus.status, 502);
+    assert.match(refus.data.error, /refusé la configuration/);
+    const { rows: annules } = await query("SELECT statut FROM paiements_en_ligne WHERE parcel_id = $1", [parcel2.id]);
+    assert.deepEqual(annules.map((r) => r.statut), ["annule"]);
+  } finally {
+    for (const nom of Object.keys(variables)) delete process.env[nom];
+    faux.serveur.close();
+  }
+});
+
+test("configuration des paiements : simulation sans clé, désactivé en production sans clé, clés validées", async () => {
+  assert.equal(configurationPaiements({}).mode, "simulation");
+  assert.equal(configurationPaiements({ DATABASE_URL: "postgres://x" }).mode, "desactive", "jamais de simulation gratuite en production");
+  assert.equal(configurationPaiements({ DATABASE_URL: "postgres://x", PAIEMENTS_SIMULATION: "1" }).mode, "simulation", "simulation explicite (préproduction)");
+  assert.equal(configurationPaiements({ SASPAY_SECRET_KEY: "sk_test_abc" }).mode, "test");
+  assert.equal(configurationPaiements({ SASPAY_SECRET_KEY: "sk_live_abc", DATABASE_URL: "postgres://x" }).mode, "live");
+  const invalide = configurationPaiements({ SASPAY_SECRET_KEY: "pk_abc_secret" });
+  assert.equal(invalide.mode, "desactive");
+  assert.ok(!invalide.raison.includes("pk_abc_secret"), "la valeur de la clé n'apparaît jamais");
+
+  process.env.SASPAY_SECRET_KEY = "cle-mal-formee";
+  try {
+    const g = client();
+    await creerAgence(g, "Agence PaieOff", "Abidjan");
+    const config = await g.get("/api/paiements");
+    assert.equal(config.data.configuration.actif, false);
+    assert.ok(!JSON.stringify(config.data).includes("cle-mal-formee"));
+    const refus = await g.post("/api/paiements", { objet: "recharge", montantFCFA: 1000 });
+    assert.equal(refus.status, 503);
+    assert.match(refus.data.error, /invalide/);
+  } finally {
+    delete process.env.SASPAY_SECRET_KEY;
+  }
+});
+
 test.after(() => {
   server.close();
 });

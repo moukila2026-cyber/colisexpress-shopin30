@@ -69,6 +69,17 @@ plus aucune dépendance à Firebase.
   agences) : file des incidents ouverts depuis plus de 7 jours, litiges,
   agences (plan, compteur, portefeuille, abonnement), volumes du réseau,
   plan Réseau négocié et recharge des portefeuilles
+- **Suivi personnalisé (LOT 7)** : chaque agence peut habiller la page de
+  suivi public des colis qu'elle expédie (nom affiché, couleurs, logo
+  PNG/JPEG/WebP) depuis Paramètres — facultatif, sans aucune donnée
+  personnelle ; sinon, l'apparence COLIS EXPRESS par défaut
+- **Paiements en ligne SasPay (LOT 7)** : payer le **reste à payer** d'un
+  colis (encaissé dans la caisse du jour, « Paiement SasPay »),
+  l'**abonnement** du mois ou une **recharge** du portefeuille, sur la page
+  de paiement hébergée SasPay (mobile money, carte). Un paiement n'est
+  appliqué qu'après vérification côté serveur (session payée, transaction
+  « SUCCESS » au bon montant) ; webhook signé (HMAC) vérifié côté serveur ;
+  mode **SIMULATION** tant qu'aucune clé n'est configurée
 
 ## Arborescence
 
@@ -80,9 +91,11 @@ lib/photos.js          Stockage des photos de preuve (Vercel Blob ou disque loca
 lib/notifications.js   Notifications : fonction d'envoi unique, transports (simulation par défaut), journal
 lib/facturation.js     Plans, quotas, portefeuille prépayé, abonnements (écritures atomiques)
 lib/plateforme.js      Console plateforme : vue d'ensemble en lecture seule
+lib/paiements.js       Paiements en ligne : abstraction SasPay (simulation / test / réel), webhook signé
 db/schema.sql          Schéma PostgreSQL (agences, colis, agents, tarifs, caisse, clients, bordereaux, photos, incidents, notifications, facturation)
 db/init-db.js          npm run init-db : applique le schéma sur la base Neon
 db/plateforme-admin.js npm run plateforme-admin : compte de la console plateforme (variables d'environnement)
+db/logo-demo.js        Logo PNG de démonstration généré en mémoire (seed)
 db/db.js               Connexion Neon (pg) ou PGlite (démo/tests), amorçage
 server.js              Serveur local (API + fichiers statiques)
 js/                    Frontend statique (modules ES, aucune dépendance externe)
@@ -127,6 +140,23 @@ tests/                 Tests automatisés (node --test)
      `PLATEFORME_ADMIN_EMAIL=… PLATEFORME_ADMIN_NOM="…" PLATEFORME_ADMIN_MOT_DE_PASSE=… DATABASE_URL=… npm run plateforme-admin`
      (12 caractères minimum ; `PLATEFORME_ADMIN_ACTIF=0` désactive le
      compte). Connexion sur `/plateforme.html`.
+   - **Paiements en ligne SasPay (LOT 7)** — variables d'environnement
+     uniquement, jamais dans le code ni les journaux :
+     - `SASPAY_SECRET_KEY` : clé secrète du tableau de bord SasPay
+       (`sk_test_…` = bac à sable, `sk_live_…` = paiements réels) ;
+     - `SASPAY_WEBHOOK_SECRET` : secret de signature du webhook, affiché
+       une seule fois par SasPay à sa création ; déclarez dans le tableau de
+       bord SasPay l'URL `https://<votre-domaine>/api/paiements/webhook`
+       abonnée aux événements `transaction.*` ;
+     - `APP_URL` (recommandée) : URL publique du site, pour l'adresse de
+       retour après paiement.
+     Sans clé : mode **SIMULATION** en démo/développement (page de paiement
+     simulée, aucune somme réelle) ; en production sans clé, le paiement en
+     ligne est **désactivé** (une simulation ne doit jamais créditer une vraie
+     caisse) — sauf `PAIEMENTS_SIMULATION=1` pour une préproduction.
+     N'utilisez une clé `sk_test_` que hors production : ses paiements de
+     test créditent réellement la caisse et le portefeuille de
+     l'environnement.
 
 > `DATABASE_URL` est un secret : ne la commitez pas, ne la partagez jamais
 > dans une conversation ou un ticket.
@@ -154,6 +184,11 @@ En démo, Abidjan est au plan **Pro** (abonnement du mois réglé, 2 500 FCFA
 restants) et Bouaké au plan **Gratuit** avec 48 colis sur 50 ce mois-ci et
 60 FCFA de portefeuille : 2 colis inclus, puis 2 colis hors forfait
 prépayés, puis le refus de création montre la règle.
+
+Le suivi public de Shopin30 Abidjan est personnalisé (bleu et or, logo) :
+comparez `suivi.html?code=CLI-DEMO01` (Abidjan) et
+`suivi.html?code=CLI-DEMO03` (Bouaké, apparence par défaut). Les paiements
+en ligne fonctionnent en **simulation**.
 
 Les données de démo sont réinitialisées à chaque redémarrage.
 
@@ -197,6 +232,8 @@ peuvent être trafiquées sans effet) :
 | Abonnement (`GET /api/facturation`, `POST /api/facturation/plan`, `POST /api/facturation/abonnement`) | lecture : tout membre de l'agence ; changement de plan (Gratuit ↔ Pro) et règlement : **gérant** uniquement (garde serveur) ; Réseau : console plateforme seulement ; journal du portefeuille immuable |
 | Quota et dépassement (`POST /api/colis`) | seule l'agence **expéditrice** est comptée (la destination ne paie jamais) ; seule la **création** d'un colis peut être refusée (402 : quota atteint et portefeuille insuffisant) ; aucune autre route ne consulte la facturation — un impayé ne bloque jamais un colis en cours |
 | Console plateforme (`/api/plateforme…`) | compte **séparé** (`plateforme_admins`, cookie `ce_plateforme` signé dans un domaine distinct, `SameSite=Strict`, 12 h) ; une session d'agence n'ouvre jamais la console et inversement ; aucune donnée client (noms, téléphones, CNI) projetée ; recharge et plan journalisés |
+| Suivi personnalisé (`GET`/`PUT /api/marque`, `GET /api/suivi/:code/logo`) | réglages : **gérant** uniquement ; couleurs strictement `#rrggbb` (contrôle serveur et contrainte SQL) ; logo PNG/JPEG/WebP vérifié sur ses octets, 300 Ko max, jamais de SVG ; le suivi public ne reçoit que nom affiché, couleurs et logo de l'agence expéditrice, si activé — aucune donnée personnelle, aucun contact |
+| Paiements en ligne (`/api/paiements…`) | reste d'un colis : l'une des deux agences du colis (comme au guichet) ; abonnement et recharge : **gérant** ; clé SasPay uniquement côté serveur ; le « client » transmis à SasPay est l'agence (aucune donnée client) ; effet appliqué **une seule fois** et seulement après vérification serveur (statut de session + `verify` « SUCCESS », montant et devise exacts) ; webhook : HMAC-SHA256 sur le corps brut, horodatage ± 300 s, comparaison en temps constant ; le numéro débité n'est jamais conservé ; simulation refusée dès qu'une clé est configurée |
 | Notifications (`GET /api/notifications`, `POST /api/notifications/lecture`) | destinataires : les **deux agences concernées** seulement (jamais un client ni un tiers) ; chaque agence lit et marque « lu » **son** journal ; messages sans nom, téléphone, CNI, identité d'agent ni note libre ; simulation tant qu'aucun transport réel n'est configuré ; aucune suppression |
 | Supprimer quoi que ce soit | jamais (aucune route de suppression) |
 
@@ -217,7 +254,8 @@ npm test
   unique, progression des statuts, refus d'accès, comptes agents, grille
   tarifaire, états de paiement, encaissements et clôture de caisse, carnet de
   clients et devis public, chaîne de preuve du LOT 4, notifications du
-  LOT 5, plans, quotas, portefeuille et console plateforme du LOT 6).
+  LOT 5, plans, quotas, portefeuille et console plateforme du LOT 6, suivi
+  personnalisé et paiements SasPay du LOT 7).
 - `tests/metier-colis.test.mjs` : règles métier (validation, construction,
   étapes, rattachement, acteur, états de paiement).
 - `tests/metier-tarifs.test.mjs` : grille tarifaire (tranches, axes,
@@ -238,6 +276,13 @@ npm test
   parcours API (402 sans solde, destination jamais comptée, rien de bloqué
   en cours de route, abonnement Pro, console plateforme séparée,
   concurrence) sont dans `tests/api.test.mjs`.
+- `tests/metier-marque.test.mjs` : suivi personnalisé (couleurs strictes,
+  contraste lisible, logos vérifiés sur leurs octets, projection publique).
+- `tests/metier-paiements.test.mjs` : paiements en ligne (montants
+  décimaux XOF, demandes, statuts de session, transaction conforme). Les
+  parcours API (simulation, abonnement et recharge, mode TEST contre un faux
+  SasPay local avec webhooks signés, configuration) sont dans
+  `tests/api.test.mjs`.
 - `tests/metier-notifications.test.mjs` : notifications (catalogue des
   événements, destinataires = les deux agences, messages sans donnée
   personnelle, dédoublonnage par épisode, échéances, canal en simulation par
@@ -341,6 +386,19 @@ npm test
     volumes) ; « Gérer » une agence pour fixer son plan (Réseau : quota et
     prix négociés) ou créditer son portefeuille d'un paiement reçu (un
     abonnement dû est alors réglé automatiquement).
+20. **Suivi personnalisé** : Paramètres → « Personnalisation du suivi »
+    (gérant) — nom affiché, couleur principale, couleur d'accent, logo
+    (redimensionné à 256 px dans le navigateur), aperçu en direct. Une fois
+    activée, la page de suivi public des colis de l'agence s'affiche à ses
+    couleurs avec son logo ; aucune donnée personnelle n'y figure.
+21. **Paiement en ligne (SasPay)** : sur la fiche d'un colis avec un reste à
+    payer, « Payer en ligne (SasPay) » prépare la page de paiement hébergée
+    (à ouvrir ou à envoyer au destinataire par WhatsApp) ; dès que SasPay
+    confirme (webhook signé ou retour sur la fiche), le serveur vérifie la
+    transaction et inscrit le montant dans la caisse du jour (« Paiement
+    SasPay », mobile money). Sur la page Abonnement, le gérant paie
+    l'abonnement dû ou recharge le portefeuille de la même façon. En démo,
+    la page de paiement est **simulée** (« Payer » / « Refuser »).
 
 ## 7. Dépannage
 

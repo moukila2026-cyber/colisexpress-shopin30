@@ -30,7 +30,8 @@ const entrees = {
   "bordereau.html": "js/bordereau-public.js",
   "notifications.html": "js/notifications.js",
   "abonnement.html": "js/abonnement.js",
-  "plateforme.html": "js/plateforme.js"
+  "plateforme.html": "js/plateforme.js",
+  "paiement-simulation.html": "js/paiement-simulation.js"
 };
 
 const PAGES_SANS_SCRIPT = new Set(["conditions.html", "confidentialite.html", "404.html"]);
@@ -692,4 +693,83 @@ test("le LOT 6 (plans, quotas, portefeuille, console plateforme) est câblé de 
   assert.match(readme, /console plateforme/i);
   assert.match(readme, /plateforme-admin/);
   assert.match(lire("docs/architecture.md"), /LOT 6/);
+});
+
+test("le LOT 7 (suivi personnalisé par agence + paiements SasPay) est câblé de bout en bout", () => {
+  // Abstraction SasPay : contrats de la documentation officielle, clé côté serveur.
+  const lib = lire("lib/paiements.js");
+  assert.match(lib, /https:\/\/api\.saspay\.me\/api\/v1/, "base URL SasPay");
+  assert.match(lib, /"\/checkout-sessions\/"/, "paiement hébergé : POST /checkout-sessions/");
+  assert.match(lib, /\/checkout-sessions\/\$\{encodeURIComponent\(id\)\}\/status\//, "statut de session");
+  assert.match(lib, /\/payments\/\$\{encodeURIComponent\(transactionId\)\}\/verify\//, "vérification de la transaction");
+  assert.match(lib, /Authorization: `Bearer \$\{cle\}`/, "clé secrète en Bearer, côté serveur");
+  assert.match(lib, /SASPAY_SECRET_KEY/);
+  assert.match(lib, /SASPAY_WEBHOOK_SECRET|secret de signature/);
+  assert.match(lib, /timingSafeEqual/, "signature comparée en temps constant");
+  assert.match(lib, /TOLERANCE_WEBHOOK_S = 300/, "anti-rejeu : ± 300 s");
+  assert.match(lib, /client: \{ nom: agency\.name, email: agency\.email \}/, "le client de la session est l'agence (aucune donnée client)");
+  assert.doesNotMatch(lib, /sk_(test|live)_[A-Za-z0-9]{6,}/, "aucune clé réelle dans le code");
+  assert.match(lib, /mode: "simulation"/, "mode simulation sans clé");
+
+  const app = lire("lib/app.js");
+  for (const route of [
+    'app.get("/api/paiements"', 'app.post("/api/paiements"', 'app.post("/api/paiements/verifier"',
+    'app.post("/api/paiements/simulation"', 'app.post("/api/paiements/webhook"',
+    'app.get("/api/marque"', 'app.put("/api/marque"', 'app.get("/api/suivi/:code/logo"'
+  ]) {
+    assert.ok(app.includes(route), `lib/app.js doit déclarer ${route}`);
+  }
+  assert.match(app, /corpsBrut/, "corps brut conservé pour la signature du webhook");
+  assert.match(app, /verifierSignatureWebhook\(/);
+  assert.match(app, /marquePublique\(/, "le suivi public projette la marque (sans contact)");
+  assert.doesNotMatch(app, /app\.delete\(/);
+
+  const schema = lire("db/schema.sql");
+  for (const table of ["paiements_en_ligne", "paiements_webhooks"]) {
+    assert.match(schema, new RegExp(`CREATE TABLE IF NOT EXISTS ${table}`), `table ${table}`);
+  }
+  assert.match(schema, /marque_couleur ~ '\^#\[0-9a-f\]\{6\}\$'/, "couleurs contrôlées en base");
+  assert.match(schema, /effet_applique/, "application unique d'un paiement");
+
+  // Vercel Hobby : routes repliées, aucune nouvelle fonction.
+  const rewrites = JSON.parse(lire("vercel.json")).rewrites ?? [];
+  for (const [source, destination] of [
+    ["/api/paiements/:action", "/api/paiements?action=:action"],
+    ["/api/suivi/:code/:action", "/api/suivi/:code?action=:action"]
+  ]) {
+    assert.ok(rewrites.some((r) => r.source === source && r.destination === destination), `vercel.json doit replier ${source}`);
+  }
+  for (const dossier of ["api/paiements", "api/marque"]) {
+    assert.ok(!existsSync(path.join(RACINE, dossier)), `pas de fichier ${dossier} : la route passe par api/[...path].js`);
+  }
+
+  // Interface : suivi habillé, réglages, paiement du reste, de l'abonnement, recharge.
+  const suivi = lire("js/suivi.js");
+  assert.match(suivi, /variablesMarque/, "couleurs revalidées avant l'attribut style");
+  assert.match(suivi, /\/logo\?v=/, "logo public servi par /api/suivi/:code/logo");
+  const parametres = lire("parametres.html");
+  for (const id of ["marqueForm", "marqueActive", "marqueNom", "marqueCouleur", "marqueCouleur2", "marqueLogo", "marqueApercu"]) {
+    assert.match(parametres, new RegExp(`id="${id}"`), `parametres.html doit exposer #${id}`);
+  }
+  assert.match(lire("js/parametres-marque.js"), /method: "PUT"/);
+  const colis = lire("js/colis.js");
+  assert.match(colis, /payerEnLigne/);
+  assert.match(colis, /\/api\/paiements\/verifier/, "retour de paiement vérifié côté serveur");
+  const abonnement = lire("js/abonnement.js");
+  assert.match(abonnement, /objet: "abonnement"/);
+  assert.match(abonnement, /objet: "recharge"/);
+  assert.match(lire("paiement-simulation.html"), /SIMULATION/);
+  assert.match(lire("js/paiement-simulation.js"), /\/api\/paiements\/simulation/);
+
+  // Démo : suivi habillé pour Abidjan (logo généré), défaut pour Bouaké.
+  const seed = lire("db/db.js");
+  assert.match(seed, /logoDemoPng/);
+  assert.match(seed, /marque_active = TRUE/);
+
+  // README et docs.
+  const readme = lire("README.md");
+  for (const motif of [/SasPay/, /SASPAY_SECRET_KEY/, /SASPAY_WEBHOOK_SECRET/, /suivi personnalisé/i, /simulation/i]) {
+    assert.match(readme, motif);
+  }
+  assert.match(lire("docs/architecture.md"), /LOT 7/);
 });
