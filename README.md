@@ -56,6 +56,19 @@ plus aucune dépendance à Firebase.
   **sans aucune donnée personnelle** (codes, villes, durées seulement) ; une
   seule fonction d'envoi (`lib/notifications.js`) pour brancher plus tard
   WhatsApp, SMS ou e-mail
+- **Plans, quotas et portefeuille (LOT 6)** : plan par agence — **Gratuit**
+  (50 colis/mois, puis 30 FCFA par colis prépayés sur le portefeuille),
+  **Pro** (10 000 FCFA/mois, 500 colis inclus), **Réseau** (sur devis).
+  Seule l'agence **expéditrice** est comptée : l'agence de destination ne
+  paie jamais. Seule la **création** d'un nouveau colis peut être refusée
+  (quota atteint et portefeuille insuffisant) : un solde impayé ne bloque
+  jamais un colis en cours (lecture, progression, réception, contrôle).
+  Page « Abonnement » : compteur du mois, portefeuille et mouvements,
+  échéances, historique
+- **Console plateforme (LOT 6)** (`plateforme.html`, compte séparé des
+  agences) : file des incidents ouverts depuis plus de 7 jours, litiges,
+  agences (plan, compteur, portefeuille, abonnement), volumes du réseau,
+  plan Réseau négocié et recharge des portefeuilles
 
 ## Arborescence
 
@@ -65,7 +78,11 @@ lib/app.js             API Express : routes, sessions, autorisations
 lib/auth.js            Hachage des mots de passe (scrypt) et cookies signés
 lib/photos.js          Stockage des photos de preuve (Vercel Blob ou disque local)
 lib/notifications.js   Notifications : fonction d'envoi unique, transports (simulation par défaut), journal
-db/schema.sql          Schéma PostgreSQL (agences, colis, agents, tarifs, caisse, clients, bordereaux, photos, incidents, notifications)
+lib/facturation.js     Plans, quotas, portefeuille prépayé, abonnements (écritures atomiques)
+lib/plateforme.js      Console plateforme : vue d'ensemble en lecture seule
+db/schema.sql          Schéma PostgreSQL (agences, colis, agents, tarifs, caisse, clients, bordereaux, photos, incidents, notifications, facturation)
+db/init-db.js          npm run init-db : applique le schéma sur la base Neon
+db/plateforme-admin.js npm run plateforme-admin : compte de la console plateforme (variables d'environnement)
 db/db.js               Connexion Neon (pg) ou PGlite (démo/tests), amorçage
 server.js              Serveur local (API + fichiers statiques)
 js/                    Frontend statique (modules ES, aucune dépendance externe)
@@ -104,6 +121,12 @@ tests/                 Tests automatisés (node --test)
      `WHATSAPP_API_TOKEN`) ne sont pas toutes définies, le serveur reste en
      simulation. Ces jetons sont des secrets : variables d'environnement
      uniquement.
+   - **Console plateforme (LOT 6)** : le compte de l'équipe Shopin30 est
+     distinct des agences. Créez-le (ou changez son mot de passe) sans
+     aucun secret dans le code :
+     `PLATEFORME_ADMIN_EMAIL=… PLATEFORME_ADMIN_NOM="…" PLATEFORME_ADMIN_MOT_DE_PASSE=… DATABASE_URL=… npm run plateforme-admin`
+     (12 caractères minimum ; `PLATEFORME_ADMIN_ACTIF=0` désactive le
+     compte). Connexion sur `/plateforme.html`.
 
 > `DATABASE_URL` est un secret : ne la commitez pas, ne la partagez jamais
 > dans une conversation ou un ticket.
@@ -124,6 +147,13 @@ PGlite (Postgres WASM en mémoire) avec des données de démonstration :
 - `koffi@colisexpress.ci` / `demo1234` (agent actif, Shopin30 Abidjan)
 - `aicha@colisexpress.ci` / `demo1234` (agent actif, Agence Bouaké Centre)
 - `yao@colisexpress.ci` / `demo1234` (agent **désactivé** : la connexion est refusée)
+- `plateforme@colisexpress.ci` / `demo1234` : **console plateforme**
+  (`/plateforme.html`), compte séparé des agences
+
+En démo, Abidjan est au plan **Pro** (abonnement du mois réglé, 2 500 FCFA
+restants) et Bouaké au plan **Gratuit** avec 48 colis sur 50 ce mois-ci et
+60 FCFA de portefeuille : 2 colis inclus, puis 2 colis hors forfait
+prépayés, puis le refus de création montre la règle.
 
 Les données de démo sont réinitialisées à chaque redémarrage.
 
@@ -164,6 +194,9 @@ peuvent être trafiquées sans effet) :
 | Photos (`/api/colis/:id/photos`, `/api/photos/:id`) | téléversement par l'agence concernée par l'étape (prise en charge : expéditrice ; arrivée : destination), lecture aux deux agences ; 2 max/étape, `image/*`, ≤ 2 Mo ; **jamais publiques, jamais supprimables** |
 | Incidents (`/api/colis/:id/incidents`, `/api/incidents…`) | ouverture et suivi par les deux agences du colis ; un seul incident non résolu à la fois ; le suivi public n'affiche qu'un bandeau fixe |
 | Retour à l'expéditeur (`POST /api/colis/:id/retour`) | décision : agence qui détient le colis (arrivée + non retiré) ; réception : agence expéditrice ; frais de magasinage → caisse de l'agence qui encaisse |
+| Abonnement (`GET /api/facturation`, `POST /api/facturation/plan`, `POST /api/facturation/abonnement`) | lecture : tout membre de l'agence ; changement de plan (Gratuit ↔ Pro) et règlement : **gérant** uniquement (garde serveur) ; Réseau : console plateforme seulement ; journal du portefeuille immuable |
+| Quota et dépassement (`POST /api/colis`) | seule l'agence **expéditrice** est comptée (la destination ne paie jamais) ; seule la **création** d'un colis peut être refusée (402 : quota atteint et portefeuille insuffisant) ; aucune autre route ne consulte la facturation — un impayé ne bloque jamais un colis en cours |
+| Console plateforme (`/api/plateforme…`) | compte **séparé** (`plateforme_admins`, cookie `ce_plateforme` signé dans un domaine distinct, `SameSite=Strict`, 12 h) ; une session d'agence n'ouvre jamais la console et inversement ; aucune donnée client (noms, téléphones, CNI) projetée ; recharge et plan journalisés |
 | Notifications (`GET /api/notifications`, `POST /api/notifications/lecture`) | destinataires : les **deux agences concernées** seulement (jamais un client ni un tiers) ; chaque agence lit et marque « lu » **son** journal ; messages sans nom, téléphone, CNI, identité d'agent ni note libre ; simulation tant qu'aucun transport réel n'est configuré ; aucune suppression |
 | Supprimer quoi que ce soit | jamais (aucune route de suppression) |
 
@@ -184,7 +217,7 @@ npm test
   unique, progression des statuts, refus d'accès, comptes agents, grille
   tarifaire, états de paiement, encaissements et clôture de caisse, carnet de
   clients et devis public, chaîne de preuve du LOT 4, notifications du
-  LOT 5).
+  LOT 5, plans, quotas, portefeuille et console plateforme du LOT 6).
 - `tests/metier-colis.test.mjs` : règles métier (validation, construction,
   étapes, rattachement, acteur, états de paiement).
 - `tests/metier-tarifs.test.mjs` : grille tarifaire (tranches, axes,
@@ -199,6 +232,12 @@ npm test
   escalade 24 h / 7 j, bandeau public).
 - `tests/metier-alertes.test.mjs` : alertes « colis qui dorment » (48 h /
   72 h / 7 j, souffrance).
+- `tests/metier-plans.test.mjs` : plans (Gratuit / Pro / Réseau), périodes
+  mensuelles, quota effectif (impayé après échéance → quota Gratuit),
+  dépassement prépayé, changements de plan, recharges, échéances. Les
+  parcours API (402 sans solde, destination jamais comptée, rien de bloqué
+  en cours de route, abonnement Pro, console plateforme séparée,
+  concurrence) sont dans `tests/api.test.mjs`.
 - `tests/metier-notifications.test.mjs` : notifications (catalogue des
   événements, destinataires = les deux agences, messages sans donnée
   personnelle, dédoublonnage par épisode, échéances, canal en simulation par
@@ -286,6 +325,22 @@ npm test
     la réception du retour de CLI-DEMO06 avec `bouake@colisexpress.ci`
     notifie aussitôt les deux agences. Mode simulation : rien ne sort de
     l'application tant qu'aucun transport réel n'est configuré.
+18. **Abonnement** : page « Abonnement » — plan actuel, compteur des colis
+    enregistrés ce mois (jauge), portefeuille et mouvements, échéances et
+    historique. Le gérant passe au **Pro** (abonnement prélevé sur le
+    portefeuille dès que le solde le permet, échéance à 7 jours) ou revient
+    au **Gratuit** au 1er du mois suivant ; le **Réseau** se demande par
+    devis. Au-delà du quota, chaque colis est prélevé de 30 FCFA à
+    l'enregistrement ; sans solde, la création est refusée avec un message
+    clair (le formulaire « Nouveau colis » prévient avant). En démo :
+    connectez-vous avec `bouake@colisexpress.ci` et enregistrez 5 colis.
+19. **Console plateforme** (`/plateforme.html`, compte
+    `plateforme@colisexpress.ci` en démo) : indicateurs du réseau, file des
+    incidents ouverts depuis plus de 7 jours (CLI-DEMO07, litige de
+    10 jours), litiges, agences (plan, compteur, portefeuille, abonnement,
+    volumes) ; « Gérer » une agence pour fixer son plan (Réseau : quota et
+    prix négociés) ou créditer son portefeuille d'un paiement reçu (un
+    abonnement dû est alors réglé automatiquement).
 
 ## 7. Dépannage
 

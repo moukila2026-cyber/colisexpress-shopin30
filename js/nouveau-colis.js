@@ -38,6 +38,28 @@ let currentAgency = null;
 let agencies = [];
 let tarifs = [];
 
+/**
+ * LOT 6 — rappel du quota avant l'enregistrement : colis inclus restants,
+ * colis hors forfait prépayé (30 FCFA) ou portefeuille insuffisant. Le
+ * serveur reste seul juge (POST /api/colis) ; ce bandeau n'est qu'informatif.
+ */
+async function rafraichirQuota() {
+  const notice = document.getElementById("quotaNotice");
+  if (!notice) return;
+  try {
+    const { resume } = await api(`/api/facturation?resume=1&_=${Date.now()}`);
+    const depassement = resume.prochainColis?.type === "depassement";
+    const insuffisant = depassement && resume.soldeFCFA < resume.prochainColis.montantFCFA;
+    notice.hidden = !resume.alerte;
+    notice.classList.toggle("notice-danger", Boolean(insuffisant || resume.enRetard));
+    notice.innerHTML = resume.alerte
+      ? `${escapeHTML(resume.alerte)} <a class="table-link" href="abonnement.html">Voir l'abonnement</a>`
+      : "";
+  } catch {
+    notice.hidden = true;
+  }
+}
+
 function mountLayout() {
   document.getElementById("sidebarMount").innerHTML = agencySidebar();
   document.getElementById("topbarMount").innerHTML = mobileAgencyHeader("Nouveau colis");
@@ -367,8 +389,10 @@ async function saveParcel(event) {
     refreshPrix();
     syncPaiement();
     showReceipt(parcel);
+    rafraichirQuota();
   } catch (error) {
     showPageMessage(message, errorMessage(error));
+    if (error.status === 402) rafraichirQuota();
   } finally {
     setButtonLoading(submitButton, false);
   }
@@ -400,6 +424,7 @@ async function boot() {
   refreshPrix();
   syncPaiement();
   bindClientPrefill();
+  rafraichirQuota();
   ["originCity", "destinationCity", "weightKg"].forEach((id) => {
     document.getElementById(id)?.addEventListener("input", refreshPrix);
     document.getElementById(id)?.addEventListener("change", refreshPrix);

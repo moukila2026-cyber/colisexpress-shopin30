@@ -8,6 +8,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { notificationsPourAgences } from "../js/metier-notifications.js";
+import { calculerEcheance, clePeriode, libellePeriode } from "../js/metier-plans.js";
 import { hashPassword } from "../lib/auth.js";
 import { stockerObjet } from "../lib/photos.js";
 
@@ -199,9 +200,55 @@ async function seedDemo(db) {
         { status: "Arrivé à l'agence de destination", date: arriveeDemo6, agencyName: "Shopin30 Abidjan", city: "Abidjan", actorId: "demo-agent-koffi", actorName: "Koffi N'Guessan" },
         { status: "Retour à l'expéditeur décidé", date: joursAvant(2), agencyName: "Shopin30 Abidjan", city: "Abidjan", note: `Colis non retiré depuis le ${new Date(arriveeDemo6).toLocaleDateString("fr-FR")}`, actorId: "demo-agent-koffi", actorName: "Koffi N'Guessan" }
       ], unreg: null
+    },
+    // LOT 6 — CLI-DEMO07 (Abidjan → Bouaké) retiré il y a 11 jours puis
+    // contesté par le destinataire : litige ouvert depuis 10 jours, donc dans
+    // la file plateforme (> 7 j) de la console.
+    {
+      id: "demo-colis-7", code: "CLI-DEMO07", owner: "demo-abidjan", dest: "demo-bouake",
+      destName: "Agence Bouaké Centre", destCity: "Bouaké", status: "Retiré",
+      payStatus: "paye", paid: 3500, cree: joursAvant(14), maj: joursAvant(11),
+      history: [
+        { status: "Enregistré", date: joursAvant(14), agencyName: "Shopin30 Abidjan", city: "Abidjan", actorId: "demo-agent-koffi", actorName: "Koffi N'Guessan" },
+        { status: "Expédié", date: joursAvant(13), agencyName: "Shopin30 Abidjan", city: "Abidjan", actorId: "demo-agent-koffi", actorName: "Koffi N'Guessan" },
+        { status: "En transit", date: joursAvant(13), agencyName: "Shopin30 Abidjan", city: "Abidjan", actorId: "demo-agent-koffi", actorName: "Koffi N'Guessan" },
+        { status: "Arrivé à l'agence de destination", date: joursAvant(12), agencyName: "Agence Bouaké Centre", city: "Bouaké", actorId: "demo-agent-aicha", actorName: "Aïcha Touré" },
+        { status: "Retiré", date: joursAvant(11), agencyName: "Agence Bouaké Centre", city: "Bouaké", actorId: "demo-agent-aicha", actorName: "Aïcha Touré" }
+      ], unreg: null
     }
   ];
-  for (const c of colis) {
+
+  // LOT 6 — volume de démonstration : Bouaké (plan Gratuit, quota 50) a déjà
+  // enregistré 48 colis ce mois-ci → 2 colis inclus restants, puis 2 colis
+  // hors forfait prépayés (portefeuille 60 FCFA), puis refus de création
+  // jusqu'à la recharge. Colis livrés (« Retiré ») vers une agence inscrite :
+  // aucune alerte, aucun effet sur les autres démonstrations.
+  const COMPTEUR_BOUAKE = 48;
+  const maintenant = Date.now();
+  const debutMois = new Date(Date.UTC(new Date(maintenant).getUTCFullYear(), new Date(maintenant).getUTCMonth(), 1)).getTime();
+  const creeCeMois = (c) => new Date(c.cree).getTime() >= debutMois;
+  const volumeBouake = COMPTEUR_BOUAKE - colis.filter((c) => c.owner === "demo-bouake" && creeCeMois(c)).length;
+  const volume = [];
+  for (let i = 0; i < volumeBouake; i += 1) {
+    const t0 = debutMois + Math.floor(((maintenant - debutMois) * (i + 1)) / (volumeBouake + 2));
+    const pas = Math.min(3 * 3600000, Math.floor((maintenant - t0) / 6));
+    const date = (k) => new Date(t0 + k * pas).toISOString();
+    const bouake = { agencyName: "Agence Bouaké Centre", city: "Bouaké", actorId: "demo-agent-aicha", actorName: "Aïcha Touré" };
+    const abidjan = { agencyName: "Shopin30 Abidjan", city: "Abidjan", actorId: "demo-agent-koffi", actorName: "Koffi N'Guessan" };
+    volume.push({
+      id: `demo-volume-${i + 1}`, code: `CLI-BK${String(i + 1).padStart(4, "0")}`, owner: "demo-bouake", dest: "demo-abidjan",
+      destName: "Shopin30 Abidjan", destCity: "Abidjan", status: "Retiré",
+      payStatus: "paye", paid: 3500, cree: date(0), maj: date(4),
+      history: [
+        { status: "Enregistré", date: date(0), ...bouake },
+        { status: "Expédié", date: date(1), ...bouake },
+        { status: "En transit", date: date(2), ...bouake },
+        { status: "Arrivé à l'agence de destination", date: date(3), ...abidjan },
+        { status: "Retiré", date: date(4), ...abidjan }
+      ], unreg: null
+    });
+  }
+  for (const c of [...colis, ...volume]) {
     await db.query(
       `INSERT INTO parcels (id, tracking_code, owner_id, owner_agency_name, owner_agency_city,
         destination_agency_id, destination_agency_name, destination_agency_city,
@@ -350,6 +397,56 @@ async function seedDemo(db) {
       );
     }
   }
+
+  // LOT 6 — litige de démonstration : CLI-DEMO07 contesté depuis 10 jours
+  // (en recherches) → file plateforme (> 7 j) et liste des litiges.
+  await db.query(
+    `INSERT INTO incidents (id, parcel_id, bordereau_id, type, state, note, opened_by_agency_id, opened_by_id, opened_by_name, opened_at_iso, resolution, updated_by_name, resolved_at_iso)
+     VALUES ($1, $2, NULL, 'conteste', 'recherches', $3, $4, $5, $6, $7, '', $6, NULL)`,
+    [
+      "demo-incident-4", "demo-colis-7",
+      "Le destinataire signale un article manquant à l'ouverture du colis : vérification du chargement avec l'agence d'Abidjan.",
+      "demo-bouake", "demo-agent-aicha", "Aïcha Touré", joursAvant(10)
+    ]
+  );
+
+  // LOT 6 — plans et portefeuilles : Abidjan au plan Pro (abonnement du mois
+  // réglé depuis le portefeuille, 2 500 FCFA restants : la prochaine échéance
+  // demandera une recharge), Bouaké au plan Gratuit (48/50, 60 FCFA = 2 colis
+  // hors forfait prépayés). Mouvements journalisés comme en production.
+  const periodeDemo = clePeriode(new Date(maintenant));
+  const debutMoisISO = new Date(debutMois).toISOString();
+  const apresOuvertureISO = new Date(Math.min(maintenant, debutMois + 60_000)).toISOString();
+  await db.query("UPDATE agencies SET plan = 'pro', portefeuille_fcfa = 2500 WHERE id = 'demo-abidjan'");
+  await db.query("UPDATE agencies SET plan = 'gratuit', portefeuille_fcfa = 60 WHERE id = 'demo-bouake'");
+  const compteurAbidjan = colis.filter((c) => c.owner === "demo-abidjan" && creeCeMois(c)).length;
+  await db.query(
+    `INSERT INTO facturation_periodes (agency_id, periode, plan, quota, colis_comptes, colis_depassement,
+       abonnement_fcfa, abonnement_statut, echeance_iso, paye_le_iso, created_at, created_at_iso)
+     VALUES ('demo-abidjan', $1, 'pro', 500, $2, 0, 10000, 'paye', $3, $4, $5, $6),
+            ('demo-bouake', $1, 'gratuit', 50, $7, 0, 0, 'sans_frais', NULL, NULL, $5, $6)`,
+    [periodeDemo, compteurAbidjan, calculerEcheance(debutMoisISO), apresOuvertureISO, debutMoisISO, debutMoisISO, COMPTEUR_BOUAKE]
+  );
+  const mouvements = [
+    ["demo-mvt-1", "demo-abidjan", "recharge", 12500, 12500, null, "Recharge du portefeuille", "MM-DEMO-0001", "Console Shopin30", debutMoisISO],
+    ["demo-mvt-2", "demo-abidjan", "abonnement", -10000, 2500, periodeDemo, `Abonnement Pro — ${libellePeriode(periodeDemo)}`, null, null, apresOuvertureISO],
+    ["demo-mvt-3", "demo-bouake", "recharge", 60, 60, null, "Recharge du portefeuille", "MM-DEMO-0002", "Console Shopin30", debutMoisISO]
+  ];
+  for (const [id, agence, type, montant, solde, periode, libelle, reference, acteur, date] of mouvements) {
+    await db.query(
+      `INSERT INTO portefeuille_mouvements (id, agency_id, type, montant_fcfa, solde_apres_fcfa, periode, libelle, reference, acteur_nom, created_at, created_at_iso)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      [id, agence, type, montant, solde, periode, libelle, reference, acteur, date, date]
+    );
+  }
+
+  // LOT 6 — compte de la console plateforme (démo uniquement ; en production,
+  // `npm run plateforme-admin` le crée depuis les variables d'environnement).
+  await db.query(
+    `INSERT INTO plateforme_admins (id, email, name, password_hash, active, created_at_iso)
+     VALUES ('demo-plateforme', 'plateforme@colisexpress.ci', 'Console Shopin30', $1, TRUE, $2)`,
+    [hash, now]
+  );
 
   // LOT 4 — photo de preuve de démonstration (prise en charge de CLI-DEMO01) :
   // le contenu passe par lib/photos.js (disque local en démo, Vercel Blob en

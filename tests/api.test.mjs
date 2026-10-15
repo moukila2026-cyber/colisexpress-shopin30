@@ -1672,6 +1672,339 @@ test("notifications : fonction d'envoi unique — dédoublonnage, panne journali
   }
 });
 
+/* -------------------- LOT 6 — plans, quotas, portefeuille, console ------------------- */
+
+const { createPlatformToken, createSessionToken, hashPassword } = await import("../lib/auth.js");
+const { ouvrirPeriode } = await import("../lib/facturation.js");
+
+let adminsCrees = 0;
+/** Compte plateforme créé directement en base (en production : npm run plateforme-admin). */
+async function consolePlateforme() {
+  adminsCrees += 1;
+  const id = `admin-test-${adminsCrees}`;
+  const email = `console${adminsCrees}@plateforme.test`;
+  await query(
+    "INSERT INTO plateforme_admins (id, email, name, password_hash, active, created_at_iso) VALUES ($1, $2, $3, $4, TRUE, $5)",
+    [id, email, `Console Test ${adminsCrees}`, hashPassword("console-secret-123"), new Date().toISOString()]
+  );
+  const p = client();
+  const connexion = await p.post("/api/plateforme/connexion", { email, password: "console-secret-123" });
+  assert.equal(connexion.status, 200, JSON.stringify(connexion.data));
+  return { p, id, email };
+}
+
+async function facturation(clientHttp) {
+  const res = await clientHttp.get("/api/facturation");
+  assert.equal(res.status, 200, JSON.stringify(res.data));
+  return res.data.facturation;
+}
+
+async function fixerCompteur(agencyId, colis) {
+  await query("UPDATE facturation_periodes SET colis_comptes = $2 WHERE agency_id = $1", [agencyId, colis]);
+}
+
+function nouveauColis(clientHttp, destinationAgencyId, i = 0) {
+  return clientHttp.post("/api/colis", {
+    agencyNotRegistered: false,
+    values: valeurs({ destinationAgencyId, recipientPhone: `0500000${300 + i}` })
+  });
+}
+
+test("abonnement : Gratuit par défaut, 50 colis inclus puis 30 FCFA prépayés, refus net (402) sans solde", async () => {
+  const a = client();
+  const b = client();
+  const agenceA = await creerAgence(a, "Agence QuotaA", "Abidjan");
+  const agenceB = await creerAgence(b, "Agence QuotaB", "Bouaké");
+
+  const initiale = await facturation(a);
+  assert.equal(initiale.plan, "gratuit");
+  assert.equal(initiale.periode.compteur, 0);
+  assert.equal(initiale.periode.quotaEffectif, 50);
+  assert.equal(initiale.portefeuille.soldeFCFA, 0);
+  assert.deepEqual(initiale.echeances, [], "le Gratuit n'a pas d'abonnement");
+  assert.deepEqual(Object.keys(initiale.plans), ["gratuit", "pro", "reseau"]);
+  assert.equal(initiale.peutModifier, true);
+
+  const premier = await nouveauColis(a, agenceB.id);
+  assert.equal(premier.status, 201, JSON.stringify(premier.data));
+  assert.deepEqual(premier.data.facturation, { periode: initiale.periode.cle, type: "inclus", montantFCFA: 0 });
+
+  // 50 colis déjà enregistrés ce mois-ci : le 51e demande 30 FCFA prépayés.
+  await fixerCompteur(agenceA.id, 50);
+  const refuse = await nouveauColis(a, agenceB.id, 1);
+  assert.equal(refuse.status, 402);
+  assert.equal(refuse.data.quotaAtteint, true);
+  assert.match(refuse.data.error, /quota du plan Gratuit est atteint \(50 colis/);
+  assert.match(refuse.data.error, /solde : 0 FCFA/);
+  assert.equal((await a.get("/api/colis")).data.parcels.length, 1, "aucun colis créé");
+  assert.equal((await facturation(a)).periode.compteur, 50, "le rang réservé est rendu");
+
+  const { p } = await consolePlateforme();
+  const recharge = await p.post("/api/plateforme/credit", { agencyId: agenceA.id, montantFCFA: 60, reference: "MM-QUOTA-1" });
+  assert.equal(recharge.status, 201, JSON.stringify(recharge.data));
+  assert.equal(recharge.data.soldeFCFA, 60);
+
+  const horsForfait1 = await nouveauColis(a, agenceB.id, 2);
+  assert.equal(horsForfait1.status, 201, JSON.stringify(horsForfait1.data));
+  assert.deepEqual(horsForfait1.data.facturation, { periode: initiale.periode.cle, type: "depassement", montantFCFA: 30, soldeApresFCFA: 30 });
+  const horsForfait2 = await nouveauColis(a, agenceB.id, 3);
+  assert.equal(horsForfait2.data.facturation.soldeApresFCFA, 0);
+  assert.equal((await nouveauColis(a, agenceB.id, 4)).status, 402, "portefeuille vide : refus");
+
+  const etat = await facturation(a);
+  assert.equal(etat.periode.compteur, 52);
+  assert.equal(etat.periode.depassements, 2);
+  assert.equal(etat.portefeuille.soldeFCFA, 0);
+  const [m1, m2, m3] = etat.portefeuille.mouvements;
+  assert.deepEqual([m1.type, m1.montantFCFA, m1.soldeApresFCFA], ["depassement", -30, 0]);
+  assert.equal(m1.libelle, `Colis hors forfait — ${horsForfait2.data.parcel.trackingCode}`);
+  assert.equal(m1.parcelId, horsForfait2.data.parcel.id);
+  assert.deepEqual([m2.type, m2.montantFCFA, m2.soldeApresFCFA], ["depassement", -30, 30]);
+  assert.deepEqual([m3.type, m3.montantFCFA, m3.soldeApresFCFA, m3.reference], ["recharge", 60, 60, "MM-QUOTA-1"]);
+  assert.match(m3.acteurNom, /Console Test/);
+
+  // Résumé léger (formulaire « Nouveau colis ») et aucune route de suppression.
+  const resume = await a.get("/api/facturation?resume=1");
+  assert.equal(resume.data.resume.prochainColis.type, "depassement");
+  assert.match(resume.data.resume.alerte, /portefeuille insuffisant/);
+  const suppression = await fetch(`${BASE}/api/facturation`, { method: "DELETE" });
+  assert.equal(suppression.status, 404);
+});
+
+test("la destination ne paie jamais, et un solde impayé ne bloque jamais un colis en cours", async () => {
+  const a = client();
+  const b = client();
+  const agenceA = await creerAgence(a, "Agence InfiniA", "Abidjan");
+  const agenceB = await creerAgence(b, "Agence InfiniB", "Bouaké");
+  // La destination est elle-même au quota, portefeuille vide.
+  await facturation(b);
+  await fixerCompteur(agenceB.id, 50);
+
+  const ids = [];
+  for (let i = 0; i < 2; i += 1) {
+    const cree = await nouveauColis(a, agenceB.id, 10 + i);
+    assert.equal(cree.status, 201, JSON.stringify(cree.data));
+    ids.push(cree.data.parcel.id);
+  }
+  assert.equal((await facturation(b)).periode.compteur, 50, "les colis reçus ne sont jamais comptés à la destination");
+  assert.equal((await facturation(a)).periode.compteur, 2);
+
+  // L'expéditrice passe au Pro sans solde, échéance dépassée : quota ramené à 50,
+  // portefeuille vide — la CRÉATION est refusée…
+  assert.equal((await a.post("/api/facturation/plan", { plan: "pro" })).status, 200);
+  await query("UPDATE facturation_periodes SET echeance_iso = $2, colis_comptes = 60 WHERE agency_id = $1", [agenceA.id, joursAvant(1)]);
+  const etatA = await facturation(a);
+  assert.equal(etatA.periode.abonnement.enRetard, true);
+  assert.equal(etatA.periode.quotaEffectif, 50);
+  const refuse = await nouveauColis(a, agenceB.id, 20);
+  assert.equal(refuse.status, 402);
+  assert.match(refuse.data.error, /impayé après son échéance/);
+
+  // … mais tout ce qui est en cours continue, des deux côtés.
+  assert.equal((await a.get("/api/colis")).status, 200);
+  assert.equal((await a.get(`/api/colis/${ids[0]}`)).status, 200);
+  assert.equal((await a.post(`/api/colis/${ids[0]}/progress`, {})).status, 200, "progression garantie");
+  const lot = await a.post("/api/bordereaux", { carrierName: "UTB", carrierPhone: "0700000077", parcelIds: [ids[1]] });
+  assert.equal(lot.status, 201, JSON.stringify(lot.data));
+  assert.equal((await a.post(`/api/bordereaux/${lot.data.bordereau.id}/remettre`, {})).status, 200);
+  assert.equal((await a.post(`/api/bordereaux/${lot.data.bordereau.id}/remettre`, {})).status, 200);
+  assert.equal((await b.post(`/api/bordereaux/${lot.data.bordereau.id}/remettre`, {})).status, 200, "arrivée déclarée par la destination");
+  assert.equal((await b.post(`/api/bordereaux/${lot.data.bordereau.id}/controle`, { absentParcelIds: [] })).status, 201, "contrôle garanti");
+  const retrait = await b.post(`/api/colis/${ids[1]}/progress`, { collectedBy: { name: "Destinataire Test", cni: "CI99887766" } });
+  assert.equal(retrait.status, 200, JSON.stringify(retrait.data));
+  assert.equal(retrait.data.parcel.status, "Retiré", "retrait garanti");
+  const code = (await a.get(`/api/colis/${ids[1]}`)).data.parcel.trackingCode;
+  assert.equal((await client().get(`/api/suivi/${code}`)).status, 200, "suivi public garanti");
+
+  const etatB = await facturation(b);
+  assert.equal(etatB.periode.compteur, 50);
+  assert.equal(etatB.portefeuille.soldeFCFA, 0);
+  assert.deepEqual(etatB.portefeuille.mouvements, [], "rien n'a jamais été prélevé à la destination");
+});
+
+test("abonnement Pro : gérant seul, prélèvement automatique, échéance, retour au Gratuit le mois suivant", async () => {
+  const g = client();
+  const agence = await creerAgence(g, "Agence ProG", "Abidjan");
+  const { p } = await consolePlateforme();
+  const invite = await g.post("/api/agents", { name: "Agent Pro", email: compteUnique("agentpro"), password: "agent12" });
+  assert.equal(invite.status, 201, JSON.stringify(invite.data));
+  const agent = client();
+  assert.equal((await agent.post("/api/login", { email: invite.data.agent.email, password: "agent12" })).status, 200);
+
+  assert.equal((await p.post("/api/plateforme/credit", { agencyId: agence.id, montantFCFA: 12000, reference: "MM-PRO-1" })).status, 201);
+  const lectureAgent = await facturation(agent);
+  assert.equal(lectureAgent.peutModifier, false, "l'agent lit l'abonnement sans pouvoir le modifier");
+  const interdit = await agent.post("/api/facturation/plan", { plan: "pro" });
+  assert.equal(interdit.status, 403);
+  assert.match(interdit.data.error, /Seul le gérant/);
+  assert.equal((await agent.post("/api/facturation/abonnement", {})).status, 403);
+
+  const pro = await g.post("/api/facturation/plan", { plan: "pro" });
+  assert.equal(pro.status, 200, JSON.stringify(pro.data));
+  assert.equal(pro.data.effet, "immediat");
+  assert.equal(pro.data.facturation.plan, "pro");
+  assert.equal(pro.data.facturation.periode.quotaEffectif, 500);
+  assert.equal(pro.data.facturation.periode.abonnement.statut, "paye", "prélevé tout de suite : le solde suffit");
+  assert.equal(pro.data.facturation.portefeuille.soldeFCFA, 2000);
+  assert.deepEqual(
+    [pro.data.facturation.portefeuille.mouvements[0].type, pro.data.facturation.portefeuille.mouvements[0].montantFCFA],
+    ["abonnement", -10000]
+  );
+  assert.match(pro.data.facturation.portefeuille.mouvements[0].libelle, /^Abonnement Pro — /);
+  assert.equal((await g.post("/api/facturation/abonnement", {})).status, 400, "rien à régler");
+  assert.match((await g.post("/api/facturation/plan", { plan: "pro" })).data.error, /déjà au plan Pro/);
+  assert.match((await g.post("/api/facturation/plan", { plan: "reseau" })).data.error, /sur devis/);
+
+  // Retour au Gratuit : programmé au mois suivant (le mois payé reste acquis), annulable.
+  const retour = await g.post("/api/facturation/plan", { plan: "gratuit" });
+  assert.equal(retour.data.effet, "periode_suivante");
+  assert.equal(retour.data.facturation.plan, "pro");
+  assert.equal(retour.data.facturation.planSuivant, "gratuit");
+  assert.deepEqual(retour.data.facturation.echeances, [], "plus d'échéance après un retour programmé");
+  const annule = await g.post("/api/facturation?action=plan", { plan: "pro" });
+  assert.equal(annule.status, 200, "forme repliée Vercel /api/facturation?action=plan");
+  assert.equal(annule.data.effet, "annulation");
+  assert.equal(annule.data.facturation.planSuivant, null);
+  assert.equal(annule.data.facturation.echeances[0].statut, "a_venir");
+
+  // Le retour programmé s'applique à l'ouverture du mois suivant.
+  await g.post("/api/facturation/plan", { plan: "gratuit" });
+  const debutMoisSuivant = new Date(annule.data.facturation.periode.finISO);
+  const suivante = await ouvrirPeriode(agence.id, new Date(debutMoisSuivant.getTime() + 3600000));
+  assert.equal(suivante.plan, "gratuit");
+  assert.equal(suivante.quota, 50);
+  assert.equal(suivante.abonnement_statut, "sans_frais");
+  const { rows } = await query("SELECT plan, plan_suivant FROM agencies WHERE id = $1", [agence.id]);
+  assert.deepEqual(rows[0], { plan: "gratuit", plan_suivant: null });
+
+  // Pro sans solde : abonnement dû (échéance J+7), règlement refusé puis automatique à la recharge.
+  const c = client();
+  const agenceC = await creerAgence(c, "Agence ProC", "Bouaké");
+  const proC = await c.post("/api/facturation/plan", { plan: "pro" });
+  assert.equal(proC.data.facturation.periode.abonnement.statut, "du");
+  assert.equal(proC.data.facturation.periode.abonnement.enRetard, false);
+  const delai = new Date(proC.data.facturation.periode.abonnement.echeanceISO).getTime() - Date.now();
+  assert.ok(delai > 6.9 * 86400000 && delai <= 7 * 86400000, "échéance à 7 jours");
+  assert.equal(proC.data.facturation.echeances[0].statut, "a_regler");
+  const insuffisant = await c.post("/api/facturation/abonnement", {});
+  assert.equal(insuffisant.status, 402);
+  assert.match(insuffisant.data.error, /il manque 10000 FCFA/);
+  const rechargeC = await p.post("/api/plateforme/credit", { agencyId: agenceC.id, montantFCFA: 10000, reference: "MM-PRO-2" });
+  assert.equal(rechargeC.data.abonnementRegle, true);
+  assert.equal(rechargeC.data.soldeFCFA, 0, "solde final après règlement automatique");
+  assert.equal((await facturation(c)).periode.abonnement.statut, "paye");
+});
+
+test("console plateforme : compte séparé, file > 7 j, litiges, agences et volumes, Réseau négocié et recharge", async () => {
+  const a = client();
+  const b = client();
+  const agenceA = await creerAgence(a, "Agence ConsoleA", "Abidjan");
+  const agenceB = await creerAgence(b, "Agence ConsoleB", "Bouaké");
+  const { p, id: adminId, email } = await consolePlateforme();
+
+  // Séparation stricte des comptes et des sessions.
+  assert.equal((await client().post("/api/plateforme/connexion", { email, password: "faux" })).status, 401);
+  assert.equal((await client().post("/api/plateforme/connexion", { email: "inconnu@plateforme.test", password: "x" })).status, 401);
+  assert.equal((await client().post("/api/plateforme/connexion", { email: agenceA.email, password: "secret12" })).status, 401, "un compte agence n'ouvre pas la console");
+  assert.equal((await a.get("/api/plateforme")).status, 401, "session agence refusée sur la console");
+  assert.equal((await p.get("/api/me")).status, 401, "session plateforme refusée sur les routes agence");
+  assert.equal((await p.get("/api/colis")).status, 401);
+  const jetonAgence = createSessionToken(agenceA.id);
+  assert.equal((await fetch(`${BASE}/api/plateforme`, { headers: { Cookie: `ce_plateforme=${jetonAgence}` } })).status, 401, "jeton d'agence placé dans le cookie plateforme");
+  assert.equal((await fetch(`${BASE}/api/me`, { headers: { Cookie: `ce_session=${createPlatformToken(adminId)}` } })).status, 401, "jeton plateforme placé dans le cookie agence");
+  assert.equal((await client().post("/api/plateforme?action=connexion", { email, password: "console-secret-123" })).status, 200, "forme repliée Vercel");
+
+  // Données : un incident perdu ouvert il y a 8 jours (file > 7 j) et un litige récent.
+  const colis1 = (await nouveauColis(a, agenceB.id, 40)).data.parcel;
+  const colis2 = (await nouveauColis(a, agenceB.id, 41)).data.parcel;
+  const perdu = await a.post(`/api/colis/${colis1.id}/incidents`, { type: "perdu", note: "Recherche en cours, Awa Traore prévenue au 0700000001." });
+  assert.equal(perdu.status, 201, JSON.stringify(perdu.data));
+  await query("UPDATE incidents SET opened_at_iso = $2 WHERE id = $1", [perdu.data.incident.id, joursAvant(8)]);
+  const litige = await b.post(`/api/colis/${colis2.id}/incidents`, { type: "conteste", note: "Le destinataire conteste le contenu." });
+  assert.equal(litige.status, 201, JSON.stringify(litige.data));
+
+  const vue = await p.get("/api/plateforme");
+  assert.equal(vue.status, 200, JSON.stringify(vue.data));
+  assert.equal(vue.data.admin.id, adminId);
+  const fiche = (id) => vue.data.agences.find((agence) => agence.id === id);
+  assert.equal(fiche(agenceA.id).periode.compteur, 2);
+  assert.equal(fiche(agenceA.id).volumes.envoyesMois, 2);
+  assert.equal(fiche(agenceB.id).volumes.recusMois, 2);
+  assert.equal(fiche(agenceB.id).periode.compteur, 0, "la destination n'est pas comptée");
+  assert.equal(fiche(agenceA.id).incidentsOuverts, 2);
+  const enFile = vue.data.fileIncidents.find((incident) => incident.id === perdu.data.incident.id);
+  assert.ok(enFile, "incident ouvert depuis 8 jours dans la file plateforme");
+  assert.ok(enFile.jours >= 8);
+  assert.equal(enFile.parcel.trackingCode, colis1.trackingCode);
+  assert.equal(enFile.expediteur.name, "Agence ConsoleA");
+  assert.equal(enFile.destination.name, "Agence ConsoleB");
+  assert.ok(!vue.data.fileIncidents.some((incident) => incident.id === litige.data.incident.id), "un litige récent n'est pas dans la file > 7 j");
+  assert.ok(vue.data.litiges.some((incident) => incident.id === litige.data.incident.id), "les incidents « contesté » forment les litiges");
+  assert.ok(vue.data.indicateurs.litigesOuverts >= 1 && vue.data.indicateurs.incidentsFile >= 1);
+  assert.ok(vue.data.volumes.parMois.length >= 1 && vue.data.volumes.parStatut.length >= 1);
+  const brut = JSON.stringify(vue.data);
+  for (const champ of ["\"sender\"", "\"recipient\"", "Ibrahim", "ci12345678", "CI12345678", "0500000340"]) {
+    assert.ok(!brut.includes(champ), `la console ne projette pas « ${champ} » (données clients)`);
+  }
+
+  // Plan Réseau négocié : quota illimité, abonnement dû puis réglé par la recharge.
+  assert.equal((await p.post("/api/plateforme/plan", { agencyId: agenceB.id, plan: "vip" })).status, 400);
+  assert.equal((await p.post("/api/plateforme/plan", { agencyId: "inconnue", plan: "pro" })).status, 404);
+  const reseau = await p.post("/api/plateforme/plan", { agencyId: agenceB.id, plan: "reseau", quotaMensuel: "", prixMensuelFCFA: 45000 });
+  assert.equal(reseau.status, 200, JSON.stringify(reseau.data));
+  assert.equal(reseau.data.facturation.plan, "reseau");
+  assert.equal(reseau.data.facturation.periode.quotaEffectif, null);
+  assert.deepEqual(
+    [reseau.data.facturation.periode.abonnement.statut, reseau.data.facturation.periode.abonnement.montantFCFA],
+    ["du", 45000]
+  );
+  assert.match((await b.post("/api/facturation/plan", { plan: "gratuit" })).data.error, /géré par Shopin30/);
+  for (const corps of [{ montantFCFA: 0, reference: "MM-1" }, { montantFCFA: 100, reference: "" }, { montantFCFA: 2_000_000, reference: "MM-1" }]) {
+    assert.equal((await p.post("/api/plateforme/credit", { agencyId: agenceB.id, ...corps })).status, 400);
+  }
+  assert.equal((await a.post("/api/plateforme/credit", { agencyId: agenceA.id, montantFCFA: 999999, reference: "MM-HACK" })).status, 401, "une agence ne se crédite jamais elle-même");
+  const credit = await p.post("/api/plateforme/credit", { agencyId: agenceB.id, montantFCFA: 50000, reference: "MM-777" });
+  assert.equal(credit.status, 201, JSON.stringify(credit.data));
+  assert.equal(credit.data.abonnementRegle, true);
+  assert.equal(credit.data.soldeFCFA, 5000);
+  const etatB = await facturation(b);
+  assert.deepEqual(etatB.portefeuille.mouvements.map((m) => [m.type, m.montantFCFA]), [["abonnement", -45000], ["recharge", 50000]]);
+  await fixerCompteur(agenceB.id, 10_000);
+  assert.equal((await nouveauColis(b, agenceA.id, 42)).status, 201, "Réseau illimité : jamais de refus de quota");
+
+  // Compte désactivé ou déconnecté : console fermée.
+  await query("UPDATE plateforme_admins SET active = FALSE WHERE id = $1", [adminId]);
+  assert.equal((await p.get("/api/plateforme")).status, 401);
+  await query("UPDATE plateforme_admins SET active = TRUE WHERE id = $1", [adminId]);
+  assert.equal((await p.get("/api/plateforme")).status, 401, "le cookie a été effacé avec le refus");
+  const p2 = client();
+  assert.equal((await p2.post("/api/plateforme/connexion", { email, password: "console-secret-123" })).status, 200);
+  assert.equal((await p2.post("/api/plateforme/deconnexion", {})).status, 200);
+  assert.equal((await p2.get("/api/plateforme")).status, 401);
+});
+
+test("facturation en concurrence : compteur et portefeuille restent exacts, jamais de solde négatif", async () => {
+  const a = client();
+  const b = client();
+  const agenceA = await creerAgence(a, "Agence ConcurA", "Abidjan");
+  const agenceB = await creerAgence(b, "Agence ConcurB", "Bouaké");
+  const { p } = await consolePlateforme();
+  await facturation(a);
+  await fixerCompteur(agenceA.id, 50);
+  await p.post("/api/plateforme/credit", { agencyId: agenceA.id, montantFCFA: 90, reference: "MM-CONC-1" });
+
+  const resultats = await Promise.all([0, 1, 2, 3, 4].map((i) => nouveauColis(a, agenceB.id, 50 + i)));
+  const statuts = resultats.map((r) => r.status).sort();
+  assert.deepEqual(statuts, [201, 201, 201, 402, 402], "exactement 3 colis hors forfait prépayés (90 FCFA)");
+  const etat = await facturation(a);
+  assert.equal(etat.portefeuille.soldeFCFA, 0);
+  assert.equal(etat.periode.compteur, 53);
+  assert.equal(etat.periode.depassements, 3);
+  assert.equal(etat.portefeuille.mouvements.filter((m) => m.type === "depassement").length, 3);
+  const { rows } = await query("SELECT min(solde_apres_fcfa)::int AS mini FROM portefeuille_mouvements WHERE agency_id = $1", [agenceA.id]);
+  assert.ok(rows[0].mini >= 0);
+});
+
 test.after(() => {
   server.close();
 });

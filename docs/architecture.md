@@ -28,7 +28,7 @@ Navigateur  ── fetch /api/* ──►  lib/app.js (Express)
   navigateur et par le serveur — une seule source de vérité. Idem pour
   `js/metier-tarifs.js` (LOT 2), `js/metier-bordereau.js`,
   `js/metier-incidents.js` et `js/metier-alertes.js` (LOT 4),
-  `js/metier-notifications.js` (LOT 5).
+  `js/metier-notifications.js` (LOT 5), `js/metier-plans.js` (LOT 6).
 - **Photos de preuve** (`lib/photos.js`) : le stockage objet est isolé derrière
   `stockerObjet()` / `lireObjet()` — Vercel Blob si `BLOB_READ_WRITE_TOKEN`
   est défini, sinon disque local (`PHOTOS_DIR`, défaut `uploads/photos`).
@@ -39,7 +39,9 @@ Navigateur  ── fetch /api/* ──►  lib/app.js (Express)
 - **Base** (`db/schema.sql`) : `agencies`, `parcels`, `agents` (LOT 1),
   `tarifs`, `encaissements`, `caisse_closures` (LOT 2), `clients` (LOT 3),
   `bordereaux`, `photos`, `incidents` + colonnes `bordereau_id`/`retour_*`
-  sur `parcels` (LOT 4), `notifications` (LOT 5).
+  sur `parcels` (LOT 4), `notifications` (LOT 5), colonnes de plan et de
+  portefeuille sur `agencies`, `facturation_periodes`,
+  `portefeuille_mouvements`, `plateforme_admins` (LOT 6).
 
 ### `agencies`
 
@@ -204,6 +206,56 @@ l'expéditeur) — les 5 statuts officiels du colis ne changent jamais.
   famille, non lues, « marquer comme lue », ouvrir = lire), lien
   « Notifications » avec compteur dans `agencySidebar()`.
 
+### Plans, quotas, portefeuille et console plateforme (LOT 6)
+
+- **Plans** (`PLANS`, `js/metier-plans.js`) : `gratuit` (50 colis/mois,
+  puis 30 FCFA par colis prépayés), `pro` (10 000 FCFA/mois, 500 colis
+  inclus, même dépassement), `reseau` (sur devis : `quota_negocie`, NULL =
+  illimité, et `prix_negocie_fcfa`, fixés par la console). Colonnes
+  additives sur `agencies` : `plan`, `plan_suivant` (retour au Gratuit
+  programmé), `portefeuille_fcfa` avec `CHECK (portefeuille_fcfa >= 0)`.
+- **Période mensuelle** (`facturation_periodes`, PK `(agency_id, periode)`,
+  `periode` = « AAAA-MM », fuseau d'Abidjan = UTC) : ouverte paresseusement
+  au premier besoin (`ouvrirPeriode()`), elle fige plan et quota, crée
+  l'abonnement dû (échéance J+7) et le prélève si le solde le permet.
+- **Quota** : `reserverCreation()` est appelé par `POST /api/colis` et nulle
+  part ailleurs. Rang atomique (`UPDATE … SET colis_comptes = colis_comptes
+  + 1 RETURNING`) ; au-delà du quota effectif, débit conditionnel
+  (`UPDATE agencies … WHERE portefeuille_fcfa >= 30`) journalisé dans la
+  même instruction (CTE). Échec → rang rendu, **402** avec un message
+  français. Si l'enregistrement du colis échoue ensuite, la réservation est
+  rendue (remboursement journalisé `ajustement`). Une panne inattendue de la
+  facturation est journalisée et n'empêche pas l'agence de travailler.
+- **Invariants** : seule l'agence **expéditrice** est comptée — la
+  destination ne paie jamais ; lecture, progression, réception, contrôle,
+  retour et suivi public ne consultent jamais la facturation (testé avec une
+  expéditrice en impayé et une destination au quota, portefeuille vide).
+- **Impayé** : abonnement `du` après l'échéance → quota effectif ramené à
+  celui du Gratuit (`quotaEffectif()`) tant qu'il n'est pas réglé ; seule la
+  création de nouveaux colis est concernée.
+- **Portefeuille** (`portefeuille_mouvements`, immuable) : `recharge`,
+  `depassement`, `abonnement`, `ajustement`, montant signé et solde après
+  opération. Recharge par la console (référence du paiement reçu, nom de
+  l'opérateur) ; l'abonnement dû est réglé automatiquement dès que le solde
+  le permet. Paiement en ligne : LOT 7.
+- **Changements de plan** : gérant (garde serveur) Gratuit → Pro immédiat
+  (abonnement dû, prélevé si possible), Pro → Gratuit au mois suivant
+  (annulable) ; console : tout plan, effet immédiat sur le quota (un
+  abonnement déjà payé reste acquis).
+- **Console plateforme** : compte séparé (`plateforme_admins`), connexion
+  `POST /api/plateforme/connexion`, cookie `ce_plateforme` (HttpOnly,
+  `SameSite=Strict`, 12 h) signé dans un domaine HMAC distinct de celui des
+  agences — aucun jeton ne vaut pour l'autre espace. `GET /api/plateforme`
+  (`lib/plateforme.js`, lecture seule, n'ouvre aucune période) : indicateurs,
+  `fileIncidents` (`escaladeIncident().filePlateforme`, > 7 j), litiges
+  (incidents `conteste`), agences (plan, compteur, portefeuille,
+  abonnement, volumes envoyés/reçus, incidents ouverts), volumes par mois et
+  par statut ; aucune donnée client projetée. Écritures :
+  `POST /api/plateforme/plan` et `POST /api/plateforme/credit`. Comptes de
+  production : `npm run plateforme-admin` (variables d'environnement).
+- **Vercel** : `/api/facturation/:action` et `/api/plateforme/:action` sont
+  repliées par rewrites sur `api/[...path].js` — toujours 10 fonctions.
+
 ## Autorisations (ex-`firestore.rules`)
 
 | Ancienne règle Firestore | Équivalent serveur |
@@ -217,6 +269,9 @@ l'expéditeur) — les 5 statuts officiels du colis ne changent jamais.
 | bordereau : émarger selon son rôle | `peutControler()` / acteur imposé côté serveur (remise = émetteur, arrivée/contrôle = destinataire) |
 | photos jamais publiques | `GET /api/photos/:id` exige une session des deux agences concernées ; clé de stockage jamais renvoyée |
 | incidents visibles aux deux bouts | `WHERE owner_id = $1 OR destination_agency_id = $1` |
+| quota : la destination ne paie jamais | `reserverCreation({ agencyId: session })` uniquement dans `POST /api/colis` ; aucune autre route ne lit la facturation |
+| abonnement : gérant seul | `requireGerantFacturation` sur `POST /api/facturation/*` ; plan Réseau réservé à la console |
+| console plateforme : compte séparé | `requirePlateforme` (cookie `ce_plateforme`, domaine de signature distinct, compte actif) |
 | notifications : chaque agence son journal | `WHERE agency_id = $session` en lecture comme en marquage « lu » ; destinataires calculés côté serveur (`agencesConcernees()`) |
 
 ## Sessions
@@ -252,7 +307,10 @@ escalade, photos de preuve, souffrance + retour + frais de magasinage,
 alertes ; LOT 5 : notifications aux deux agences sans donnée personnelle,
 journal cloisonné, bordereau arrivé / écart, souffrance et retour,
 échéances balayées une fois par épisode, panne de transport ou de journal
-jamais bloquante). Les règles pures sont testées dans
+jamais bloquante ; LOT 6 : quota puis dépassement prépayé et refus 402,
+destination jamais comptée, colis en cours jamais bloqués par un impayé,
+abonnement Pro et échéances, retour au Gratuit au mois suivant, console
+plateforme séparée, concurrence sur le compteur et le portefeuille). Les règles pures sont testées dans
 `tests/metier-*.test.mjs` et le câblage Vercel dans
 `tests/integration-page.test.mjs`.
 

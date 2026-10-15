@@ -28,7 +28,9 @@ const entrees = {
   "clients.html": "js/clients.js",
   "bordereaux.html": "js/bordereaux.js",
   "bordereau.html": "js/bordereau-public.js",
-  "notifications.html": "js/notifications.js"
+  "notifications.html": "js/notifications.js",
+  "abonnement.html": "js/abonnement.js",
+  "plateforme.html": "js/plateforme.js"
 };
 
 const PAGES_SANS_SCRIPT = new Set(["conditions.html", "confidentialite.html", "404.html"]);
@@ -595,4 +597,99 @@ test("le LOT 5 (notifications simulées, journal, deux agences, sans donnée per
   assert.match(readme, /NOTIFICATIONS_CANAL/, "le README documente la variable de canal");
   assert.match(readme, /simulation/i, "le README documente le mode simulation");
   assert.match(lire("docs/architecture.md"), /LOT 5/, "docs/architecture.md documente le LOT 5");
+});
+
+test("le LOT 6 (plans, quotas, portefeuille, console plateforme) est câblé de bout en bout", () => {
+  // Règles partagées : les tarifs du cahier des charges.
+  const metier = lire("js/metier-plans.js");
+  assert.match(metier, /PRIX_DEPASSEMENT_FCFA = 30/, "dépassement : 30 FCFA par colis");
+  assert.match(metier, /quotaMensuel: 50/, "Gratuit : 50 colis par mois");
+  assert.match(metier, /prixMensuelFCFA: 10_000/, "Pro : 10 000 FCFA par mois");
+  assert.match(metier, /quotaMensuel: 500/, "Pro : 500 colis inclus");
+  assert.match(metier, /surDevis: true/, "Réseau : sur devis");
+
+  // Serveur : la facturation n'est consultée qu'à la CRÉATION d'un colis.
+  const app = lire("lib/app.js");
+  assert.equal((app.match(/reserverCreation\(/g) || []).length, 1, "un seul point de contrôle du quota (POST /api/colis)");
+  const creation = app.slice(app.indexOf('app.post("/api/colis"'), app.indexOf('app.get("/api/colis/:id"'));
+  assert.match(creation, /reserverCreation\(/, "le contrôle du quota est dans POST /api/colis");
+  for (const route of [
+    'app.get("/api/facturation"', 'app.post("/api/facturation/plan"', 'app.post("/api/facturation/abonnement"',
+    'app.post("/api/plateforme/connexion"', 'app.post("/api/plateforme/deconnexion"', 'app.get("/api/plateforme"',
+    'app.post("/api/plateforme/plan"', 'app.post("/api/plateforme/credit"'
+  ]) {
+    assert.ok(app.includes(route), `lib/app.js doit déclarer ${route}`);
+  }
+  assert.match(app, /requireGerantFacturation/, "changement d'abonnement réservé au gérant (garde serveur)");
+  assert.match(app, /requirePlateforme/, "console protégée côté serveur");
+  assert.doesNotMatch(app, /app\.delete\(/, "aucune suppression (journal du portefeuille immuable)");
+
+  // Session plateforme séparée, débit atomique, solde jamais négatif.
+  const auth = lire("lib/auth.js");
+  assert.match(auth, /ce_plateforme/, "cookie distinct de celui des agences");
+  assert.match(auth, /SameSite=Strict/);
+  assert.match(auth, /DOMAINE_PLATEFORME/, "domaine de signature distinct");
+  assert.match(lire("lib/facturation.js"), /portefeuille_fcfa >= \$2/, "débit conditionnel (prépayé)");
+  const schema = lire("db/schema.sql");
+  assert.match(schema, /CHECK \(portefeuille_fcfa >= 0\)/, "contrainte : jamais de solde négatif");
+  for (const table of ["facturation_periodes", "portefeuille_mouvements", "plateforme_admins"]) {
+    assert.match(schema, new RegExp(`CREATE TABLE IF NOT EXISTS ${table}`), `table ${table} (migration idempotente)`);
+  }
+
+  // Vercel Hobby : routes à 2 segments repliées, aucune nouvelle fonction.
+  const rewrites = JSON.parse(lire("vercel.json")).rewrites ?? [];
+  for (const parent of ["facturation", "plateforme"]) {
+    assert.ok(
+      rewrites.some((r) => r.source === `/api/${parent}/:action` && r.destination === `/api/${parent}?action=:action`),
+      `vercel.json doit replier /api/${parent}/:action`
+    );
+    assert.ok(!existsSync(path.join(RACINE, `api/${parent}`)), `pas de fichier api/${parent} : la route passe par api/[...path].js`);
+  }
+
+  // Interface agence : page Abonnement, lien de la barre latérale, rappel du quota.
+  const abonnementHtml = lire("abonnement.html");
+  for (const id of ["planActuel", "compteurColis", "soldePortefeuille", "statutAbonnement", "quotaBar", "plansGrid", "echeancesList", "mouvementsList", "periodesList"]) {
+    assert.match(abonnementHtml, new RegExp(`id="${id}"`), `abonnement.html doit exposer #${id}`);
+  }
+  assert.match(abonnementHtml, /ne paie jamais pour les colis qu'elle reçoit/, "la règle « la destination ne paie jamais » est affichée");
+  const abonnementJs = lire("js/abonnement.js");
+  for (const appel of ["/api/facturation", "/api/facturation/plan", "/api/facturation/abonnement"]) {
+    assert.ok(abonnementJs.includes(appel), `js/abonnement.js appelle ${appel}`);
+  }
+  assert.match(lire("js/layout.js"), /abonnement\.html/, "la barre latérale pointe vers abonnement.html");
+  assert.match(lire("nouveau-colis.html"), /id="quotaNotice"/, "rappel du quota sur le formulaire");
+  assert.match(lire("js/nouveau-colis.js"), /\/api\/facturation\?resume=1/);
+
+  // Console plateforme : page autonome, non indexée, absente de l'interface agence.
+  const consoleHtml = lire("plateforme.html");
+  for (const id of ["loginPanel", "consolePanel", "fileList", "litigesList", "agencesList", "volumesList", "planForm", "creditForm"]) {
+    assert.match(consoleHtml, new RegExp(`id="${id}"`), `plateforme.html doit exposer #${id}`);
+  }
+  assert.match(consoleHtml, /noindex/);
+  const consoleJs = lire("js/plateforme.js");
+  for (const appel of ["/api/plateforme", "/api/plateforme/connexion", "/api/plateforme/deconnexion", "/api/plateforme/plan", "/api/plateforme/credit"]) {
+    assert.ok(consoleJs.includes(appel), `js/plateforme.js appelle ${appel}`);
+  }
+  assert.doesNotMatch(lire("js/layout.js"), /plateforme\.html/, "la console n'apparaît pas dans l'interface agence");
+
+  // Compte plateforme de production : variables d'environnement, aucun secret dans le code.
+  const script = lire("db/plateforme-admin.js");
+  assert.match(script, /PLATEFORME_ADMIN_MOT_DE_PASSE/);
+  assert.doesNotMatch(script, /demo1234/);
+  assert.match(JSON.parse(lire("package.json")).scripts["plateforme-admin"], /db\/plateforme-admin\.js/);
+  assert.ok(existsSync(path.join(RACINE, "db/init-db.js")), "npm run init-db (documenté) existe");
+
+  // Démo : Bouaké proche du quota, Abidjan en Pro, litige > 7 j, compte plateforme.
+  const seed = lire("db/db.js");
+  assert.match(seed, /COMPTEUR_BOUAKE = 48/);
+  assert.match(seed, /plateforme@colisexpress\.ci/);
+  assert.match(seed, /'conteste', 'recherches'/);
+
+  // README et docs.
+  const readme = lire("README.md");
+  assert.match(readme, /Gratuit/);
+  assert.match(readme, /portefeuille/i);
+  assert.match(readme, /console plateforme/i);
+  assert.match(readme, /plateforme-admin/);
+  assert.match(lire("docs/architecture.md"), /LOT 6/);
 });
