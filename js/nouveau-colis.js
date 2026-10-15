@@ -135,7 +135,10 @@ function showReceipt(parcel) {
     ${pendingNotice}
     <p class="receipt-date">Enregistré le ${escapeHTML(new Intl.DateTimeFormat("fr-CI", { dateStyle: "long", timeStyle: "short" }).format(new Date()))}</p>`;
   renderReceiptShare(parcel);
-  receiptModal.dataset.parcelId = parcel.id;
+  // Lien réel (pas un simple bouton) : clic gauche, clic milieu et copie du lien
+  // fonctionnent, et la fiche s'ouvre avec l'identifiant du colis.
+  const viewLink = document.getElementById("viewSavedParcel");
+  if (viewLink) viewLink.href = `colis.html?id=${encodeURIComponent(parcel.id)}`;
   receiptModal.hidden = false;
   document.body.classList.add("modal-open");
 }
@@ -221,10 +224,6 @@ async function boot() {
   document.getElementById("closeReceipt")?.addEventListener("click", () => {
     receiptModal.hidden = true;
     document.body.classList.remove("modal-open");
-  });
-  document.getElementById("viewSavedParcel")?.addEventListener("click", () => {
-    const id = receiptModal.dataset.parcelId;
-    window.location.href = `colis.html?id=${encodeURIComponent(id)}`;
   });
 }
 

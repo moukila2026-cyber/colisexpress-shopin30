@@ -221,6 +221,25 @@ test("chaque page a un script et un titre, et le HTML reste équilibré", () => 
   }
 });
 
+test("les liens vers la fiche colis portent leur paramètre et ne dépendent d'aucun redirect cleanUrls", () => {
+  // Sur Vercel, « cleanUrls » redirige colis.html?id=X vers /colis en perdant la
+  // query string : le bouton « Voir le colis » (reçu) et le lien « Voir »
+  // (dashboard) ouvrent alors la fiche sans identifiant. La config doit rester
+  // sans cleanUrls et les liens doivent rester en .html?paramètre.
+  const vercel = JSON.parse(lire("vercel.json"));
+  assert.notEqual(vercel.cleanUrls, true, "vercel.json ne doit pas activer cleanUrls : les liens .html?param perdraient leur query string");
+
+  const dashboard = lire("js/dashboard.js");
+  assert.match(dashboard, /href=\\?"colis\.html\?id=/, "le dashboard doit lier chaque colis vers colis.html?id=…");
+
+  const page = lire("nouveau-colis.html");
+  assert.match(page, /<a[^>]*id="viewSavedParcel"/, "« Voir le colis » doit être un lien réel (élément <a>)");
+  const script = lire("js/nouveau-colis.js");
+  assert.match(script, /viewSavedParcel/, "le reçu doit câbler le lien « Voir le colis »");
+  assert.match(script, /colis\.html\?id=/, "le lien « Voir le colis » doit cibler colis.html?id=…");
+  assert.doesNotMatch(script, /dataset\.parcelId/, "l'identifiant doit aller dans le href du lien, pas dans un dataset lu au clic");
+});
+
 test("les règles de protection sont rappelées dans le README", () => {
   const readme = lire("README.md");
   assert.match(readme, /DATABASE_URL/);
