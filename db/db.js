@@ -7,6 +7,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { notificationsPourAgences } from "../js/metier-notifications.js";
 import { hashPassword } from "../lib/auth.js";
 import { stockerObjet } from "../lib/photos.js";
 
@@ -125,6 +126,10 @@ async function seedDemo(db) {
   // LOT 4 — dates de démonstration : des colis « qui dorment » pour montrer
   // les alertes (sans mouvement > 48 h, non rattaché > 7 j, souffrance > 7 j).
   const joursAvant = (n) => new Date(Date.now() - n * 86400000).toISOString();
+  const heuresAvant = (n) => new Date(Date.now() - n * 3600000).toISOString();
+  // LOT 5 — date d'arrivée de CLI-DEMO06 : partagée par l'historique et par
+  // les clés de dédoublonnage des notifications d'échéance pré-remplies.
+  const arriveeDemo6 = joursAvant(12);
 
   const colis = [
     {
@@ -154,6 +159,46 @@ async function seedDemo(db) {
         { status: "En transit", date: joursAvant(9), agencyName: "Agence Bouaké Centre", city: "Bouaké", actorId: "demo-agent-aicha", actorName: "Aïcha Touré" },
         { status: "Arrivé à l'agence de destination", date: joursAvant(8), agencyName: "Shopin30 Abidjan", city: "Abidjan", note: "Contrôle d'arrivée du bordereau BDR-DEMO02", actorId: "demo-abidjan", actorName: "Shopin30 Abidjan" }
       ], unreg: null
+    },
+    // LOT 5 — lot BDR-DEMO03 (Abidjan → Bouaké) contrôlé hier avec un écart :
+    // CLI-DEMO04 présent (arrivé), CLI-DEMO05 absent (incident « perdu »
+    // automatique) — notifications « bordereau arrivé », « écart au
+    // contrôle » et « incident ouvert » aux deux agences.
+    {
+      id: "demo-colis-4", code: "CLI-DEMO04", owner: "demo-abidjan", dest: "demo-bouake",
+      destName: "Agence Bouaké Centre", destCity: "Bouaké", status: "Arrivé à l'agence de destination",
+      payStatus: "paye", paid: 3500, cree: joursAvant(3), maj: heuresAvant(20),
+      history: [
+        { status: "Enregistré", date: joursAvant(3), agencyName: "Shopin30 Abidjan", city: "Abidjan", actorId: "demo-agent-koffi", actorName: "Koffi N'Guessan" },
+        { status: "Expédié", date: joursAvant(2), agencyName: "Shopin30 Abidjan", city: "Abidjan", note: "Remis au transporteur — Bordereau BDR-DEMO03 — UTB (car Bouaké 14 h)", actorId: "demo-agent-koffi", actorName: "Koffi N'Guessan" },
+        { status: "En transit", date: joursAvant(2), agencyName: "Shopin30 Abidjan", city: "Abidjan", note: "Bordereau BDR-DEMO03 en route", actorId: "demo-agent-koffi", actorName: "Koffi N'Guessan" },
+        { status: "Arrivé à l'agence de destination", date: heuresAvant(20), agencyName: "Agence Bouaké Centre", city: "Bouaké", note: "Contrôle d'arrivée du bordereau BDR-DEMO03", actorId: "demo-agent-aicha", actorName: "Aïcha Touré" }
+      ], unreg: null
+    },
+    {
+      id: "demo-colis-5", code: "CLI-DEMO05", owner: "demo-abidjan", dest: "demo-bouake",
+      destName: "Agence Bouaké Centre", destCity: "Bouaké", status: "En transit",
+      payStatus: "arrivee", paid: 0, cree: joursAvant(3), maj: joursAvant(2),
+      history: [
+        { status: "Enregistré", date: joursAvant(3), agencyName: "Shopin30 Abidjan", city: "Abidjan", actorId: "demo-agent-koffi", actorName: "Koffi N'Guessan" },
+        { status: "Expédié", date: joursAvant(2), agencyName: "Shopin30 Abidjan", city: "Abidjan", note: "Remis au transporteur — Bordereau BDR-DEMO03 — UTB (car Bouaké 14 h)", actorId: "demo-agent-koffi", actorName: "Koffi N'Guessan" },
+        { status: "En transit", date: joursAvant(2), agencyName: "Shopin30 Abidjan", city: "Abidjan", note: "Bordereau BDR-DEMO03 en route", actorId: "demo-agent-koffi", actorName: "Koffi N'Guessan" }
+      ], unreg: null
+    },
+    // LOT 5 — CLI-DEMO06 (Bouaké → Abidjan) non retiré depuis 12 jours : la
+    // destination a décidé le retour il y a 2 jours ; Bouaké confirme la
+    // réception pendant la démo (notification « retour reçu » en direct).
+    {
+      id: "demo-colis-6", code: "CLI-DEMO06", owner: "demo-bouake", dest: "demo-abidjan",
+      destName: "Shopin30 Abidjan", destCity: "Abidjan", status: "Arrivé à l'agence de destination",
+      payStatus: "paye", paid: 3500, cree: joursAvant(15), maj: joursAvant(2),
+      history: [
+        { status: "Enregistré", date: joursAvant(15), agencyName: "Agence Bouaké Centre", city: "Bouaké", actorId: "demo-agent-aicha", actorName: "Aïcha Touré" },
+        { status: "Expédié", date: joursAvant(14), agencyName: "Agence Bouaké Centre", city: "Bouaké", actorId: "demo-agent-aicha", actorName: "Aïcha Touré" },
+        { status: "En transit", date: joursAvant(14), agencyName: "Agence Bouaké Centre", city: "Bouaké", actorId: "demo-agent-aicha", actorName: "Aïcha Touré" },
+        { status: "Arrivé à l'agence de destination", date: arriveeDemo6, agencyName: "Shopin30 Abidjan", city: "Abidjan", actorId: "demo-agent-koffi", actorName: "Koffi N'Guessan" },
+        { status: "Retour à l'expéditeur décidé", date: joursAvant(2), agencyName: "Shopin30 Abidjan", city: "Abidjan", note: `Colis non retiré depuis le ${new Date(arriveeDemo6).toLocaleDateString("fr-FR")}`, actorId: "demo-agent-koffi", actorName: "Koffi N'Guessan" }
+      ], unreg: null
     }
   ];
   for (const c of colis) {
@@ -178,6 +223,10 @@ async function seedDemo(db) {
     );
     await db.query("UPDATE parcels SET updated_at = $1 WHERE id = $2", [c.maj, c.id]);
   }
+  await db.query(
+    "UPDATE parcels SET retour_status = 'en_cours', retour_started_at = $1 WHERE id = 'demo-colis-6'",
+    [joursAvant(2)]
+  );
 
   // LOT 4 — bordereaux de démonstration : un lot en route (Abidjan → Bouaké)
   // et un lot contrôlé à l'arrivée (Bouaké → Abidjan, zéro écart).
@@ -193,6 +242,14 @@ async function seedDemo(db) {
       to: "demo-abidjan", toName: "Shopin30 Abidjan", toCity: "Abidjan",
       carrier: "Union Cars", phone: "0500000055", vehicle: "car Abidjan 06 h",
       status: "Contrôlé", remis: joursAvant(9), parti: joursAvant(9), arrive: joursAvant(8), controle: joursAvant(8), cree: joursAvant(9)
+    },
+    // LOT 5 — lot contrôlé hier par Bouaké avec un absent (statut « Écart »).
+    {
+      id: "demo-bdr-3", code: "BDR-DEMO03", from: "demo-abidjan", fromName: "Shopin30 Abidjan", fromCity: "Abidjan",
+      to: "demo-bouake", toName: "Agence Bouaké Centre", toCity: "Bouaké",
+      carrier: "UTB", phone: "0700000077", vehicle: "car Bouaké 14 h",
+      status: "Écart", remis: joursAvant(2), parti: joursAvant(2), arrive: heuresAvant(21), controle: heuresAvant(20), cree: joursAvant(2),
+      count: 2, missing: ["demo-colis-5"], arrivedBy: "Aïcha Touré", checkedBy: "Aïcha Touré"
     }
   ];
   for (const b of bordereaux) {
@@ -201,20 +258,23 @@ async function seedDemo(db) {
         carrier_name, carrier_phone, vehicle_ref, parcel_count, status,
         handed_over_at, handed_over_by, departed_at, arrived_at, arrived_by, checked_at, checked_by,
         missing_parcel_ids, created_at_iso)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,1,$12,$13,$14,$15,$16,$17,$18,$19,'[]',$20)`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`,
       [
         b.id, b.code, b.from, b.fromName, b.fromCity, b.to, b.toName, b.toCity,
-        b.carrier, b.phone, b.vehicle, b.status,
-        b.remis, "Koffi N'Guessan", b.parti, b.arrive, b.arrive ? "Shopin30 Abidjan" : null, b.controle, b.controle ? "Shopin30 Abidjan" : null,
-        b.cree
+        b.carrier, b.phone, b.vehicle, b.count ?? 1, b.status,
+        b.remis, "Koffi N'Guessan", b.parti, b.arrive,
+        b.arrivedBy ?? (b.arrive ? "Shopin30 Abidjan" : null),
+        b.controle, b.checkedBy ?? (b.controle ? "Shopin30 Abidjan" : null),
+        JSON.stringify(b.missing ?? []), b.cree
       ]
     );
     await db.query("UPDATE bordereaux SET updated_at = $1 WHERE id = $2", [b.controle || b.parti || b.cree, b.id]);
   }
-  await db.query("INSERT INTO bordereau_parcels (bordereau_id, parcel_id) VALUES ($1, $2), ($3, $4)",
-    ["demo-bdr-1", "demo-colis-1", "demo-bdr-2", "demo-colis-3"]);
+  await db.query("INSERT INTO bordereau_parcels (bordereau_id, parcel_id) VALUES ($1, $2), ($3, $4), ($5, $6), ($7, $8)",
+    ["demo-bdr-1", "demo-colis-1", "demo-bdr-2", "demo-colis-3", "demo-bdr-3", "demo-colis-4", "demo-bdr-3", "demo-colis-5"]);
   await db.query("UPDATE parcels SET bordereau_id = 'demo-bdr-1' WHERE id = 'demo-colis-1'");
   await db.query("UPDATE parcels SET bordereau_id = 'demo-bdr-2' WHERE id = 'demo-colis-3'");
+  await db.query("UPDATE parcels SET bordereau_id = 'demo-bdr-3' WHERE id IN ('demo-colis-4', 'demo-colis-5')");
 
   // LOT 4 — incidents de démonstration : un retard ouvert (bandeau sobre sur
   // le suivi public de CLI-DEMO02, escalade > 24 h) et un dommage résolu.
@@ -232,6 +292,64 @@ async function seedDemo(db) {
       "Colis remis en l'état au destinataire après vérification conjointe.", "Shopin30 Abidjan", joursAvant(8)
     ]
   );
+  // LOT 5 — incident automatique du contrôle de BDR-DEMO03 (CLI-DEMO05 absent).
+  await db.query(
+    `INSERT INTO incidents (id, parcel_id, bordereau_id, type, state, note, opened_by_agency_id, opened_by_id, opened_by_name, opened_at_iso, resolution, updated_by_name, resolved_at_iso)
+     VALUES ($1, $2, $3, 'perdu', 'ouvert', $4, $5, $6, $7, $8, '', '', NULL)`,
+    [
+      "demo-incident-3", "demo-colis-5", "demo-bdr-3",
+      "Absent au contrôle d'arrivée du bordereau BDR-DEMO03 (Abidjan → Bouaké, transporteur UTB).",
+      "demo-bouake", "demo-agent-aicha", "Aïcha Touré", heuresAvant(20)
+    ]
+  );
+
+  // LOT 5 — journal des notifications de démonstration (mode simulation) :
+  // mêmes messages que le serveur (js/metier-notifications.js), aucune donnée
+  // personnelle, une ligne par agence concernée. Les autres échéances
+  // (escalade 24 h de CLI-DEMO02, colis qui dorment, souffrance de
+  // CLI-DEMO03) s'y ajoutent EN DIRECT au premier affichage du tableau de
+  // bord ou du journal : balayage idempotent de lib/notifications.js.
+  const colisNotif = (id) => {
+    const c = colis.find((item) => item.id === id);
+    return {
+      id: c.id, trackingCode: c.code, ownerId: c.owner, destinationAgencyId: c.dest,
+      originCity: c.owner === "demo-abidjan" ? "Abidjan" : "Bouaké", destinationCity: c.destCity
+    };
+  };
+  const bordereauNotif = (id) => {
+    const b = bordereaux.find((item) => item.id === id);
+    return { id: b.id, code: b.code, fromAgencyId: b.from, toAgencyId: b.to, fromCity: b.fromCity, toCity: b.toCity, parcelCount: b.count ?? 1 };
+  };
+  const journalDemo = [
+    { date: joursAvant(9), lu: true, evenement: { type: "incident_ouvert", parcel: colisNotif("demo-colis-3"), incident: { id: "demo-incident-2", type: "endommage" } } },
+    { date: joursAvant(9), lu: true, evenement: { type: "alerte_non_retire", parcel: colisNotif("demo-colis-6"), depuis: arriveeDemo6, heures: 72 } },
+    { date: joursAvant(8), lu: true, evenement: { type: "bordereau_arrive", bordereau: bordereauNotif("demo-bdr-2") } },
+    { date: joursAvant(5), lu: true, evenement: { type: "colis_souffrance", parcel: colisNotif("demo-colis-6"), depuis: arriveeDemo6, jours: 7 } },
+    { date: joursAvant(2), lu: false, evenement: { type: "incident_ouvert", parcel: colisNotif("demo-colis-2"), incident: { id: "demo-incident-1", type: "retard" } } },
+    { date: joursAvant(2), lu: false, evenement: { type: "retour_decide", parcel: colisNotif("demo-colis-6") } },
+    { date: heuresAvant(21), lu: false, evenement: { type: "bordereau_arrive", bordereau: bordereauNotif("demo-bdr-3") } },
+    {
+      date: heuresAvant(20), lu: false,
+      evenement: { type: "incident_ouvert", parcel: colisNotif("demo-colis-5"), incident: { id: "demo-incident-3", type: "perdu", automatique: true }, bordereau: bordereauNotif("demo-bdr-3") }
+    },
+    { date: heuresAvant(20), lu: false, evenement: { type: "bordereau_ecart", bordereau: bordereauNotif("demo-bdr-3"), absents: ["CLI-DEMO05"] } }
+  ];
+  let rangNotif = 0;
+  for (const { date, lu, evenement } of journalDemo) {
+    for (const notification of notificationsPourAgences(evenement)) {
+      rangNotif += 1;
+      await db.query(
+        `INSERT INTO notifications (id, agency_id, type, titre, message, lien, parcel_id, bordereau_id, incident_id,
+           canal, statut, dedup_key, lu, created_at, created_at_iso)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'simulation', 'simule', $10, $11, $12, $13)`,
+        [
+          `demo-notif-${rangNotif}`, notification.agencyId, notification.type, notification.titre, notification.message,
+          notification.lien, notification.parcelId, notification.bordereauId, notification.incidentId,
+          notification.cle, lu, date, date
+        ]
+      );
+    }
+  }
 
   // LOT 4 — photo de preuve de démonstration (prise en charge de CLI-DEMO01) :
   // le contenu passe par lib/photos.js (disque local en démo, Vercel Blob en

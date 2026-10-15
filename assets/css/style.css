@@ -739,3 +739,26 @@ dd { margin: 4px 0 0; color: var(--ink); overflow-wrap: anywhere; font-size: .88
 .bordereau-parcels-public { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 7px; }
 .bordereau-parcels-public li { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; background: var(--green-50); font-size: .82rem; }
 .bordereau-parcels-public .table-link { margin-left: auto; }
+
+/* Notifications (LOT 5) : badge de la barre latérale et journal. */
+.agency-nav a .nav-badge { display: inline-grid; place-items: center; min-width: 20px; height: 20px; margin-left: auto; padding: 0 6px; border-radius: 10px; background: var(--orange); color: #fff; font-size: .68rem; font-weight: 850; line-height: 1; }
+.notif-mode { margin-bottom: 17px; }
+.notif-mode-reel { border-color: #f3c9a7; color: #7c4a12; background: var(--orange-light); }
+.notif-filters .switch-field { min-height: 39px; align-items: center; }
+.notif-list { list-style: none; margin: 0; padding: 0; }
+.notif-item { display: grid; gap: 6px; padding: 14px 17px; border-top: 1px solid #edf2ef; border-left: 4px solid transparent; }
+.notif-item:first-child { border-top: 0; }
+.notif-unread { border-left-color: var(--orange); background: #fffaf5; }
+.notif-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.notif-head small { margin-left: auto; color: var(--muted); font-size: .72rem; white-space: nowrap; }
+.notif-type { display: inline-flex; padding: 3px 9px; border-radius: 20px; font-size: .69rem; font-weight: 820; color: var(--green-800); background: var(--green-100); }
+.notif-famille-incidents { color: var(--danger); background: var(--danger-light); }
+.notif-famille-bordereaux { color: #1f5b8a; background: #e6f0fa; }
+.notif-famille-souffrance { color: var(--warning); background: #fff0de; }
+.notif-famille-dorment { color: #6b4bc4; background: #efeafc; }
+.notif-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--orange); }
+.notif-title { color: var(--green-950); font-size: .9rem; }
+.notif-message { margin: 0; color: #3d4d47; font-size: .84rem; line-height: 1.5; }
+.notif-meta { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.notif-canal { color: var(--muted); font-size: .72rem; }
+.notif-actions { display: inline-flex; align-items: center; gap: 12px; flex-wrap: wrap; }

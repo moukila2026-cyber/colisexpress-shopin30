@@ -1,6 +1,6 @@
 import { api } from "./api.js";
 import { requireAgency } from "./auth.js";
-import { agencySidebar, initAgencyLayout, mobileAgencyHeader } from "./layout.js";
+import { afficherBadgeNotifications, agencySidebar, initAgencyLayout, mobileAgencyHeader } from "./layout.js";
 import {
   clearPageMessage,
   errorMessage,
@@ -155,8 +155,11 @@ async function charger() {
   // Cartes « À traiter » : une panne de cette route secondaire ne doit pas
   // priver l'agence de sa liste de colis.
   try {
-    const { alertes, total } = await api("/api/alertes");
+    const { alertes, total, notificationsNonLues } = await api("/api/alertes");
     renderAlertes(alertes, total);
+    // LOT 5 — le rafraîchissement des alertes (balayage des échéances côté
+    // serveur) met aussi à jour le compteur de notifications non lues.
+    if (notificationsNonLues !== undefined) afficherBadgeNotifications(notificationsNonLues);
   } catch {
     document.getElementById("alertsPanel")?.setAttribute("hidden", "");
   }

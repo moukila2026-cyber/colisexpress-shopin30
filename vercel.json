@@ -21,6 +21,10 @@
     {
       "source": "/api/caisse/:action",
       "destination": "/api/caisse?action=:action"
+    },
+    {
+      "source": "/api/notifications/:action",
+      "destination": "/api/notifications?action=:action"
     }
   ]
 }
