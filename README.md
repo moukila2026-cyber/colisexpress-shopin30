@@ -15,7 +15,7 @@ plus aucune dépendance à Firebase.
 ## Arborescence
 
 ```text
-api/[[...path]].js     Point d'entrée Vercel (redirige vers lib/app.js)
+api/[...path].js       Point d'entrée Vercel (redirige vers lib/app.js)
 lib/app.js             API Express : routes, sessions, autorisations
 lib/auth.js            Hachage des mots de passe (scrypt) et cookies signés
 db/schema.sql          Schéma PostgreSQL (agencies, parcels)
@@ -61,7 +61,7 @@ Les données de démo sont réinitialisées à chaque redémarrage.
 
 ## 3. Déployer sur Vercel
 
-Le dépôt est déjà configuré (`vercel.json`, `api/[[...path]].js`) : le dépôt
+Le dépôt est déjà configuré (`vercel.json`, `api/[...path].js`) : le dépôt
 GitHub est détecté comme projet **Node.js**. Après le premier import :
 
 1. Renseignez `DATABASE_URL` et `SESSION_SECRET` dans *Environment Variables*.
