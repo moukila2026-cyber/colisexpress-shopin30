@@ -365,3 +365,36 @@ souffrance)
   DELETE (la preuve est immuable), aucune donnée personnelle en public,
   migrations additives idempotentes, données de démo enrichies (2 bordereaux,
   2 incidents, 1 photo, 1 colis en souffrance).
+
+## 13. Livré : LOT 5 — notifications (le système appelle l'agence)
+
+Réponse au principe du chantier 4.4 : « le système doit appeler l'agence, pas
+l'inverse ».
+
+- **Événements notifiés aux deux agences concernées** : incident ouvert
+  (manuel, ou automatique pour un colis absent au contrôle d'arrivée) et
+  escalade d'un incident non résolu depuis plus de 24 h ; bordereau arrivé et
+  écart au contrôle ; colis en souffrance ; retour à l'expéditeur décidé puis
+  reçu ; colis qui dorment (48 h sans mouvement, 72 h non retiré, 7 jours sans
+  agence de destination rattachée).
+- **Mode simulation par défaut** : aucun message ne sort de l'application ;
+  chaque notification est journalisée (table `notifications`) et consultable
+  dans la page « Notifications » (filtres, non lues, « marquer comme lue »),
+  avec un compteur dans la barre latérale.
+- **Une seule fonction d'envoi** (`envoyerNotification()`,
+  `lib/notifications.js`) devant un registre de transports : WhatsApp, SMS et
+  e-mail sont des points de branchement prévus (variables d'environnement
+  documentées). Tant qu'un transport n'est pas écrit **et** configuré, le
+  canal reste la simulation.
+- **Aucune donnée personnelle** dans les messages (codes, villes, durées,
+  nombre de colis uniquement) — ni nom, ni téléphone, ni CNI, ni identité
+  d'agent, ni note libre : ils pourront sortir par WhatsApp sans risque.
+- **Échéances sans cron** (plan Vercel Hobby) : balayage idempotent déclenché
+  par le tableau de bord et le journal ; une clé de dédoublonnage garantit
+  une notification par événement, par agence et par épisode.
+- **Jamais bloquant** : une panne de transport (statut « échec » journalisé)
+  ou du journal n'empêche aucune opération métier.
+- Suite naturelle : brancher le premier transport réel (WhatsApp Business ou
+  SMS local) dans `TRANSPORTS`, puis, si besoin, une tâche planifiée
+  (Vercel Cron) qui appelle le même balayage pour les agences qui
+  n'ouvrent pas l'application.

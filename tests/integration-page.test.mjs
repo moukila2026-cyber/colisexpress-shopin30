@@ -27,7 +27,8 @@ const entrees = {
   "caisse.html": "js/caisse.js",
   "clients.html": "js/clients.js",
   "bordereaux.html": "js/bordereaux.js",
-  "bordereau.html": "js/bordereau-public.js"
+  "bordereau.html": "js/bordereau-public.js",
+  "notifications.html": "js/notifications.js"
 };
 
 const PAGES_SANS_SCRIPT = new Set(["conditions.html", "confidentialite.html", "404.html"]);
@@ -528,4 +529,70 @@ test("le LOT 4 (bordereaux, photos, incidents, souffrance, alertes) est câblé 
   assert.match(readme, /bordereau/i, "le README documente les bordereaux");
   assert.match(readme, /incident/i, "le README documente les incidents");
   assert.match(readme, /photo/i, "le README documente les photos de preuve");
+});
+
+test("le LOT 5 (notifications simulées, journal, deux agences, sans donnée personnelle) est câblé de bout en bout", () => {
+  // Abstraction : UNE fonction d'envoi, transports branchables, simulation par défaut.
+  const lib = lire("lib/notifications.js");
+  assert.match(lib, /export async function envoyerNotification\(/, "une fonction d'envoi unique");
+  assert.match(lib, /export async function notifier\(/, "notifier() calcule destinataires et messages");
+  assert.match(lib, /simulation: \{/, "transport de simulation (par défaut)");
+  for (const canal of ["whatsapp", "sms", "email"]) {
+    assert.match(lib, new RegExp(`${canal}: \\{`), `point de branchement prévu pour ${canal}`);
+  }
+  assert.match(lib, /NOTIFICATIONS_CANAL/, "le canal se choisit par variable d'environnement");
+  assert.match(lib, /ON CONFLICT \(dedup_key\) DO NOTHING/, "dédoublonnage atomique (une notification par événement et par agence)");
+
+  // Chaque événement de la chaîne de preuve passe par notifier().
+  const app = lire("lib/app.js");
+  for (const type of ["incident_ouvert", "bordereau_arrive", "bordereau_ecart", "retour_decide", "retour_recu"]) {
+    assert.match(app, new RegExp(`"${type}"`), `lib/app.js notifie l'événement ${type}`);
+  }
+  assert.match(app, /balayerEcheances\(/, "escalade 24 h, souffrance et colis qui dorment sont balayés au fil de l'eau");
+  assert.match(app, /app\.get\("\/api\/notifications"/, "journal consultable");
+  assert.match(app, /app\.post\("\/api\/notifications\/lecture"/, "marquer comme lu");
+  assert.doesNotMatch(app, /app\.delete\(/, "aucune suppression : on marque lu");
+
+  // Métier partagé : mêmes seuils que les cartes « À traiter ».
+  const metier = lire("js/metier-notifications.js");
+  assert.match(metier, /evaluerAlertes/, "les seuils des colis qui dorment sont partagés avec le tableau de bord");
+  assert.match(metier, /escaladeIncident/, "l'escalade 24 h est partagée avec les incidents");
+
+  // Schéma additif et idempotent.
+  const schema = lire("db/schema.sql");
+  assert.match(schema, /CREATE TABLE IF NOT EXISTS notifications/);
+  assert.match(schema, /dedup_key\s+TEXT NOT NULL UNIQUE/);
+
+  // Vercel Hobby : aucune nouvelle fonction, la route à 3 segments est repliée.
+  const rewrites = JSON.parse(lire("vercel.json")).rewrites ?? [];
+  assert.ok(
+    rewrites.some((r) => r.source === "/api/notifications/:action" && r.destination === "/api/notifications?action=:action"),
+    "vercel.json doit replier /api/notifications/:action vers /api/notifications?action=:action"
+  );
+  assert.ok(!existsSync(path.join(RACINE, "api/notifications")), "pas de fichier api/ dédié : /api/notifications passe par api/[...path].js");
+
+  // Interface : page journal + lien de la barre latérale avec compteur de non lues.
+  const html = lire("notifications.html");
+  for (const id of ["notifList", "notifCount", "notifFamille", "notifNonLuesSeulement", "toutLireButton", "notifMode"]) {
+    assert.match(html, new RegExp(`id="${id}"`), `notifications.html doit exposer #${id}`);
+  }
+  const js = lire("js/notifications.js");
+  assert.match(js, /\/api\/notifications/, "la page lit le journal par l'API");
+  assert.match(js, /\/api\/notifications\/lecture/, "la page marque les notifications comme lues");
+  assert.match(js, /filtrerNotifications/, "filtres partagés client/serveur");
+  const layout = lire("js/layout.js");
+  assert.match(layout, /notifications\.html/, "la barre latérale pointe vers notifications.html");
+  assert.match(layout, /resume=1/, "compteur léger des non lues sur chaque page");
+
+  // Démo : journal pré-rempli et bordereau en écart.
+  const seed = lire("db/db.js");
+  assert.match(seed, /INSERT INTO notifications/, "le seed de démo pré-remplit le journal");
+  assert.match(seed, /BDR-DEMO03/, "un bordereau en écart illustre la notification d'écart");
+
+  // README et docs.
+  const readme = lire("README.md");
+  assert.match(readme, /notifications/i, "le README documente les notifications");
+  assert.match(readme, /NOTIFICATIONS_CANAL/, "le README documente la variable de canal");
+  assert.match(readme, /simulation/i, "le README documente le mode simulation");
+  assert.match(lire("docs/architecture.md"), /LOT 5/, "docs/architecture.md documente le LOT 5");
 });

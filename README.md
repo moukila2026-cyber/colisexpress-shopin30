@@ -47,6 +47,15 @@ plus aucune dépendance à Firebase.
 - **Alertes « colis qui dorment »** sur le tableau de bord (cartes
   « À traiter ») : sans mouvement > 48 h, non retiré > 72 h, non rattaché
   > 7 jours
+- **Notifications (LOT 5)** aux **deux agences concernées** : incident ouvert
+  (manuel ou automatique) et escalade 24 h, bordereau arrivé et écart au
+  contrôle, colis en souffrance, retour à l'expéditeur décidé / reçu, colis
+  qui dorment. **Mode simulation par défaut** : aucun message ne sort de
+  l'application, chaque notification est journalisée (page
+  « Notifications », compteur de non lues dans la barre latérale). Messages
+  **sans aucune donnée personnelle** (codes, villes, durées seulement) ; une
+  seule fonction d'envoi (`lib/notifications.js`) pour brancher plus tard
+  WhatsApp, SMS ou e-mail
 
 ## Arborescence
 
@@ -55,7 +64,8 @@ api/                   Points d'entrée Vercel (réexportent lib/app.js)
 lib/app.js             API Express : routes, sessions, autorisations
 lib/auth.js            Hachage des mots de passe (scrypt) et cookies signés
 lib/photos.js          Stockage des photos de preuve (Vercel Blob ou disque local)
-db/schema.sql          Schéma PostgreSQL (agences, colis, agents, tarifs, caisse, clients, bordereaux, photos, incidents)
+lib/notifications.js   Notifications : fonction d'envoi unique, transports (simulation par défaut), journal
+db/schema.sql          Schéma PostgreSQL (agences, colis, agents, tarifs, caisse, clients, bordereaux, photos, incidents, notifications)
 db/db.js               Connexion Neon (pg) ou PGlite (démo/tests), amorçage
 server.js              Serveur local (API + fichiers statiques)
 js/                    Frontend statique (modules ES, aucune dépendance externe)
@@ -85,6 +95,15 @@ tests/                 Tests automatisés (node --test)
      cas, le contenu n'est servi que par la route authentifiée
      `GET /api/photos/:id` (deux agences du colis uniquement) et Postgres ne
      garde que les métadonnées.
+   - **Notifications (LOT 5)** : rien à configurer — `NOTIFICATIONS_CANAL`
+     vaut `simulation` par défaut (aucun envoi réel, journal consultable
+     dans la page « Notifications »). Les canaux `whatsapp`, `sms` et `email`
+     sont des points de branchement prévus dans `lib/notifications.js`
+     (`TRANSPORTS`) : tant que la fonction d'envoi du transport n'est pas
+     écrite **et** que ses variables (ex. `WHATSAPP_API_URL`,
+     `WHATSAPP_API_TOKEN`) ne sont pas toutes définies, le serveur reste en
+     simulation. Ces jetons sont des secrets : variables d'environnement
+     uniquement.
 
 > `DATABASE_URL` est un secret : ne la commitez pas, ne la partagez jamais
 > dans une conversation ou un ticket.
@@ -145,6 +164,7 @@ peuvent être trafiquées sans effet) :
 | Photos (`/api/colis/:id/photos`, `/api/photos/:id`) | téléversement par l'agence concernée par l'étape (prise en charge : expéditrice ; arrivée : destination), lecture aux deux agences ; 2 max/étape, `image/*`, ≤ 2 Mo ; **jamais publiques, jamais supprimables** |
 | Incidents (`/api/colis/:id/incidents`, `/api/incidents…`) | ouverture et suivi par les deux agences du colis ; un seul incident non résolu à la fois ; le suivi public n'affiche qu'un bandeau fixe |
 | Retour à l'expéditeur (`POST /api/colis/:id/retour`) | décision : agence qui détient le colis (arrivée + non retiré) ; réception : agence expéditrice ; frais de magasinage → caisse de l'agence qui encaisse |
+| Notifications (`GET /api/notifications`, `POST /api/notifications/lecture`) | destinataires : les **deux agences concernées** seulement (jamais un client ni un tiers) ; chaque agence lit et marque « lu » **son** journal ; messages sans nom, téléphone, CNI, identité d'agent ni note libre ; simulation tant qu'aucun transport réel n'est configuré ; aucune suppression |
 | Supprimer quoi que ce soit | jamais (aucune route de suppression) |
 
 Les mots de passe sont hachés avec **scrypt** (bibliothèque standard Node) ; les
@@ -163,7 +183,8 @@ npm test
   non inscrite, visibilité entre agences, suivi public anonyme, rattachement
   unique, progression des statuts, refus d'accès, comptes agents, grille
   tarifaire, états de paiement, encaissements et clôture de caisse, carnet de
-  clients et devis public).
+  clients et devis public, chaîne de preuve du LOT 4, notifications du
+  LOT 5).
 - `tests/metier-colis.test.mjs` : règles métier (validation, construction,
   étapes, rattachement, acteur, états de paiement).
 - `tests/metier-tarifs.test.mjs` : grille tarifaire (tranches, axes,
@@ -178,6 +199,12 @@ npm test
   escalade 24 h / 7 j, bandeau public).
 - `tests/metier-alertes.test.mjs` : alertes « colis qui dorment » (48 h /
   72 h / 7 j, souffrance).
+- `tests/metier-notifications.test.mjs` : notifications (catalogue des
+  événements, destinataires = les deux agences, messages sans donnée
+  personnelle, dédoublonnage par épisode, échéances, canal en simulation par
+  défaut). Les parcours API correspondants (incident, bordereau arrivé /
+  écart, souffrance et retour, balayage des échéances, panne de transport
+  jamais bloquante) sont dans `tests/api.test.mjs`.
 - `tests/integration-page.test.mjs` : intégrité statique (syntaxe, imports,
   identifiants DOM, liens, absence de toute dépendance Firebase, points
   d'entrée Vercel de chaque route imbriquée).
@@ -248,6 +275,17 @@ npm test
     (frais de magasinage éventuels, encaissés dans sa caisse du jour) ;
     l'agence expéditrice confirme la réception — les deux trajets sont
     tracés dans l'historique du colis.
+17. **Notifications** : page « Notifications » (compteur de non lues dans la
+    barre latérale) — chaque événement de la chaîne de preuve est notifié
+    aux deux agences du colis : incident ouvert (y compris l'incident
+    automatique d'un absent au contrôle), incident non résolu depuis 24 h,
+    bordereau arrivé, écart au contrôle, colis en souffrance, retour décidé
+    puis reçu, colis qui dorment. En démo (`npm start`), le journal est
+    pré-rempli (BDR-DEMO03 en écart, CLI-DEMO06 en retour) et le premier
+    affichage du tableau de bord y ajoute les échéances en direct ; confirmer
+    la réception du retour de CLI-DEMO06 avec `bouake@colisexpress.ci`
+    notifie aussitôt les deux agences. Mode simulation : rien ne sort de
+    l'application tant qu'aucun transport réel n'est configuré.
 
 ## 7. Dépannage
 

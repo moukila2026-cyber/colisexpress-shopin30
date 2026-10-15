@@ -1376,6 +1376,302 @@ test("limite Hobby Vercel : les rewrites ?action=… sont redépliés vers les r
   assert.equal((await a.post(`/api/colis/${id}?action=inconnue`, {})).status, 404);
 });
 
+/* --------------------------- notifications (LOT 5) ------------------------- */
+
+const { TRANSPORTS, envoyerNotification } = await import("../lib/notifications.js");
+
+/** Journal d'une agence (la lecture déclenche aussi le balayage des échéances). */
+async function journal(clientHttp, filtre = () => true) {
+  const res = await clientHttp.get("/api/notifications");
+  assert.equal(res.status, 200, JSON.stringify(res.data));
+  return res.data.notifications.filter(filtre);
+}
+
+const DONNEES_PERSONNELLES_TEST = ["Awa", "Traore", "Ibrahim", "Kone", "0700000001", "0500000002", "CI12345678", "ci12345678"];
+
+function aucuneDonneePersonnelle(valeur, contexte) {
+  const brut = JSON.stringify(valeur);
+  for (const sensible of DONNEES_PERSONNELLES_TEST) {
+    assert.ok(!brut.includes(sensible), `${contexte} : « ${sensible} » ne doit jamais sortir dans une notification`);
+  }
+}
+
+test("notifications : incident ouvert → les deux agences, journal cloisonné, sans donnée personnelle", async () => {
+  const a = client();
+  const b = client();
+  const c = client();
+  await creerAgence(a, "Agence NotifA", "Abidjan");
+  const agenceB = await creerAgence(b, "Agence NotifB", "Bouaké");
+  await creerAgence(c, "Agence NotifC", "Korhogo");
+  const cree = await a.post("/api/colis", {
+    agencyNotRegistered: false,
+    values: valeurs({ destinationAgencyId: agenceB.id })
+  });
+  const id = cree.data.parcel.id;
+  const code = cree.data.parcel.trackingCode;
+
+  // Session obligatoire.
+  assert.equal((await client().get("/api/notifications")).status, 401);
+  assert.equal((await client().post("/api/notifications/lecture", { toutes: true })).status, 401);
+
+  // Journal vide au départ, mode simulation par défaut.
+  const vide = await a.get("/api/notifications");
+  assert.deepEqual(vide.data.notifications, []);
+  assert.equal(vide.data.nonLues, 0);
+  assert.equal(vide.data.configuration.canal, "simulation");
+  assert.equal(vide.data.configuration.simulation, true);
+
+  const ouvert = await b.post(`/api/colis/${id}/incidents`, {
+    type: "retard",
+    note: "Ibrahim Kone a appelé au 0500000002, très inquiet."
+  });
+  assert.equal(ouvert.status, 201, JSON.stringify(ouvert.data));
+
+  for (const agence of [a, b]) {
+    const liste = await journal(agence);
+    assert.equal(liste.length, 1, "une notification par agence concernée");
+    const [notification] = liste;
+    assert.equal(notification.type, "incident_ouvert");
+    assert.equal(notification.canal, "simulation");
+    assert.equal(notification.statut, "simule", "aucun envoi réel sans configuration");
+    assert.equal(notification.lu, false);
+    assert.equal(notification.parcelId, id);
+    assert.equal(notification.incidentId, ouvert.data.incident.id);
+    assert.equal(notification.lien, `colis.html?id=${id}`);
+    assert.match(notification.message, new RegExp(code));
+    assert.match(notification.message, /Retard/);
+    aucuneDonneePersonnelle(notification, "incident_ouvert");
+    assert.ok(!JSON.stringify(notification).includes("inquiet"), "la note libre ne sort jamais");
+  }
+  assert.deepEqual(await journal(c), [], "une agence sans lien ne reçoit rien");
+
+  // Compteur léger (badge de la barre latérale) puis marquage « lu » cloisonné.
+  assert.equal((await a.get("/api/notifications?resume=1")).data.nonLues, 1);
+  const notifA = (await journal(a))[0];
+  assert.equal((await c.post("/api/notifications/lecture", { ids: [notifA.id] })).data.nonLues, 0);
+  assert.equal((await a.get("/api/notifications?resume=1")).data.nonLues, 1, "une autre agence ne marque jamais lu à sa place");
+  assert.equal((await a.post("/api/notifications/lecture", {})).status, 400);
+  assert.equal((await a.post("/api/notifications/lecture", { ids: "pas-une-liste" })).status, 400);
+  const lu = await a.post("/api/notifications/lecture", { ids: [notifA.id] });
+  assert.equal(lu.status, 200);
+  assert.equal(lu.data.nonLues, 0);
+  assert.equal((await journal(a))[0].lu, true);
+  assert.equal((await b.get("/api/notifications?resume=1")).data.nonLues, 1, "B garde sa propre notification non lue");
+
+  // Forme repliée par le rewrite Vercel, équivalente ; aucune suppression.
+  const replie = await b.post("/api/notifications?action=lecture", { toutes: true });
+  assert.equal(replie.status, 200, JSON.stringify(replie.data));
+  assert.equal(replie.data.nonLues, 0);
+  assert.equal((await a.call("DELETE", "/api/notifications")).status, 404);
+  assert.equal((await a.call("DELETE", `/api/notifications/${notifA.id}`)).status, 404);
+});
+
+test("notifications : bordereau arrivé puis écart au contrôle → les deux agences, incident automatique notifié", async () => {
+  const a = client();
+  const b = client();
+  await creerAgence(a, "Agence NotifBordA", "Abidjan");
+  const agenceB = await creerAgence(b, "Agence NotifBordB", "Bouaké");
+  const ids = [];
+  const codes = [];
+  for (let i = 0; i < 2; i += 1) {
+    const cree = await a.post("/api/colis", {
+      agencyNotRegistered: false,
+      values: valeurs({ destinationAgencyId: agenceB.id, recipientPhone: `0500000${200 + i}` })
+    });
+    ids.push(cree.data.parcel.id);
+    codes.push(cree.data.parcel.trackingCode);
+  }
+  const ok = await a.post("/api/bordereaux", { carrierName: "Gbaka Express", carrierPhone: "0700000055", parcelIds: ids });
+  assert.equal(ok.status, 201, JSON.stringify(ok.data));
+  const bordereau = ok.data.bordereau;
+  await a.post(`/api/bordereaux/${bordereau.id}/remettre`, {});
+  await a.post(`/api/bordereaux/${bordereau.id}/remettre`, {});
+  assert.deepEqual(await journal(a, (n) => n.bordereauId === bordereau.id), [], "rien avant l'arrivée du lot");
+
+  assert.equal((await b.post(`/api/bordereaux/${bordereau.id}/remettre`, {})).data.bordereau.status, "Arrivé");
+  for (const agence of [a, b]) {
+    const arrivee = await journal(agence, (n) => n.type === "bordereau_arrive");
+    assert.equal(arrivee.length, 1);
+    assert.equal(arrivee[0].bordereauId, bordereau.id);
+    assert.equal(arrivee[0].lien, `bordereaux.html?id=${bordereau.id}`);
+    assert.match(arrivee[0].message, new RegExp(`${bordereau.code} \\(Abidjan → Bouaké, 2 colis\\)`));
+  }
+
+  const controle = await b.post(`/api/bordereaux/${bordereau.id}/controle`, { absentParcelIds: [ids[1]] });
+  assert.equal(controle.status, 201, JSON.stringify(controle.data));
+  for (const agence of [a, b]) {
+    const liste = await journal(agence);
+    const ecart = liste.filter((n) => n.type === "bordereau_ecart");
+    assert.equal(ecart.length, 1, "l'écart est notifié une fois à chaque agence");
+    assert.match(ecart[0].message, new RegExp(codes[1]));
+    assert.ok(!ecart[0].message.includes(codes[0]), "seuls les absents sont cités");
+    const automatique = liste.filter((n) => n.type === "incident_ouvert");
+    assert.equal(automatique.length, 1, "l'incident automatique est notifié");
+    assert.equal(automatique[0].parcelId, ids[1]);
+    assert.equal(automatique[0].bordereauId, bordereau.id);
+    assert.match(automatique[0].message, /automatiquement/);
+    aucuneDonneePersonnelle(liste, "bordereau");
+    const brut = JSON.stringify(liste);
+    assert.ok(!brut.includes("0700000055") && !brut.includes("Gbaka"), "ni téléphone ni nom du transporteur");
+  }
+});
+
+test("notifications : souffrance puis retour décidé/reçu → les deux agences, une seule fois", async () => {
+  const a = client();
+  const b = client();
+  await creerAgence(a, "Agence NotifSouffA", "Abidjan");
+  const agenceB = await creerAgence(b, "Agence NotifSouffB", "Bouaké");
+  const cree = await a.post("/api/colis", {
+    agencyNotRegistered: false,
+    values: valeurs({ destinationAgencyId: agenceB.id })
+  });
+  const id = cree.data.parcel.id;
+  await a.post(`/api/colis/${id}/progress`, {});
+  await a.post(`/api/colis/${id}/progress`, {});
+  await b.post(`/api/colis/${id}/progress`, {});
+  assert.deepEqual(await journal(b, (n) => n.parcelId === id), [], "arrivé à l'instant : rien à signaler");
+  await antidaterArrivee(id, 8);
+
+  // Le balayage déclenché par B notifie aussi A (compteur sans balayage).
+  const typesB = (await journal(b, (n) => n.parcelId === id)).map((n) => n.type).sort();
+  assert.deepEqual(typesB, ["alerte_non_retire", "colis_souffrance"]);
+  assert.equal((await a.get("/api/notifications?resume=1")).data.nonLues, 2, "les deux agences concernées sont notifiées");
+
+  // Balayages répétés (tableau de bord, journal) : jamais de doublon.
+  await b.get("/api/alertes");
+  await a.get("/api/alertes");
+  await b.get("/api/alertes");
+  assert.equal((await journal(a, (n) => n.parcelId === id)).length, 2);
+  assert.equal((await journal(b, (n) => n.parcelId === id)).length, 2);
+  const souffrance = (await journal(a, (n) => n.type === "colis_souffrance"))[0];
+  assert.match(souffrance.message, /depuis 8 jours/);
+  aucuneDonneePersonnelle(souffrance, "souffrance");
+
+  assert.equal((await b.post(`/api/colis/${id}/retour`, { etape: "decider" })).status, 200);
+  assert.equal((await a.post(`/api/colis/${id}/retour`, { etape: "recevoir" })).status, 200);
+  for (const agence of [a, b]) {
+    const types = (await journal(agence, (n) => n.parcelId === id)).map((n) => n.type);
+    assert.equal(types.filter((t) => t === "retour_decide").length, 1);
+    assert.equal(types.filter((t) => t === "retour_recu").length, 1);
+    assert.equal(types.length, 4, "retour terminé : l'épisode de souffrance est clos, rien de nouveau");
+  }
+});
+
+test("notifications : échéances (escalade 24 h, colis qui dorment) détectées au fil de l'eau, une fois par épisode", async () => {
+  const a = client();
+  const b = client();
+  await creerAgence(a, "Agence NotifEchA", "Abidjan");
+  const agenceB = await creerAgence(b, "Agence NotifEchB", "Bouaké");
+
+  // Colis 1 : expédié, sans mouvement depuis 3 jours, incident ouvert il y a 2 jours.
+  const c1 = await a.post("/api/colis", {
+    agencyNotRegistered: false,
+    values: valeurs({ destinationAgencyId: agenceB.id, recipientPhone: "0500000311" })
+  });
+  const id1 = c1.data.parcel.id;
+  await a.post(`/api/colis/${id1}/progress`, {});
+  const incident = await a.post(`/api/colis/${id1}/incidents`, { type: "retard", note: "Car en panne à Yamoussoukro." });
+  await query("UPDATE incidents SET opened_at_iso = $1 WHERE id = $2", [joursAvant(2), incident.data.incident.id]);
+  await query("UPDATE parcels SET updated_at = now() - interval '3 days' WHERE id = $1", [id1]);
+
+  // Colis 2 : destination non rattachée depuis 8 jours (concerne A seule).
+  const c2 = await a.post("/api/colis", {
+    agencyNotRegistered: true,
+    values: valeurs({
+      destinationAgencyId: "", recipientPhone: "0500000312",
+      declaredAgencyName: "Flash Notif", declaredAgencyCity: "Korhogo", declaredAgencyPhone: "0700000019"
+    })
+  });
+  const id2 = c2.data.parcel.id;
+  await query("UPDATE parcels SET created_at = now() - interval '8 days', created_at_iso = $1, updated_at = now() - interval '8 days' WHERE id = $2", [
+    joursAvant(8), id2
+  ]);
+
+  // Le tableau de bord (GET /api/alertes, rafraîchi toutes les 20 s) déclenche le balayage
+  // et renvoie le compteur de non lues (badge mis à jour sans requête de plus).
+  const tableauDeBord = await a.get("/api/alertes");
+  assert.equal(tableauDeBord.status, 200);
+  assert.equal(tableauDeBord.data.notificationsNonLues, 4, "incident ouvert + escalade + sans mouvement + non rattaché");
+  const typesA = (await journal(a)).map((n) => `${n.type}:${n.parcelId}`).sort();
+  assert.deepEqual(typesA, [
+    `alerte_non_rattache:${id2}`,
+    `alerte_sans_mouvement:${id1}`,
+    `incident_escalade:${id1}`,
+    `incident_ouvert:${id1}`
+  ].sort());
+  const typesB = (await journal(b)).map((n) => n.type).sort();
+  assert.deepEqual(typesB, ["alerte_sans_mouvement", "incident_escalade", "incident_ouvert"], "B n'est pas concernée par le colis non rattaché");
+  const escalade = (await journal(b, (n) => n.type === "incident_escalade"))[0];
+  assert.match(escalade.message, /ouvert depuis 2 jours/);
+  assert.ok(!escalade.message.includes("Yamoussoukro"), "la note de l'incident ne sort pas");
+
+  // Balayages répétés : aucune nouvelle notification.
+  for (let i = 0; i < 3; i += 1) await b.get("/api/alertes");
+  assert.equal((await journal(a)).length, 4);
+  assert.equal((await journal(b)).length, 3);
+
+  // Nouvel épisode : le colis bouge puis redort → nouvelle notification « sans mouvement ».
+  await a.post(`/api/colis/${id1}/progress`, {});
+  await query("UPDATE parcels SET updated_at = now() - interval '3 days' WHERE id = $1", [id1]);
+  const sansMouvement = await journal(a, (n) => n.type === "alerte_sans_mouvement");
+  assert.equal(sansMouvement.length, 2, "un colis qui redort est renotifié");
+  assert.match(sansMouvement[0].message, /« En transit » sans mouvement/);
+});
+
+test("notifications : fonction d'envoi unique — dédoublonnage, panne journalisée, jamais bloquante, transport branchable", async () => {
+  const a = client();
+  const agence = await creerAgence(a, "Agence NotifEnvoi", "Abidjan");
+  const base = {
+    agencyId: agence.id, type: "retour_recu", titre: "Essai", message: "Message d'essai sans donnée personnelle.",
+    lien: "", cle: `essai:${agence.id}:1`
+  };
+
+  const premier = await envoyerNotification(base);
+  assert.deepEqual({ canal: premier.canal, statut: premier.statut }, { canal: "simulation", statut: "simule" });
+  assert.equal(await envoyerNotification(base), null, "même clé : jamais notifiée deux fois");
+
+  // Transport en panne : statut « echec » journalisé, aucune exception, aucun détail sensible.
+  const enPanne = {
+    simulation: { ...TRANSPORTS.simulation, envoyer: async () => { throw new Error("connexion refusée https://exemple.invalid?token=secret-123"); } }
+  };
+  const echec = await envoyerNotification({ ...base, cle: `essai:${agence.id}:2` }, { transports: enPanne });
+  assert.equal(echec.statut, "echec");
+
+  // Transport branché ET configuré : envoi réel vers les coordonnées professionnelles de l'agence.
+  const envois = [];
+  const branche = {
+    ...TRANSPORTS,
+    whatsapp: { ...TRANSPORTS.whatsapp, envoyer: async (envoi) => { envois.push(envoi); return { statut: "envoye" }; } }
+  };
+  const env = { NOTIFICATIONS_CANAL: "whatsapp", WHATSAPP_API_URL: "https://exemple.invalid", WHATSAPP_API_TOKEN: "jeton-test" };
+  const reel = await envoyerNotification({ ...base, cle: `essai:${agence.id}:3` }, { transports: branche, env });
+  assert.deepEqual({ canal: reel.canal, statut: reel.statut }, { canal: "whatsapp", statut: "envoye" });
+  assert.equal(envois.length, 1);
+  assert.equal(envois[0].destinataire.id, agence.id);
+  assert.equal(envois[0].destinataire.phone, "0700000001", "coordonnées de l'agence, jamais d'un client");
+  assert.equal(envois[0].message, base.message);
+
+  const liste = await journal(a);
+  assert.deepEqual(liste.map((n) => n.statut).sort(), ["echec", "envoye", "simule"]);
+  const ligneEchec = liste.find((n) => n.statut === "echec");
+  assert.match(ligneEchec.erreur, /Échec de l'envoi/);
+  assert.ok(!JSON.stringify(liste).includes("secret-123"), "aucun détail technique sensible journalisé");
+  assert.ok(!JSON.stringify(await a.get("/api/notifications")).includes("jeton-test"));
+
+  // Journal indisponible : l'opération métier aboutit quand même.
+  const cree = await a.post("/api/colis", {
+    agencyNotRegistered: true,
+    values: valeurs({ destinationCity: "Man", declaredAgencyName: "Flash Panne", declaredAgencyCity: "Man", declaredAgencyPhone: "0700000177" })
+  });
+  await query("ALTER TABLE notifications RENAME TO notifications_hors_service");
+  try {
+    const ouvert = await a.post(`/api/colis/${cree.data.parcel.id}/incidents`, { type: "bloque", note: "Colis retenu au contrôle routier." });
+    assert.equal(ouvert.status, 201, "une panne de notification ne bloque jamais l'opération");
+  } finally {
+    await query("ALTER TABLE notifications_hors_service RENAME TO notifications");
+  }
+});
+
 test.after(() => {
   server.close();
 });

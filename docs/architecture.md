@@ -27,15 +27,19 @@ Navigateur  ── fetch /api/* ──►  lib/app.js (Express)
 - **Métier** (`js/metier-colis.js`) : inchangé, importé **à la fois** par le
   navigateur et par le serveur — une seule source de vérité. Idem pour
   `js/metier-tarifs.js` (LOT 2), `js/metier-bordereau.js`,
-  `js/metier-incidents.js` et `js/metier-alertes.js` (LOT 4).
+  `js/metier-incidents.js` et `js/metier-alertes.js` (LOT 4),
+  `js/metier-notifications.js` (LOT 5).
 - **Photos de preuve** (`lib/photos.js`) : le stockage objet est isolé derrière
   `stockerObjet()` / `lireObjet()` — Vercel Blob si `BLOB_READ_WRITE_TOKEN`
   est défini, sinon disque local (`PHOTOS_DIR`, défaut `uploads/photos`).
   Aucun base64 géant en base : `photos` ne stocke que la clé et les métadonnées.
+- **Notifications** (`lib/notifications.js`, LOT 5) : même principe
+  d'isolation — une seule fonction d'envoi (`envoyerNotification()`) devant
+  un registre de transports ; simulation par défaut (voir plus bas).
 - **Base** (`db/schema.sql`) : `agencies`, `parcels`, `agents` (LOT 1),
   `tarifs`, `encaissements`, `caisse_closures` (LOT 2), `clients` (LOT 3),
   `bordereaux`, `photos`, `incidents` + colonnes `bordereau_id`/`retour_*`
-  sur `parcels` (LOT 4).
+  sur `parcels` (LOT 4), `notifications` (LOT 5).
 
 ### `agencies`
 
@@ -150,6 +154,56 @@ l'expéditeur) — les 5 statuts officiels du colis ne changent jamais.
   (`sans_mouvement` > 48 h, `non_retire` > 72 h, `non_rattache` > 7 j,
   `souffrance` > 7 j) — cartes « À traiter » du tableau de bord.
 
+### `notifications` (LOT 5 — notifications aux deux agences)
+
+- **Événements** (catalogue `TYPES_NOTIFICATION`, `js/metier-notifications.js`) :
+  `incident_ouvert` (manuel, ou automatique pour un absent au contrôle),
+  `incident_escalade` (non résolu > 24 h), `bordereau_arrive`,
+  `bordereau_ecart`, `colis_souffrance`, `retour_decide`, `retour_recu`,
+  `alerte_sans_mouvement` / `alerte_non_retire` / `alerte_non_rattache`
+  (colis qui dorment, mêmes seuils que `evaluerAlertes()`).
+- **Destinataires** : `agencesConcernees()` — les deux agences du colis (ou du
+  bordereau), une seule si la destination n'est pas rattachée. Jamais de
+  client ni de tiers.
+- **Aucune donnée personnelle** : `construireNotification()` lit uniquement
+  codes de suivi / bordereau, villes, type d'incident, durées et nombre de
+  colis (projections explicites) — ni nom, ni téléphone, ni CNI, ni identité
+  d'agent, ni note libre, ni téléphone du transporteur.
+- **Fonction d'envoi unique** (`lib/notifications.js`) :
+  `notifier(evenement)` → `notificationsPourAgences()` → pour chaque agence
+  `envoyerNotification()` : (1) `INSERT … ON CONFLICT (dedup_key) DO NOTHING`
+  réserve la clé de dédoublonnage `type:ref[:début d'épisode]:agence` (une
+  seule notification par événement et par agence, même en concurrence) ;
+  (2) transport du canal effectif ; (3) statut journalisé (`simule`,
+  `envoye` ou `echec` avec un message générique, jamais l'erreur brute).
+- **Canal** (`configurationNotifications()`) : `NOTIFICATIONS_CANAL`
+  (défaut `simulation`). `whatsapp`, `sms`, `email` sont déclarés dans
+  `TRANSPORTS` avec leurs variables d'environnement requises mais
+  `envoyer: null` : tant qu'un transport n'est pas branché **et** configuré,
+  le canal effectif reste la simulation (aucun envoi réel). L'API ne renvoie
+  jamais la valeur d'une variable d'environnement.
+- **Échéances sans tâche planifiée** : `balayerEcheances()` est appelé par
+  `GET /api/alertes` (tableau de bord, rafraîchi toutes les 20 s) et
+  `GET /api/notifications`. Il évalue `evenementsEcheance()` sur les colis de
+  l'agence appelante, écarte en une requête les clés déjà journalisées et
+  notifie les **deux** agences — quelle que soit celle qui consulte.
+  Idempotent ; un colis qui « redort » après avoir bougé ouvre un nouvel
+  épisode (clé datée par `sinceISO`).
+- **Jamais bloquant** : `notifier()` et `balayerEcheances()` absorbent toute
+  erreur (journal serveur sans donnée personnelle) — l'opération métier
+  aboutit même si le journal est indisponible (testé).
+- **Routes** : `GET /api/notifications` (journal des 300 dernières, compteur
+  `nonLues`, configuration sans secret ; `?resume=1` = compteur seul, sans
+  balayage, pour le badge de la barre latérale) et
+  `POST /api/notifications/lecture` (`{ ids: [...] }` ou `{ toutes: true }`,
+  limité au journal de l'agence appelante). Sur Vercel, cette route à
+  3 segments est repliée par le rewrite `/api/notifications/:action` →
+  `/api/notifications?action=:action` : **aucune nouvelle fonction
+  serverless** (10/12).
+- **Interface** : `notifications.html` + `js/notifications.js` (filtres par
+  famille, non lues, « marquer comme lue », ouvrir = lire), lien
+  « Notifications » avec compteur dans `agencySidebar()`.
+
 ## Autorisations (ex-`firestore.rules`)
 
 | Ancienne règle Firestore | Équivalent serveur |
@@ -163,6 +217,7 @@ l'expéditeur) — les 5 statuts officiels du colis ne changent jamais.
 | bordereau : émarger selon son rôle | `peutControler()` / acteur imposé côté serveur (remise = émetteur, arrivée/contrôle = destinataire) |
 | photos jamais publiques | `GET /api/photos/:id` exige une session des deux agences concernées ; clé de stockage jamais renvoyée |
 | incidents visibles aux deux bouts | `WHERE owner_id = $1 OR destination_agency_id = $1` |
+| notifications : chaque agence son journal | `WHERE agency_id = $session` en lecture comme en marquage « lu » ; destinataires calculés côté serveur (`agencesConcernees()`) |
 
 ## Sessions
 
@@ -194,8 +249,12 @@ configuration requise. `tests/api.test.mjs` rejoue les parcours complets
 suivi public anonyme, refus d'accès ; LOT 4 : bordereau de bout en bout avec
 écart → incident automatique, destination non rattachée, incidents et
 escalade, photos de preuve, souffrance + retour + frais de magasinage,
-alertes). Les règles pures sont testées dans `tests/metier-*.test.mjs` et le
-câblage Vercel dans `tests/integration-page.test.mjs`.
+alertes ; LOT 5 : notifications aux deux agences sans donnée personnelle,
+journal cloisonné, bordereau arrivé / écart, souffrance et retour,
+échéances balayées une fois par épisode, panne de transport ou de journal
+jamais bloquante). Les règles pures sont testées dans
+`tests/metier-*.test.mjs` et le câblage Vercel dans
+`tests/integration-page.test.mjs`.
 
 ## Déploiement
 
