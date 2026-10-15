@@ -269,3 +269,71 @@ CREATE TABLE IF NOT EXISTS notifications (
 );
 
 CREATE INDEX IF NOT EXISTS idx_notifications_agency ON notifications (agency_id, created_at);
+
+-- LOT 6 — plans, quotas, portefeuille, console plateforme (additif, idempotent).
+-- Plan de l'agence : 'gratuit' (50 colis/mois, puis 30 FCFA prépayés),
+-- 'pro' (10 000 FCFA/mois, 500 colis), 'reseau' (sur devis : quota et prix
+-- négociés, quota NULL = illimité). `plan_suivant` = retour au Gratuit
+-- programmé au début du mois suivant. Le portefeuille ne peut jamais être
+-- négatif (contrainte) : les colis hors forfait sont PRÉPAYÉS.
+ALTER TABLE agencies ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'gratuit'
+  CHECK (plan IN ('gratuit', 'pro', 'reseau'));
+ALTER TABLE agencies ADD COLUMN IF NOT EXISTS plan_suivant TEXT
+  CHECK (plan_suivant IS NULL OR plan_suivant IN ('gratuit', 'pro'));
+ALTER TABLE agencies ADD COLUMN IF NOT EXISTS quota_negocie INTEGER;
+ALTER TABLE agencies ADD COLUMN IF NOT EXISTS prix_negocie_fcfa INTEGER;
+ALTER TABLE agencies ADD COLUMN IF NOT EXISTS portefeuille_fcfa INTEGER NOT NULL DEFAULT 0
+  CHECK (portefeuille_fcfa >= 0);
+
+-- Une ligne par agence et par mois (« AAAA-MM ») : plan et quota figés à
+-- l'ouverture, compteur atomique des colis créés par l'agence EXPÉDITRICE
+-- (l'agence de destination ne paie jamais), abonnement et échéance.
+CREATE TABLE IF NOT EXISTS facturation_periodes (
+  agency_id          TEXT NOT NULL REFERENCES agencies(id),
+  periode            TEXT NOT NULL,
+  plan               TEXT NOT NULL,
+  quota              INTEGER,                              -- NULL = illimité (Réseau)
+  colis_comptes      INTEGER NOT NULL DEFAULT 0 CHECK (colis_comptes >= 0),
+  colis_depassement  INTEGER NOT NULL DEFAULT 0 CHECK (colis_depassement >= 0),
+  abonnement_fcfa    INTEGER NOT NULL DEFAULT 0,
+  abonnement_statut  TEXT NOT NULL DEFAULT 'sans_frais'
+                     CHECK (abonnement_statut IN ('sans_frais', 'du', 'paye')),
+  echeance_iso       TEXT,
+  paye_le_iso        TEXT,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at_iso     TEXT NOT NULL,
+  PRIMARY KEY (agency_id, periode)
+);
+
+-- Journal immuable du portefeuille (aucune route de modification ni de
+-- suppression) : montant signé (+ crédit, − débit) et solde après opération.
+CREATE TABLE IF NOT EXISTS portefeuille_mouvements (
+  id                TEXT PRIMARY KEY,
+  agency_id         TEXT NOT NULL REFERENCES agencies(id),
+  type              TEXT NOT NULL CHECK (type IN ('recharge', 'depassement', 'abonnement', 'ajustement')),
+  montant_fcfa      INTEGER NOT NULL,
+  solde_apres_fcfa  INTEGER NOT NULL,
+  periode           TEXT,
+  parcel_id         TEXT,
+  libelle           TEXT NOT NULL,
+  reference         TEXT,
+  acteur_nom        TEXT,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at_iso    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS portefeuille_mouvements_agency_idx
+  ON portefeuille_mouvements (agency_id, created_at DESC);
+
+-- Comptes de la console plateforme (Shopin30) : SÉPARÉS des agences et des
+-- agents (table, route de connexion et cookie distincts). Créés par
+-- `npm run plateforme-admin` en production (variables d'environnement),
+-- par le seed en démo.
+CREATE TABLE IF NOT EXISTS plateforme_admins (
+  id              TEXT PRIMARY KEY,
+  email           TEXT NOT NULL UNIQUE,
+  name            TEXT NOT NULL,
+  password_hash   TEXT NOT NULL,
+  active          BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at_iso  TEXT NOT NULL
+);

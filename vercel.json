@@ -25,6 +25,14 @@
     {
       "source": "/api/notifications/:action",
       "destination": "/api/notifications?action=:action"
+    },
+    {
+      "source": "/api/facturation/:action",
+      "destination": "/api/facturation?action=:action"
+    },
+    {
+      "source": "/api/plateforme/:action",
+      "destination": "/api/plateforme?action=:action"
     }
   ]
 }
