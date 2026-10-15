@@ -20,6 +20,7 @@ import {
   familleNotification,
   filtrerNotifications,
   libelleTypeNotification,
+  niveauRappelAbonnement,
   normaliserNotification,
   notificationsPourAgences,
   resumeNotifications
@@ -88,18 +89,19 @@ function sansDonneePersonnelle(valeur, contexte) {
   }
 }
 
-test("catalogue : 10 types d'événements rangés en 4 familles, libellés français", () => {
-  assert.equal(TYPES_NOTIFICATION.length, 10);
+test("catalogue : types d'événements rangés en 5 familles, libellés français", () => {
+  assert.equal(TYPES_NOTIFICATION.length, 13);
   for (const type of [
     "incident_ouvert", "incident_escalade", "bordereau_arrive", "bordereau_ecart", "colis_souffrance",
-    "retour_decide", "retour_recu", "alerte_sans_mouvement", "alerte_non_retire", "alerte_non_rattache"
+    "retour_decide", "retour_recu", "alerte_sans_mouvement", "alerte_non_retire", "alerte_non_rattache",
+    "abonnement_jmoins2", "abonnement_echeance", "abonnement_retard"
   ]) {
     assert.ok(estTypeNotification(type), `${type} doit être un type connu`);
     assert.ok(estFamilleNotification(familleNotification(type)), `${type} doit appartenir à une famille`);
     assert.notEqual(libelleTypeNotification(type), type, `${type} doit avoir un libellé français`);
   }
   assert.equal(estTypeNotification("suppression"), false);
-  assert.deepEqual(FAMILLES_NOTIFICATION.map((f) => f.id), ["incidents", "bordereaux", "souffrance", "dorment"]);
+  assert.deepEqual(FAMILLES_NOTIFICATION.map((f) => f.id), ["incidents", "bordereaux", "souffrance", "dorment", "facturation"]);
 });
 
 test("destinataires : les deux agences concernées, sans doublon ni valeur vide", () => {
@@ -125,7 +127,10 @@ test("chaque type construit un message français avec code, trajet et lien inter
     [{ type: "retour_recu", parcel: colis() }, /revenu à l'agence expéditrice/, "colis.html?id=p1"],
     [{ type: "alerte_sans_mouvement", parcel: colis(), heures: 60 }, /« En transit » sans mouvement depuis plus de 48 h/, "colis.html?id=p1"],
     [{ type: "alerte_non_retire", parcel: colis(), heures: 80 }, /retrait depuis plus de 72 h/, "colis.html?id=p1"],
-    [{ type: "alerte_non_rattache", parcel: colis({ destinationAgencyId: null }), jours: 8 }, /vers Bouaké.*après 8 jours/, "colis.html?id=p1"]
+    [{ type: "alerte_non_rattache", parcel: colis({ destinationAgencyId: null }), jours: 8 }, /vers Bouaké.*après 8 jours/, "colis.html?id=p1"],
+    [{ type: "abonnement_jmoins2", agencyId: "A", periode: "2026-10", plan: "pro", montantFCFA: 10000, echeanceISO: "2026-10-17T05:00:00.000Z" }, /10 000 FCFA.*dans deux jours/, "abonnement.html"],
+    [{ type: "abonnement_echeance", agencyId: "A", periode: "2026-10", plan: "pro", montantFCFA: 10000, echeanceISO: "2026-10-15T05:00:00.000Z" }, /arrive à échéance aujourd'hui/, "abonnement.html"],
+    [{ type: "abonnement_retard", agencyId: "A", periode: "2026-10", plan: "pro", montantFCFA: 10000, echeanceISO: "2026-10-14T05:00:00.000Z" }, /reste à régler/, "abonnement.html"]
   ];
   for (const [evenement, attendu, lien] of cas) {
     const notification = construireNotification(evenement);
@@ -149,10 +154,13 @@ test("aucune donnée personnelle ne sort : ni client, ni agent, ni note libre, n
     { type: "retour_recu", parcel: colis() },
     { type: "alerte_sans_mouvement", parcel: colis(), heures: 50 },
     { type: "alerte_non_retire", parcel: colis(), heures: 80 },
-    { type: "alerte_non_rattache", parcel: colis({ destinationAgencyId: null }), jours: 8 }
+    { type: "alerte_non_rattache", parcel: colis({ destinationAgencyId: null }), jours: 8 },
+    { type: "abonnement_jmoins2", agencyId: "A", periode: "2026-10", plan: "pro", montantFCFA: 10000, echeanceISO: "2026-10-17T05:00:00.000Z" },
+    { type: "abonnement_echeance", agencyId: "A", periode: "2026-10", plan: "pro", montantFCFA: 10000, echeanceISO: "2026-10-15T05:00:00.000Z" },
+    { type: "abonnement_retard", agencyId: "A", periode: "2026-10", plan: "pro", montantFCFA: 10000, echeanceISO: "2026-10-14T05:00:00.000Z" }
   ];
   for (const evenement of evenements) {
-    for (const notification of notificationsPourAgences(evenement)) {
+    for (const notification of notificationsPourAgences(evenement, evenement.agencyId ? [evenement.agencyId] : null)) {
       sansDonneePersonnelle(notification, evenement.type);
       assert.deepEqual(
         Object.keys(notification).sort(),
@@ -169,6 +177,20 @@ test("événement incomplet ou inconnu : aucune notification (l'appelant n'écho
   assert.equal(construireNotification({ type: "bordereau_arrive", parcel: colis() }), null, "bordereau manquant");
   assert.equal(construireNotification({ type: "incident_ouvert", parcel: colis() }), null, "incident manquant");
   assert.deepEqual(notificationsPourAgences({ type: "retour_recu" }), []);
+});
+
+test("rappels d'abonnement : J-2, échéance le jour J, puis retard dédoublonné", () => {
+  assert.deepEqual(niveauRappelAbonnement({ echeanceISO: "2026-10-17T05:00:00.000Z", now: NOW }), { type: "abonnement_jmoins2", joursRestants: 2 });
+  assert.deepEqual(niveauRappelAbonnement({ echeanceISO: "2026-10-15T05:00:00.000Z", now: NOW }), { type: "abonnement_echeance", joursRestants: 0 });
+  assert.deepEqual(niveauRappelAbonnement({ echeanceISO: "2026-10-14T05:00:00.000Z", now: NOW }), { type: "abonnement_retard", joursRestants: -1 });
+  assert.equal(niveauRappelAbonnement({ echeanceISO: "2026-10-20T00:00:00.000Z", now: NOW }), null, "aucun rappel avant J-2");
+  assert.equal(niveauRappelAbonnement({ echeanceISO: "invalid", now: NOW }), null, "date invalide ignorée");
+
+  const evenement = { type: "abonnement_retard", agencyId: "A", periode: "2026-10", plan: "pro", montantFCFA: 10000, echeanceISO: "2026-10-14T05:00:00.000Z" };
+  const [a] = notificationsPourAgences(evenement, ["A"]);
+  assert.equal(a.refId, "A:2026-10");
+  assert.equal(a.cle, cleNotification({ type: "abonnement_retard", refId: "A:2026-10", agencyId: "A" }));
+  assert.equal(notificationsPourAgences({ ...evenement, agencyId: "" }, ["A"]).length, 0);
 });
 
 test("dédoublonnage : une clé par événement, par agence et par épisode", () => {
@@ -244,7 +266,7 @@ test("journal : normalisation sans clé interne, filtres et compteurs", () => {
   const resume = resumeNotifications(liste);
   assert.equal(resume.total, 3);
   assert.equal(resume.nonLues, 2);
-  assert.deepEqual(resume.parFamille, { incidents: 0, bordereaux: 1, souffrance: 1, dorment: 1 });
+  assert.deepEqual(resume.parFamille, { incidents: 0, bordereaux: 1, souffrance: 1, dorment: 1, facturation: 0 });
 });
 
 test("canal : simulation par défaut, aucun envoi réel sans transport branché ET configuré", () => {

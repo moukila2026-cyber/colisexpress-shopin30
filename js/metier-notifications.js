@@ -23,6 +23,7 @@
 import { evaluerAlertes } from "./metier-alertes.js";
 import { textePropre } from "./metier-colis.js";
 import { escaladeIncident, libelleTypeIncident } from "./metier-incidents.js";
+import { libellePeriode, libellePlan } from "./metier-plans.js";
 
 export const TYPES_NOTIFICATION = [
   { id: "incident_ouvert", label: "Incident ouvert", famille: "incidents" },
@@ -34,14 +35,18 @@ export const TYPES_NOTIFICATION = [
   { id: "retour_recu", label: "Retour à l'expéditeur reçu", famille: "souffrance" },
   { id: "alerte_sans_mouvement", label: "Sans mouvement depuis 48 h", famille: "dorment" },
   { id: "alerte_non_retire", label: "Non retiré depuis 72 h", famille: "dorment" },
-  { id: "alerte_non_rattache", label: "Agence de destination non rattachée", famille: "dorment" }
+  { id: "alerte_non_rattache", label: "Agence de destination non rattachée", famille: "dorment" },
+  { id: "abonnement_jmoins2", label: "Abonnement : échéance dans deux jours", famille: "facturation" },
+  { id: "abonnement_echeance", label: "Abonnement : échéance aujourd'hui", famille: "facturation" },
+  { id: "abonnement_retard", label: "Abonnement en retard", famille: "facturation" }
 ];
 
 export const FAMILLES_NOTIFICATION = [
   { id: "incidents", label: "Incidents" },
   { id: "bordereaux", label: "Bordereaux" },
   { id: "souffrance", label: "Souffrance et retours" },
-  { id: "dorment", label: "Colis qui dorment" }
+  { id: "dorment", label: "Colis qui dorment" },
+  { id: "facturation", label: "Abonnement" }
 ];
 
 /** Canaux connus. Seule la simulation est active tant qu'aucun transport réel n'est configuré. */
@@ -169,15 +174,40 @@ export function construireNotification(evenement = {}) {
   const incident = evenement.incident ? incidentSur(evenement.incident) : null;
   const heures = Math.max(0, Math.floor(Number(evenement.heures) || 0));
   const jours = Math.max(0, Math.floor(Number(evenement.jours ?? heures / 24) || 0));
+  const abonnement = type.startsWith("abonnement_");
+  const typesBordereau = ["bordereau_arrive", "bordereau_ecart"];
 
-  const besoinColis = !["bordereau_arrive", "bordereau_ecart"].includes(type);
-  if (besoinColis && !(colis?.id && colis.code)) return null;
-  if (!besoinColis && !(lot?.id && lot.code)) return null;
+  if (abonnement) {
+    if (!evenement.agencyId || !/^\d{4}-(0[1-9]|1[0-2])$/.test(String(evenement.periode ?? ""))) return null;
+    if (!(Number(evenement.montantFCFA) >= 0) || !evenement.echeanceISO) return null;
+  } else if (typesBordereau.includes(type)) {
+    if (!(lot?.id && lot.code)) return null;
+  } else if (!(colis?.id && colis.code)) {
+    return null;
+  }
   if (type.startsWith("incident_") && !incident?.id) return null;
 
   let titre = "";
   let message = "";
+  const montantAbonnement = `${new Intl.NumberFormat("fr-FR").format(Math.max(0, Number(evenement.montantFCFA) || 0)).replace(/\u202f|\u00a0/g, " ")} FCFA`;
+  const dateEcheance = evenement.echeanceISO
+    ? new Intl.DateTimeFormat("fr-FR", { timeZone: "Africa/Abidjan", day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(evenement.echeanceISO))
+    : "";
+  const planAbonnement = libellePlan(evenement.plan);
+  const periodeAbonnement = libellePeriode(evenement.periode);
   switch (type) {
+    case "abonnement_jmoins2":
+      titre = `Rappel d'abonnement — ${periodeAbonnement}`;
+      message = `L'abonnement ${planAbonnement} de ${montantAbonnement} arrive à échéance le ${dateEcheance} (dans deux jours). Réglez-le depuis la page Abonnement. Un impayé ne bloque jamais un colis en cours.`;
+      break;
+    case "abonnement_echeance":
+      titre = `Échéance d'abonnement aujourd'hui — ${periodeAbonnement}`;
+      message = `L'abonnement ${planAbonnement} de ${montantAbonnement} arrive à échéance aujourd'hui (${dateEcheance}). Réglez-le depuis la page Abonnement. Un impayé ne bloque jamais un colis en cours.`;
+      break;
+    case "abonnement_retard":
+      titre = `Abonnement en retard — ${periodeAbonnement}`;
+      message = `L'abonnement ${planAbonnement} de ${montantAbonnement}, arrivé à échéance le ${dateEcheance}, reste à régler. Le quota Gratuit s'applique aux nouvelles créations seulement ; les colis en cours ne sont jamais bloqués.`;
+      break;
     case "incident_ouvert": {
       const libelle = libelleTypeIncident(incident.type);
       titre = `Incident ouvert — ${colis.code}`;
@@ -239,10 +269,14 @@ export function construireNotification(evenement = {}) {
       return null;
   }
 
-  const refId = type.startsWith("incident_") ? incident.id : besoinColis ? colis.id : lot.id;
-  const lien = besoinColis
-    ? `colis.html?id=${encodeURIComponent(colis.id)}`
-    : `bordereaux.html?id=${encodeURIComponent(lot.id)}`;
+  const refId = abonnement
+    ? `${evenement.agencyId}:${evenement.periode}`
+    : type.startsWith("incident_") ? incident.id : typesBordereau.includes(type) ? lot.id : colis.id;
+  const lien = abonnement
+    ? "abonnement.html"
+    : typesBordereau.includes(type)
+      ? `bordereaux.html?id=${encodeURIComponent(lot.id)}`
+      : `colis.html?id=${encodeURIComponent(colis.id)}`;
   return {
     type,
     titre,
@@ -271,6 +305,19 @@ export function notificationsPourAgences(evenement = {}, agencyIds = null) {
 }
 
 /* ------------------------------ échéances --------------------------------- */
+
+/** Rappel mensuel à émettre à J-2, le jour de l'échéance, puis une fois en retard. */
+export function niveauRappelAbonnement({ echeanceISO, now = new Date() } = {}) {
+  if (!echeanceISO || !Number.isFinite(new Date(echeanceISO).getTime())) return null;
+  const echeance = new Date(echeanceISO);
+  const courant = new Date(now);
+  const debutJour = (date) => Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+  const joursRestants = Math.round((debutJour(echeance) - debutJour(courant)) / 86_400_000);
+  if (joursRestants === 2) return { type: "abonnement_jmoins2", joursRestants };
+  if (joursRestants === 0) return { type: "abonnement_echeance", joursRestants };
+  if (joursRestants < 0) return { type: "abonnement_retard", joursRestants };
+  return null;
+}
 
 const TYPE_PAR_ALERTE = {
   sans_mouvement: "alerte_sans_mouvement",

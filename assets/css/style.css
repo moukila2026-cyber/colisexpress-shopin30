@@ -756,6 +756,7 @@ dd { margin: 4px 0 0; color: var(--ink); overflow-wrap: anywhere; font-size: .88
 .notif-famille-bordereaux { color: #1f5b8a; background: #e6f0fa; }
 .notif-famille-souffrance { color: var(--warning); background: #fff0de; }
 .notif-famille-dorment { color: #6b4bc4; background: #efeafc; }
+.notif-famille-facturation { color: #8a5713; background: #fff3cd; }
 .notif-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--orange); }
 .notif-title { color: var(--green-950); font-size: .9rem; }
 .notif-message { margin: 0; color: #3d4d47; font-size: .84rem; line-height: 1.5; }

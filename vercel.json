@@ -1,4 +1,7 @@
 {
+  "crons": [
+    { "path": "/api/taches/quotidienne", "schedule": "0 5 * * *" }
+  ],
   "headers": [
     {
       "source": "/(.*)",
@@ -33,6 +36,10 @@
     {
       "source": "/api/plateforme/:action",
       "destination": "/api/plateforme?action=:action"
+    },
+    {
+      "source": "/api/taches/:action",
+      "destination": "/api/taches?action=:action"
     },
     {
       "source": "/api/paiements/:action",

@@ -501,3 +501,23 @@ l'inverse ».
   les 30 s.
 - Piste future : notification au gérant (LOT 5) au passage de 80 % et à
   l'épuisement du quota, une fois par mois.
+
+
+## 19. Livré : LOT 11 — tâche quotidienne Vercel Cron
+
+- Vercel exécute `GET /api/taches/quotidienne` une fois par jour à 05:00 UTC ;
+  `CRON_SECRET` (Production, ≥ 32 caractères) est contrôlée en temps constant.
+  Le rewrite vers `api/taches.js` respecte le plafond de 12 fonctions Hobby
+  (11 avant ce lot, 12 maintenant).
+- La tâche ouvre la période mensuelle pour chaque agence, balaie tous les
+  incidents (notification 24 h et comptage des escalades plateforme > 7 j),
+  les colis qui dorment et les colis en souffrance, et envoie des rappels
+  d'abonnement à J-2, le jour de l'échéance et en retard. Les notifications
+  sont dédoublonnées et gardent leur mode simulation tant que le LOT 12 n'est
+  pas configuré.
+- Journal `taches_executions` (déjà préparé au LOT 9) : déclencheur, début,
+  fin, durée, statut `en_cours|ok|partiel|erreur` et résumé non personnel.
+  Console : dix dernières exécutions et bouton « Exécuter maintenant »,
+  réservé à la session plateforme ; le cron public exige son en-tête Bearer.
+- Vérification côté développeur : l'API refuse un secret absent ou incorrect
+  (401), et l'exécution manuelle met à jour le diagnostic « Mise en service ».

@@ -30,7 +30,7 @@ import {
 
 const RAFRAICHISSEMENT_MS = 30_000;
 /** Seuls les liens internes construits par le serveur sont suivis. */
-const LIEN_INTERNE = /^(colis|bordereaux)\.html\?id=[A-Za-z0-9%._-]+$/;
+const LIEN_INTERNE = /^(?:(colis|bordereaux)\.html\?id=[A-Za-z0-9%._-]+|abonnement\.html)$/;
 
 const message = document.getElementById("pageMessage");
 const modeTarget = document.getElementById("notifMode");
@@ -73,11 +73,14 @@ function renderCompteurs() {
   document.getElementById("notifIncidents").textContent = String(resume.parFamille.incidents);
   document.getElementById("notifBordereaux").textContent = String(resume.parFamille.bordereaux);
   document.getElementById("notifDorment").textContent = String(resume.parFamille.dorment);
+  document.getElementById("notifAbonnements").textContent = String(resume.parFamille.facturation || 0);
   afficherBadgeNotifications(nonLues);
 }
 
 function libelleLien(lien) {
-  return lien.startsWith("bordereaux.html") ? "Ouvrir le bordereau" : "Ouvrir le colis";
+  if (lien.startsWith("bordereaux.html")) return "Ouvrir le bordereau";
+  if (lien === "abonnement.html") return "Ouvrir Abonnement";
+  return "Ouvrir le colis";
 }
 
 function renderListe() {
@@ -91,7 +94,7 @@ function renderListe() {
   if (!visibles.length) {
     listTarget.innerHTML = notifications.length
       ? '<div class="empty-state"><h3>Aucune notification pour ce filtre</h3><p>Modifiez les filtres pour revoir tout le journal.</p></div>'
-      : '<div class="empty-state"><div class="empty-icon" aria-hidden="true">✉</div><h3>Aucune notification pour l\'instant</h3><p>Incidents, arrivées de bordereaux, écarts, colis en souffrance, retours et colis qui dorment apparaîtront ici dès qu\'ils concernent votre agence.</p></div>';
+      : '<div class="empty-state"><div class="empty-icon" aria-hidden="true">✉</div><h3>Aucune notification pour l\'instant</h3><p>Incidents, arrivées de bordereaux, colis en souffrance, retours, colis qui dorment et rappels d\'abonnement apparaîtront ici dès qu\'ils concernent votre agence.</p></div>';
     return;
   }
   listTarget.innerHTML = `<ul class="notif-list">${visibles.map((item) => {

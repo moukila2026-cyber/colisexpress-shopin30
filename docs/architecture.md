@@ -305,7 +305,7 @@ l'expéditeur) — les 5 statuts officiels du colis ne changent jamais.
   SasPay.
 - **Vercel** : rewrites `/api/paiements/:action` et
   `/api/suivi/:code/:action` ; `/api/marque` est une route à un segment —
-  toujours 10 fonctions.
+  11 fonctions avant le LOT 11, 12 après le point d'entrée `api/taches.js`.
 
 ### Sécurité avant la mise en production (LOT 8)
 
@@ -355,7 +355,7 @@ l'expéditeur) — les 5 statuts officiels du colis ne changent jamais.
   ensuite fermé pour toujours (même si tous les administrateurs sont
   désactivés). Routes repliées par le rewrite `/api/plateforme/:action`
   existant. `api/plateforme.js` est un point d'entrée Vercel dédié (11 fonctions
-  au total, avant le LOT 11).
+  avant le LOT 11, puis 12 avec `api/taches.js` — limite Hobby atteinte).
 
 ### Mise en service assistée (LOT 9)
 
@@ -377,8 +377,9 @@ l'expéditeur) — les 5 statuts officiels du colis ne changent jamais.
   sort dans le JSON.
 - Route `GET /api/plateforme/mise-en-service` (`requirePlateforme`, lecture
   seule, `Cache-Control: no-store`), repliée par le rewrite
-  `/api/plateforme/:action` — toujours 10 fonctions. Panneau en tête de la
-  console (`plateforme.html`, `js/plateforme.js`).
+  `/api/plateforme/:action` — 11 fonctions après ajout du point d'entrée
+  dédié `api/plateforme.js`. Panneau en tête de la console
+  (`plateforme.html`, `js/plateforme.js`).
 - Guide pas à pas : `docs/mise-en-service.md`.
 
 ### Compteur de colis en temps réel (LOT 10)
@@ -502,3 +503,27 @@ signature refusés, montant vérifié). Les règles pures sont testées dans
   fonctions (≤ 12).
 - **Autre hébergeur Node** : `npm start` sert API + fichiers statiques
   (`server.js`).
+
+
+### Tâche quotidienne Vercel Cron (LOT 11)
+
+- `vercel.json` planifie `GET /api/taches/quotidienne` à `0 5 * * *` (05:00
+  UTC, une fois par jour). Le rewrite `/api/taches/:action` replie la route
+  sur `api/taches.js` avec `?action=quotidienne` ; aucun fichier de fonction
+  n'est créé pour une route à trois segments. Avec `api/plateforme.js`, le
+  déploiement compte exactement 12 fonctions, plafond Hobby.
+- La route exige `Authorization: Bearer <CRON_SECRET>` (≥ 32 caractères) ;
+  les empreintes SHA-256 sont comparées par `crypto.timingSafeEqual`, et un
+  secret absent, trop court ou erroné donne 401. La console déclenche le même
+  traitement via `POST /api/plateforme/taches`, exclusivement avec une
+  session plateforme valide ; `GET` sur ce chemin liste dix exécutions.
+- `lib/taches-quotidiennes.js` ouvre idempotemment le mois pour chaque agence,
+  balaie les événements de tous les colis et incidents (> 24 h ; la file
+  plateforme > 7 j est comptée), puis crée les rappels d'abonnement à J-2,
+  l'échéance et le retard via le journal unique des notifications. Un échec
+  localisé donne un statut `partiel`; aucune donnée personnelle ou secret
+  n'est écrit dans `resultats`.
+- `taches_executions` garde le déclencheur, les horodatages, la durée, le
+  statut et un résumé JSON. Le panneau console montre les dix dernières
+  exécutions et le bouton « Exécuter maintenant » ; le diagnostic « Mise en
+  service » ne coche la ligne Cron qu'après une exécution récente réussie.
