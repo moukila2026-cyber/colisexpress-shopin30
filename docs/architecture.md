@@ -256,8 +256,12 @@ l'expéditeur) — les 5 statuts officiels du colis ne changent jamais.
   par statut ; aucune donnée client projetée. Écritures :
   `POST /api/plateforme/plan` et `POST /api/plateforme/credit`. Comptes de
   production : `npm run plateforme-admin` (variables d'environnement).
-- **Vercel** : `/api/facturation/:action` et `/api/plateforme/:action` sont
-  repliées par rewrites sur `api/[...path].js` — toujours 10 fonctions.
+- **Vercel** : `/api/plateforme/:action` est repliée par rewrite sur la
+  fonction dédiée `api/plateforme.js` (`?action=...`) ; le middleware Express
+  et le handler prennent aussi en charge les chemins originaux transmis par
+  les en-têtes Vercel. Les autres parents sans fichier dédié peuvent être
+  servis par `api/[...path].js`. La fonction plateforme porte le total à 11,
+  sous la limite Hobby de 12.
 
 ### Suivi personnalisé et paiements SasPay (LOT 7)
 
@@ -350,7 +354,8 @@ l'expéditeur) — les 5 statuts officiels du colis ne changent jamais.
   (administrateur actif)`) ; 5 jetons faux par adresse et par 15 min → 429 ;
   ensuite fermé pour toujours (même si tous les administrateurs sont
   désactivés). Routes repliées par le rewrite `/api/plateforme/:action`
-  existant — toujours 10 fonctions.
+  existant. `api/plateforme.js` est un point d'entrée Vercel dédié (11 fonctions
+  au total, avant le LOT 11).
 
 ### Mise en service assistée (LOT 9)
 
