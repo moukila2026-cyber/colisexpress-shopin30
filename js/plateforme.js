@@ -251,7 +251,8 @@ function renderTaches(executions = []) {
         `${Number(r.colisBalayes) || 0} colis balayés`,
         `${Number(r.notificationsEcheance) || 0} alertes`,
         `${Number(r.rappelsAbonnement) || 0} rappels`,
-        `${Number(r.incidentsAArbitrer) || 0} incidents > 7 j`
+        `${Number(r.incidentsAArbitrer) || 0} incidents > 7 j`,
+        `${Number(r.relevesArchives) || 0} relevés archivés`
       ].join(" · ");
       const duree = Number.isFinite(Number(item.dureeMs)) ? `${Number(item.dureeMs)} ms` : "—";
       return `<tr>
@@ -395,6 +396,7 @@ function ouvrirAgence(agencyId) {
   document.getElementById("prixReseau").value = agenceCourante.prixNegocieFCFA ?? "";
   document.getElementById("creditMontant").value = "";
   document.getElementById("creditReference").value = "";
+  document.getElementById("releveMoisConsole").value = new Date().toISOString().slice(0, 7);
   syncReseau();
   modal.hidden = false;
   document.body.classList.add("modal-open");
@@ -424,6 +426,40 @@ async function appliquerPlan(event) {
     showToast(`Plan ${libellePlan(planSelect.value)} appliqué à ${agenceCourante.name}.`);
     fermerAgence();
     await charger();
+  } catch (error) {
+    showPageMessage(modalMessage, errorMessage(error));
+  } finally {
+    setButtonLoading(button, false);
+  }
+}
+
+async function telechargerReleveConsole() {
+  if (!agenceCourante) return;
+  const periode = document.getElementById("releveMoisConsole").value;
+  const button = document.getElementById("telechargerReleveConsole");
+  if (!periode) {
+    showPageMessage(modalMessage, "Choisissez un mois pour le relevé.");
+    return;
+  }
+  setButtonLoading(button, true, "Génération…");
+  try {
+    const parametres = new URLSearchParams({ agencyId: agenceCourante.id, periode });
+    const response = await fetch(`/api/plateforme/releve?${parametres}`, { credentials: "same-origin" });
+    if (!response.ok) {
+      const donnees = await response.json().catch(() => ({}));
+      const error = new Error(donnees.error || "Le relevé n'a pas pu être généré.");
+      error.status = response.status;
+      throw error;
+    }
+    const fichier = URL.createObjectURL(await response.blob());
+    const lien = document.createElement("a");
+    lien.href = fichier;
+    lien.download = `releve-colisexpress-${periode}.pdf`;
+    document.body.append(lien);
+    lien.click();
+    lien.remove();
+    window.setTimeout(() => URL.revokeObjectURL(fichier), 1000);
+    showToast(`Relevé de ${agenceCourante.name} téléchargé.`);
   } catch (error) {
     showPageMessage(modalMessage, errorMessage(error));
   } finally {
@@ -471,6 +507,7 @@ function boot() {
   planSelect.addEventListener("change", syncReseau);
   document.getElementById("planForm").addEventListener("submit", appliquerPlan);
   document.getElementById("creditForm").addEventListener("submit", crediter);
+  document.getElementById("telechargerReleveConsole").addEventListener("click", telechargerReleveConsole);
   // LOT 10 — compteurs des agences rafraîchis toutes les 30 s (onglet visible, aucune fenêtre ouverte).
   window.setInterval(() => {
     if (vue && document.visibilityState === "visible" && modal.hidden) charger({ silencieux: true });

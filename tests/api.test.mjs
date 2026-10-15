@@ -50,7 +50,12 @@ function client() {
       const headers = cookie ? { Cookie: cookie } : {};
       const res = await fetch(`${BASE}${urlPath}`, { headers });
       const buffer = Buffer.from(await res.arrayBuffer());
-      return { status: res.status, contentType: res.headers.get("content-type"), buffer };
+      return {
+        status: res.status,
+        contentType: res.headers.get("content-type"),
+        contentDisposition: res.headers.get("content-disposition"),
+        buffer
+      };
     },
     deconnexion() { cookie = null; }
   };
@@ -2799,6 +2804,59 @@ test("LOT 11 : cron protégé, traitement quotidien journalisé et commandes con
     if (ancienSecret === undefined) delete process.env.CRON_SECRET;
     else process.env.CRON_SECRET = ancienSecret;
   }
+});
+
+test("LOT 13 : relevé PDF cloisonné, export console et archive mensuelle idempotente", async () => {
+  const { obtenirRelevePDF } = await import("../lib/releves.js");
+  const { executerTacheQuotidienne } = await import("../lib/taches-quotidiennes.js");
+  const a = client();
+  const b = client();
+  const agenceA = await creerAgence(a, "Agence Relevé A", "Abidjan");
+  const agenceB = await creerAgence(b, "Agence Relevé B", "Bouaké");
+  const colisA = await nouveauColis(a, agenceB.id, 301);
+  const colisB = await nouveauColis(b, agenceA.id, 302);
+  assert.equal(colisA.status, 201, JSON.stringify(colisA.data));
+  assert.equal(colisB.status, 201, JSON.stringify(colisB.data));
+  const periodeCourante = new Date().toISOString().slice(0, 7);
+
+  assert.equal((await client().brut(`/api/facturation/releve?periode=${periodeCourante}`)).status, 401);
+  const direct = await a.brut(`/api/facturation/releve?periode=${periodeCourante}`);
+  assert.equal(direct.status, 200);
+  assert.match(direct.contentType, /application\/pdf/);
+  assert.match(direct.contentDisposition, new RegExp(`releve-colisexpress-${periodeCourante}\.pdf`));
+  assert.equal(direct.buffer.subarray(0, 8).toString("ascii"), "%PDF-1.4");
+  const contenuA = direct.buffer.toString("ascii");
+  assert.ok(contenuA.includes(colisA.data.parcel.trackingCode));
+  assert.ok(!contenuA.includes(colisB.data.parcel.trackingCode), "le relevé d'agence A ne contient pas les colis de B");
+  assert.ok(contenuA.includes("FCFA"));
+
+  // L'URL Vercel repliée garde la période et ne permet pas de substituer l'agence.
+  const replie = await a.brut(`/api/facturation?action=releve&periode=${periodeCourante}&agencyId=${agenceB.id}`);
+  assert.equal(replie.status, 200);
+  assert.ok(replie.buffer.toString("ascii").includes(colisA.data.parcel.trackingCode));
+  assert.ok(!replie.buffer.toString("ascii").includes(colisB.data.parcel.trackingCode));
+
+  assert.equal((await a.brut(`/api/plateforme/releve?agencyId=${agenceA.id}&periode=${periodeCourante}`)).status, 401);
+  const { p } = await consolePlateforme();
+  const consolePdf = await p.brut(`/api/plateforme?action=releve&agencyId=${agenceA.id}&periode=${periodeCourante}`);
+  assert.equal(consolePdf.status, 200);
+  assert.equal(consolePdf.contentType, "application/pdf");
+  assert.ok(consolePdf.buffer.toString("ascii").includes(colisA.data.parcel.trackingCode));
+
+  // Le Cron du 1er archive le mois clos ; une seconde exécution ne duplique rien.
+  const premiereTache = await executerTacheQuotidienne({ declencheur: "test_archive", now: new Date("2026-11-01T05:00:00.000Z") });
+  assert.ok(["ok", "partiel"].includes(premiereTache.statut));
+  assert.ok(premiereTache.resultats.relevesArchives >= 2);
+  const periodeArchive = "2026-10";
+  const archive = await obtenirRelevePDF({ agencyId: agenceA.id, periode: periodeArchive });
+  assert.equal(archive.archive, true);
+  assert.equal(archive.pdf.subarray(0, 8).toString("ascii"), "%PDF-1.4");
+  const archiveRoute = await a.brut(`/api/facturation/releve?periode=${periodeArchive}`);
+  assert.equal(archiveRoute.status, 200);
+  assert.equal(Buffer.compare(archiveRoute.buffer, archive.pdf), 0, "le téléchargement renvoie le PDF archivé à l'identique");
+  const deuxiemeTache = await executerTacheQuotidienne({ declencheur: "test_archive", now: new Date("2026-11-01T05:00:00.000Z") });
+  assert.equal(deuxiemeTache.resultats.relevesArchives, 0);
+  assert.ok(deuxiemeTache.resultats.relevesDejaArchives >= premiereTache.resultats.relevesArchives);
 });
 
 test.after(() => {

@@ -930,6 +930,32 @@ test("le LOT 12 (WhatsApp Cloud, Orange SMS, repli simulation et panneau console
   assert.ok(!existsSync(path.join(RACINE, "api/notifications.js")), "aucune fonction Vercel supplémentaire");
 });
 
+test("le LOT 13 (relevés PDF mensuels) est câblé sans nouvelle fonction Vercel", () => {
+  const app = lire("lib/app.js");
+  assert.match(app, /app\.get\("\/api\/facturation\/releve"/);
+  assert.match(app, /app\.get\("\/api\/plateforme\/releve"/);
+  assert.match(app, /repondrePDFReleve/);
+  assert.ok(!existsSync(path.join(RACINE, "api/releves.js")), "route PDF repliée, aucun point d'entrée supplémentaire");
+  assert.match(lire("lib/releves.js"), /releves_mensuels/);
+  assert.match(lire("lib/releves.js"), /ON CONFLICT \(agency_id, periode\) DO NOTHING/);
+  assert.match(lire("lib/pdf.js"), /WinAnsiEncoding/);
+  assert.doesNotMatch(lire("lib/pdf.js"), /from ["'](?:pdfkit|puppeteer|playwright)|require\(["'](?:pdfkit|puppeteer|playwright)/i, "PDF produit sans bibliothèque native ni navigateur headless");
+  assert.match(lire("db/schema.sql"), /CREATE TABLE IF NOT EXISTS releves_mensuels/);
+  assert.match(lire("lib/taches-quotidiennes.js"), /archiverRelevesMensuels/);
+  assert.match(lire("lib/taches-quotidiennes.js"), /getUTCDate\(\) === 1/, "archive mensuelle le premier jour du mois");
+
+  const abonnement = lire("abonnement.html");
+  for (const id of ["relevesPanel", "releveForm", "relevePeriode", "telechargerReleveButton"]) assert.match(abonnement, new RegExp(`id="${id}"`));
+  assert.match(lire("js/abonnement.js"), /\/api\/facturation\/releve/);
+  const consoleHtml = lire("plateforme.html");
+  for (const id of ["releveAgencePanel", "releveMoisConsole", "telechargerReleveConsole"]) assert.match(consoleHtml, new RegExp(`id="${id}"`));
+  assert.match(lire("js/plateforme.js"), /\/api\/plateforme\/releve/);
+  assert.match(lire("README.md"), /relevés mensuels PDF/i);
+  assert.match(lire("docs/architecture.md"), /LOT 13/);
+  assert.match(lire("docs/ameliorations.md"), /LOT 13/);
+  assert.match(lire("docs/mise-en-service.md"), /relevés mensuels PDF/i);
+});
+
 test("le LOT 10 (compteur de colis en temps réel) est câblé de bout en bout", () => {
   // Une route légère, lecture seule, sans nouveau fichier api/.
   const api = lire("lib/app.js");

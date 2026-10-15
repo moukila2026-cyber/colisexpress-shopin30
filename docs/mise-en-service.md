@@ -267,7 +267,10 @@ elles ne sont jamais perdues.
 2. Une agence se connecte, crée un colis, prend une photo : OK (Blob).
 3. La console affiche *Mise en service* avec **0 ✗** en production. Après
    une exécution réussie, la ligne Cron est ✓. Les notifications restent en
-   simulation jusqu'à la configuration facultative des transports (LOT 12).
+   simulation tant que les transports facultatifs ne sont pas configurés.
+4. Les relevés mensuels PDF ne nécessitent aucune variable Vercel : ils sont
+   téléchargeables depuis Abonnement et la console, et le Cron archive le
+   mois précédent le 1er de chaque mois.
 4. Préversion : empreinte de base différente, mode de paiement `test`,
    `APP_URL` vide.
 5. Les variables d'amorçage (`PLATEFORME_PREMIER_ADMIN_JETON`) ont été

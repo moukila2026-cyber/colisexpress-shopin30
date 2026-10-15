@@ -119,6 +119,12 @@
         <small class="field-help">Effet immédiat sur le quota du mois. Un abonnement déjà payé ce mois-ci reste acquis.</small>
         <button class="button button-primary" id="planSubmit" type="submit">Appliquer le plan</button>
       </form>
+      <section class="form-stack credit-form" id="releveAgencePanel">
+        <h3 class="form-subheading">Relevé mensuel PDF</h3>
+        <div class="field"><label for="releveMoisConsole">Mois du relevé</label><input id="releveMoisConsole" type="month" required></div>
+        <small class="field-help">Télécharge les colis, encaissements, hors forfait, abonnement et mouvements du portefeuille. Aucun téléphone de client n'y figure.</small>
+        <button class="button button-outline" id="telechargerReleveConsole" type="button">Télécharger le PDF</button>
+      </section>
       <form id="creditForm" class="form-stack credit-form" novalidate>
         <h3 class="form-subheading">Recharger le portefeuille</h3>
         <div class="form-grid">

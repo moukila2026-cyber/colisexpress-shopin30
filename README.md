@@ -109,6 +109,11 @@ plus aucune dépendance à Firebase.
   les rappels d'abonnement à J-2, le jour de l'échéance et en retard. Les
   exécutions sont journalisées dans `taches_executions` ; la console affiche
   les dix dernières et permet à un administrateur de lancer la tâche.
+- **Relevés mensuels PDF (LOT 13)** : un relevé par agence (colis enregistrés,
+  encaissements, hors forfait, abonnement et mouvements du portefeuille),
+  téléchargé depuis **Abonnement** ou la console plateforme. PDF généré en
+  Node pur sans dépendance native ; le Cron archive le mois précédent le 1er.
+  Les relevés sont en français et en FCFA, sans données personnelles de client.
 - **Sécurité avant la mise en production (LOT 8)** : garde-fous de paiement
   selon l'environnement Vercel (clé de test ou simulation refusées en
   production, clé réelle refusée en préversion), mode de frais SasPay
@@ -123,7 +128,9 @@ api/                   Points d'entrée Vercel (réexportent lib/app.js)
 lib/app.js             API Express : routes, sessions, autorisations
 lib/auth.js            Hachage des mots de passe (scrypt) et cookies signés
 lib/photos.js          Stockage des photos de preuve (Vercel Blob ou disque local)
-lib/notifications.js   Notifications : fonction d'envoi unique, transports (simulation par défaut), journal
+lib/notifications.js   Notifications : WhatsApp → Orange SMS → simulation, journal
+lib/pdf.js             Générateur PDF A4 en Node pur, police WinAnsi
+lib/releves.js         Relevés mensuels agence : génération, téléchargement et archivage
 lib/facturation.js     Plans, quotas, portefeuille prépayé, abonnements (écritures atomiques)
 lib/plateforme.js      Console plateforme : vue d'ensemble en lecture seule, amorçage du premier administrateur
 lib/mise-en-service.js Diagnostic de configuration (console) : états ✓/⚠/✗ sans aucune valeur de secret

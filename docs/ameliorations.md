@@ -542,3 +542,21 @@ l'inverse ».
   de statut ; aucun corps de réponse, numéro ou jeton n'est écrit dans les
   logs.
 - Aucun nouveau point d'entrée Vercel : le total reste à 12/12.
+
+
+## 21. Livré : LOT 13 — relevés mensuels PDF
+
+- Générateur `lib/pdf.js` en Node pur, PDF multipage, police WinAnsi, français
+  et FCFA ; aucune dépendance native ou de navigateur.
+- Relevé par agence/mois : colis enregistrés, encaissements, hors forfait,
+  abonnement et mouvements du portefeuille. Aucun nom, téléphone ou CNI de
+  client, ni référence de paiement libre.
+- Téléchargement protégé sur la page **Abonnement** (`GET /api/facturation/releve`)
+  et la console (`GET /api/plateforme/releve`). L'agence ne peut télécharger
+  que son propre relevé ; la console exige sa session plateforme.
+- Table `releves_mensuels` additive/idempotente : le Cron quotidien archive
+  le mois précédent le 1er du mois ; une nouvelle exécution ne duplique pas
+  l'archive. Si le PDF existe, le téléchargement renvoie le binaire archivé ;
+  sinon, il est généré à la demande.
+- Pas de nouvelle fonction Vercel ni de variable d'environnement ; le total
+  reste à 12/12.

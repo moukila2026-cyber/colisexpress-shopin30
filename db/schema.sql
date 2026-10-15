@@ -419,3 +419,19 @@ CREATE TABLE IF NOT EXISTS taches_executions (
   resultats        TEXT,
   created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- LOT 13 — archives PDF mensuelles par agence. Le PDF est généré en Node pur
+-- (lib/pdf.js), à la demande pour les téléchargements et archivé par le Cron
+-- le 1er du mois pour le mois précédent. Une seule archive par agence/mois.
+CREATE TABLE IF NOT EXISTS releves_mensuels (
+  id              TEXT PRIMARY KEY,
+  agency_id       TEXT NOT NULL REFERENCES agencies(id),
+  periode         TEXT NOT NULL CHECK (periode ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'),
+  pdf             BYTEA NOT NULL,
+  taille_octets   INTEGER NOT NULL CHECK (taille_octets > 0),
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at_iso  TEXT NOT NULL,
+  UNIQUE (agency_id, periode)
+);
+CREATE INDEX IF NOT EXISTS releves_mensuels_agency_idx
+  ON releves_mensuels (agency_id, periode DESC);
