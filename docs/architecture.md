@@ -71,12 +71,15 @@ suivi public anonyme, refus d'accès).
 
 ## Déploiement
 
-- **Vercel** : `api/[...path].js` exporte l'app Express pour tout `/api/*`,
-  le reste est statique. Variables : `DATABASE_URL`, `SESSION_SECRET`.
-  Le catch-all s'écrit `[...path]` (un ou plusieurs segments) : la forme
-  `[[...path]]` (catch-all optionnel Next.js) n'est pas reconnue hors
-  Next.js et ne captait qu'un seul segment — les routes imbriquées
-  (`/api/colis/:id`, `/api/suivi/:code`) renvoyaient le 404 NOT_FOUND de la
-  plateforme au lieu d'atteindre Express.
+- **Vercel** : les fichiers de `api/` exportent l'app Express, le reste est
+  statique. Variables : `DATABASE_URL`, `SESSION_SECRET`. Hors Next.js,
+  Vercel convertit tout segment entre crochets en `([^/]+)` (un seul
+  segment d'URL, pas de catch-all multi-segments) : `api/[...path].js`
+  couvre les routes à un segment (`/api/health`, `/api/colis`…), et chaque
+  route imbriquée a son fichier (`api/colis/[id].js`,
+  `api/colis/[id]/attach.js`, `api/colis/[id]/progress.js`,
+  `api/suivi/[code].js`) — sinon elle renvoie le 404 NOT_FOUND de la
+  plateforme au lieu d'atteindre Express. Toute nouvelle route imbriquée
+  doit recevoir son point d'entrée (verrouillé par `npm test`).
 - **Autre hébergeur Node** : `npm start` sert API + fichiers statiques
   (`server.js`).

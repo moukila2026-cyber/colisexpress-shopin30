@@ -240,23 +240,35 @@ test("les liens vers la fiche colis portent leur paramètre et ne dépendent d'a
   assert.doesNotMatch(script, /dataset\.parcelId/, "l'identifiant doit aller dans le href du lien, pas dans un dataset lu au clic");
 });
 
-test("le point d'entrée Vercel capte aussi les routes API imbriquées (catch-all [...path])", () => {
-  // Hors Next.js, « api/[[...path]].js » (catch-all optionnel, syntaxe Next.js)
-  // ne captait qu'un seul segment après /api : /api/health et /api/colis
-  // répondaient, mais /api/colis/:id et /api/suivi/:code tombaient sur le
-  // 404 NOT_FOUND de la plateforme sans jamais atteindre Express — fiche
-  // colis (« Voir le colis », dashboard) et suivi QR en panne sur le site
-  // déployé, alors que tout passait en local via server.js. Le catch-all
-  // Vercel s'écrit [...path] : un ou plusieurs segments, et toutes les routes
-  // appelées par le front ont au moins un segment après /api.
-  assert.ok(existsSync(path.join(RACINE, "api/[...path].js")), "api/[...path].js doit exister (catch-all Vercel)");
+test("les points d'entrée Vercel captent les routes API à un segment et imbriquées", () => {
+  // Hors Next.js, Vercel convertit tout segment entre crochets
+  // (« [param] », « [...param] », « [[...param]] ») en « ([^/]+) » : un seul
+  // segment d'URL, jamais un catch-all multi-segments. Avec le seul
+  // api/[...path].js, /api/health et /api/colis répondaient, mais
+  // /api/colis/:id et /api/suivi/:code tombaient sur le 404 NOT_FOUND de la
+  // plateforme sans jamais atteindre Express — fiche colis (« Voir le
+  // colis », dashboard) et suivi QR en panne sur le site déployé, alors que
+  // tout passait en local via server.js. Chaque forme de route imbriquée a
+  // donc son fichier, qui réexporte la même application Express.
+  assert.ok(existsSync(path.join(RACINE, "api/[...path].js")), "api/[...path].js doit exister (routes à un segment)");
   assert.ok(!existsSync(path.join(RACINE, "api/[[...path]].js")), "api/[[...path]].js ne capte qu'un seul segment hors Next.js : les routes imbriquées finissent en 404 plateforme");
   assert.match(lire("api/[...path].js"), /lib\/app\.js/, "le point d'entrée Vercel doit exporter l'application Express");
+
+  const entreesImbriquees = {
+    "api/colis/[id].js": "../../lib/app.js",
+    "api/colis/[id]/attach.js": "../../../lib/app.js",
+    "api/colis/[id]/progress.js": "../../../lib/app.js",
+    "api/suivi/[code].js": "../../lib/app.js"
+  };
+  for (const [fichier, cible] of Object.entries(entreesImbriquees)) {
+    assert.ok(existsSync(path.join(RACINE, fichier)), `${fichier} doit exister : sinon Vercel répond 404 NOT_FOUND sur cette route`);
+    assert.ok(lire(fichier).includes(cible), `${fichier} doit réexporter ${cible} (l'application Express)`);
+  }
 
   // Les routes imbriquées appelées par le front doivent exister côté Express.
   const api = lire("lib/app.js");
   for (const route of ["/api/colis/:id", "/api/colis/:id/attach", "/api/colis/:id/progress", "/api/suivi/:code"]) {
-    assert.ok(api.includes(route), `lib/app.js doit déclarer ${route} (captée par le catch-all)`);
+    assert.ok(api.includes(route), `lib/app.js doit déclarer ${route} (captée par son point d'entrée Vercel)`);
   }
   assert.match(lire("js/colis.js"), /\/api\/colis\//, "la fiche colis appelle les routes imbriquées /api/colis/…");
   assert.match(lire("js/suivi.js"), /\/api\/suivi\//, "le suivi public (QR code du reçu) appelle /api/suivi/…");
