@@ -11,6 +11,8 @@ plus aucune dépendance à Firebase.
   puis **rattachement** définitif quand l'agence crée son compte
 - Authentification agence par e-mail/mot de passe (sessions cookie signées,
   mots de passe hachés scrypt)
+- **Comptes agents nommés** : 1 compte = 1 agence, plusieurs agents ;
+  chaque écriture d'étape trace l'agent acteur dans l'historique
 
 ## Arborescence
 
@@ -54,8 +56,11 @@ npm start          # http://localhost:8080
 **Mode démo (sans Neon)** : si `DATABASE_URL` est absente, le serveur utilise
 PGlite (Postgres WASM en mémoire) avec des données de démonstration :
 
-- `demo@colisexpress.ci` / `demo1234`
-- `bouake@colisexpress.ci` / `demo1234`
+- `demo@colisexpress.ci` / `demo1234` (gérant de Shopin30 Abidjan)
+- `bouake@colisexpress.ci` / `demo1234` (gérant de Agence Bouaké Centre)
+- `koffi@colisexpress.ci` / `demo1234` (agent actif, Shopin30 Abidjan)
+- `aicha@colisexpress.ci` / `demo1234` (agent actif, Agence Bouaké Centre)
+- `yao@colisexpress.ci` / `demo1234` (agent **désactivé** : la connexion est refusée)
 
 Les données de démo sont réinitialisées à chaque redémarrage.
 
@@ -86,7 +91,9 @@ peuvent être trafiquées sans effet) :
 | Voir un colis / la liste | agence expéditrice **ou** agence de destination uniquement |
 | Rattacher une agence de destination | expéditeur seulement, **une seule fois**, vers une agence inscrite, jamais vers lui-même |
 | Faire avancer le statut | selon les étapes de `js/metier-colis.js` (expéditions : expéditeur ; arrivée/retrait : agence de destination, ou l'expéditeur si rien n'est rattaché) |
-| Suivi public (`/api/suivi/:code`) | monde entier, mais **strictement** les 7 champs publics (aucune donnée personnelle) |
+| Inviter / désactiver des agents | **gérant** de l'agence uniquement (garde serveur `requireGerant`) |
+| Se connecter comme agent | agent **actif** uniquement ; un agent désactivé perd sa session immédiatement |
+| Suivi public (`/api/suivi/:code`) | monde entier, mais **strictement** les 7 champs publics (aucune donnée personnelle, y compris l'acteur `actorName` des étapes) |
 | Supprimer quoi que ce soit | jamais (aucune route de suppression) |
 
 Les mots de passe sont hachés avec **scrypt** (bibliothèque standard Node) ; les
@@ -122,6 +129,10 @@ npm test
    l'agence de destination », « Retiré » avec CNI du retraitant) et
    **rattachement** de l'agence de destination quand elle crée son compte.
 6. **Paramètres** : nom, ville et téléphone de l'agence.
+7. **Équipe (Paramètres)** : le gérant invite des agents (nom, e-mail,
+   téléphone, mot de passe provisoire) et les active/désactive ; chaque agent
+   se connecte avec son propre e-mail et ses étapes apparaissent « Par … »
+   dans l'historique des colis.
 
 ## 7. Dépannage
 

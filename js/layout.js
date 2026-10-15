@@ -42,6 +42,14 @@ export async function initAgencyLayout(agency, activePage) {
     document.querySelectorAll("[data-agency-initial]").forEach((element) => {
       element.textContent = (agency.name || "A").trim().charAt(0).toUpperCase();
     });
+    // Membre connecté : l'agent voit son nom, le gérant n'a pas d'affichage
+    // supplémentaire (le nom de l'agence le représente déjà).
+    document.querySelectorAll("[data-member-label]").forEach((element) => {
+      const member = agency.member;
+      const estAgent = member && member.role === "agent";
+      element.hidden = !estAgent;
+      element.textContent = estAgent ? `${member.name} · Agent` : "";
+    });
     if (!document.getElementById("agencyCredit")) {
       document.querySelector(".agency-content")?.insertAdjacentHTML(
         "beforeend",
@@ -68,6 +76,7 @@ export function agencySidebar() {
         <div>
           <strong data-agency-name>Chargement…</strong>
           <small data-agency-city>—</small>
+          <small class="member-line" data-member-label hidden></small>
         </div>
       </div>
       <nav class="agency-nav">

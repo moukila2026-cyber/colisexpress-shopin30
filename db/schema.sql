@@ -41,3 +41,21 @@ CREATE TABLE IF NOT EXISTS parcels (
 
 CREATE INDEX IF NOT EXISTS idx_parcels_owner       ON parcels (owner_id);
 CREATE INDEX IF NOT EXISTS idx_parcels_destination ON parcels (destination_agency_id);
+
+-- LOT 1 — comptes agents nommés : 1 compte (agences) = 1 agence, plusieurs
+-- agents. Le gérant EST le compte agence (agencies.email/password inchangés) ;
+-- cette table stocke les agents invités par le gérant. Idempotent et additive.
+CREATE TABLE IF NOT EXISTS agents (
+  id             TEXT PRIMARY KEY,
+  agency_id      TEXT NOT NULL REFERENCES agencies(id),
+  name           TEXT NOT NULL,
+  email          TEXT UNIQUE NOT NULL,
+  phone          TEXT,
+  password_hash  TEXT NOT NULL,
+  role           TEXT NOT NULL DEFAULT 'agent' CHECK (role IN ('gerant', 'agent')),
+  active         BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at_iso TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_agents_agency ON agents (agency_id);

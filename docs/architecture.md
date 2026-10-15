@@ -26,15 +26,26 @@ Navigateur  ── fetch /api/* ──►  lib/app.js (Express)
   Firestore sont réécrites comme des contrôles serveur.
 - **Métier** (`js/metier-colis.js`) : inchangé, importé **à la fois** par le
   navigateur et par le serveur — une seule source de vérité.
-- **Base** (`db/schema.sql`) : deux tables.
+- **Base** (`db/schema.sql`) : `agencies`, `parcels` et `agents` (LOT 1).
 
 ### `agencies`
 
 | colonne | rôle |
 |---|---|
 | `id` | identifiant (UUID) |
-| `email`, `password_hash` | connexion (scrypt) |
+| `email`, `password_hash` | connexion du **gérant** (scrypt) — le compte agence EST le gérant |
 | `name`, `city`, `phone` | profil public de l'agence |
+
+### `agents` (LOT 1 — comptes agents)
+
+| colonne | rôle |
+|---|---|
+| `id` | identifiant (UUID) |
+| `agency_id` | agence propriétaire (1 agence = N agents) |
+| `name`, `email`, `phone` | identité de l'agent ; `email` UNIQUE au réseau (connexion) |
+| `password_hash` | mot de passe scrypt propre à l'agent |
+| `role` | `agent` (le gérant n'a pas de ligne : c'est le compte `agencies`) |
+| `active` | un agent désactivé ne peut plus se connecter et sa session expire |
 
 ### `parcels`
 
@@ -59,8 +70,22 @@ plus de duplication à maintenir cohérente. Contraintes : `tracking_code` UNIQU
 - `POST /api/register` et `/api/login` posent `ce_session` : cookie `HttpOnly`,
   `SameSite=Lax`, `Secure` en production, contenant `payload.signature`
   (HMAC-SHA256 de `SESSION_SECRET`, expiration 30 jours).
+- La charge contient `id` (= agence) et, pour un agent, `agent` (= id agent).
+  `requireAgency` recharge le membre : agent absent/inactif → 401 et cookie
+  effacé — un agent désactivé par le gérant perd son accès immédiatement.
+  Le gérant n'a pas de ligne `agents` : il EST le compte `agencies`.
 - Aucun jeton n'est stocké en base : la révocation se fait par expiration ou
   rotation de `SESSION_SECRET`.
+
+## Traçabilité de l'acteur (LOT 1)
+
+- Chaque écriture d'étape (enregistrement, rattachement, progression) ajoute
+  `actorId` / `actorName` à l'étape d'historique (`champsActeur()` partagé
+  client/serveur) ; la fiche colis affiche « Par <agent> ».
+- Le suivi public projette chaque étape via `etapePublique()` : ni `actorId`
+  ni `actorName` ne sortent — aucune donnée personnelle côté anonyme.
+- Écritures d'équipe (`POST/PATCH /api/agents`) : `requireGerant` appliqué
+  côté serveur, jamais seulement dans l'interface.
 
 ## Tests
 

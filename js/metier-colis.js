@@ -37,6 +37,26 @@ function comparerParNom(a, b) {
   return `${a.name || ""}`.localeCompare(`${b.name || ""}`, "fr", { sensitivity: "base" });
 }
 
+/**
+ * Champs d'acteur ajoutés à une étape d'historique (traçabilité agent).
+ * Absents quand aucun acteur n'est fourni : le contrat JSON reste stable.
+ */
+export function champsActeur(actor) {
+  if (!actor || !actor.id || !actor.name) return {};
+  return { actorId: String(actor.id), actorName: String(actor.name) };
+}
+
+/** Projection publique d'une étape : aucune donnée d'acteur (agent) ne sort. */
+export function etapePublique(etape = {}) {
+  return {
+    status: etape.status,
+    date: etape.date,
+    agencyName: etape.agencyName,
+    city: etape.city,
+    ...(etape.note ? { note: etape.note } : {})
+  };
+}
+
 /** Coordonnées de l'agence de destination saisies à la main (agence non inscrite). */
 export function lireAgenceDeclaree(values = {}) {
   return {
@@ -152,7 +172,7 @@ export function construireSuiviPublic(parcel, nowISO) {
     code: parcel.trackingCode,
     colisId: parcel.id,
     status: parcel.status,
-    history: Array.isArray(parcel.history) ? parcel.history : [],
+    history: Array.isArray(parcel.history) ? parcel.history.map(etapePublique) : [],
     originCity: parcel.originCity,
     destinationCity: parcel.destinationCity,
     lastUpdatedAtISO: nowISO
@@ -163,14 +183,15 @@ export function construireSuiviPublic(parcel, nowISO) {
  * Construit le document `colis` et son document public `suivis/{code}`.
  * Les horodatages serveur (`created_at`, `updated_at`) sont gérés par la base.
  */
-export function construireColis({ values, currentAgency, destination, parcelId, trackingCode, nowISO }) {
+export function construireColis({ values, currentAgency, destination, parcelId, trackingCode, nowISO, actor = null }) {
   const originCity = textePropre(values.originCity);
   const destinationCity = textePropre(values.destinationCity);
   const history = [{
     status: "Enregistré",
     date: nowISO,
     agencyName: currentAgency.name,
-    city: originCity
+    city: originCity,
+    ...champsActeur(actor)
   }];
   const parcel = {
     id: parcelId,
@@ -232,7 +253,7 @@ export function agencesRattachables({ parcel, agencies = [], currentAgencyId = n
  * profil de l'agence, pas d'une saisie. Le statut n'est jamais modifié ici
  * (les règles l'interdisent) et la déclaration d'origine est conservée.
  */
-export function changementsRattachement({ parcel, agency, ownerAgency, now, destinationCity = null }) {
+export function changementsRattachement({ parcel, agency, ownerAgency, now, destinationCity = null, actor = null }) {
   const finalCity = textePropre(destinationCity) || parcel.destinationCity || agency.city || "";
   const history = Array.isArray(parcel.history) ? [...parcel.history] : [];
   history.push({
@@ -240,7 +261,8 @@ export function changementsRattachement({ parcel, agency, ownerAgency, now, dest
     date: now,
     agencyName: ownerAgency?.name || "Agence COLIS EXPRESS",
     city: finalCity,
-    note: `Retrait confirmé à ${agency.name}${finalCity ? ` — ${finalCity}` : ""}`
+    note: `Retrait confirmé à ${agency.name}${finalCity ? ` — ${finalCity}` : ""}`,
+    ...champsActeur(actor)
   });
   return {
     destinationAgencyId: agency.id,
