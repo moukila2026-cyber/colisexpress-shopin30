@@ -346,3 +346,89 @@ test("les villes de départ et de destination sont validées sur 2 à 60 caract�
   assert.match(validerColis({ values: valeurs({ destinationCity: "" }) }), /villes de départ et de destination/);
   assert.equal(validerColis({ values: valeurs({ originCity: "  Abidjan  ", destinationCity: "Bouaké" }) }), null);
 });
+
+/* --------------------------- traçabilité agent (LOT 1) ---------------------- */
+
+test("l'acteur est écrit dans l'historique seulement quand il est fourni", () => {
+  const destination = resoudreDestination({
+    values: valeurs(),
+    agencies: [AGENCE_BKE],
+    currentAgencyId: EXPEDITRICE.id
+  }).destination;
+
+  const sansActeur = construireColis({
+    values: valeurs(),
+    currentAgency: EXPEDITRICE,
+    destination,
+    parcelId: "colis-a",
+    trackingCode: "CLI-ACTR01",
+    nowISO: "2026-10-14T09:00:00.000Z"
+  });
+  assert.equal("actorId" in sansActeur.parcel.history[0], false);
+  assert.equal("actorName" in sansActeur.parcel.history[0], false);
+
+  const avecActeur = construireColis({
+    values: valeurs(),
+    currentAgency: EXPEDITRICE,
+    destination,
+    parcelId: "colis-b",
+    trackingCode: "CLI-ACTR02",
+    nowISO: "2026-10-14T09:00:00.000Z",
+    actor: { id: "agent-7", name: "Koffi N'Guessan" }
+  });
+  assert.equal(avecActeur.parcel.history[0].actorId, "agent-7");
+  assert.equal(avecActeur.parcel.history[0].actorName, "Koffi N'Guessan");
+  assert.equal(avecActeur.parcel.history[0].status, "Enregistré");
+});
+
+test("le rattachement trace l'acteur sur son étape d'historique", () => {
+  const changes = changementsRattachement({
+    parcel: nonRattache,
+    agency: AGENCE_BKE,
+    ownerAgency: EXPEDITRICE,
+    now: "2026-10-15T08:30:00.000Z",
+    actor: { id: "agent-7", name: "Koffi N'Guessan" }
+  });
+  assert.equal(changes.history[0].actorId, "agent-7");
+  assert.equal(changes.history[0].actorName, "Koffi N'Guessan");
+
+  const sansActeur = changementsRattachement({
+    parcel: nonRattache,
+    agency: AGENCE_BKE,
+    ownerAgency: EXPEDITRICE,
+    now: "2026-10-15T08:30:00.000Z"
+  });
+  assert.equal("actorId" in sansActeur.history[0], false);
+});
+
+test("le suivi public projette les étapes sans jamais exposer l'acteur", () => {
+  const suivi = construireSuiviPublic(
+    {
+      id: "colis-pub",
+      trackingCode: "CLI-PUBL01",
+      status: "En transit",
+      originCity: "Abidjan",
+      destinationCity: "Bouaké",
+      history: [
+        {
+          status: "Expédié",
+          date: "2026-10-14T09:00:00.000Z",
+          agencyName: "Shopin30 Abidjan",
+          city: "Abidjan",
+          actorId: "agent-7",
+          actorName: "Koffi N'Guessan",
+          note: "Étape validée au guichet"
+        }
+      ]
+    },
+    "2026-10-15T08:30:00.000Z"
+  );
+  assert.deepEqual(suivi.history[0], {
+    status: "Expédié",
+    date: "2026-10-14T09:00:00.000Z",
+    agencyName: "Shopin30 Abidjan",
+    city: "Abidjan",
+    note: "Étape validée au guichet"
+  });
+  assert.equal(/agent-7|Koffi/.test(JSON.stringify(suivi)), false);
+});

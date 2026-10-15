@@ -269,3 +269,13 @@ date de création de l'incident moins la date d'arrivée du bordereau.
   la garde des écritures.
 - Le contrat client ↔ API est couvert par les tests : ajouter une ressource (bordereaux, photos, incidents)
   se fera avec le même niveau de preuve.
+
+## 9. Livré : LOT 1 — comptes agents nommés (chantier 7 de la priorité P0)
+
+La table `agents` (1 agence = N agents, gérant = compte agence existant) permet
+la connexion par agent, l'activation/désactivation par le gérant (Paramètres >
+Équipe) et la traçabilité `actorId`/`actorName` sur chaque écriture d'étape —
+affichée « Par … » dans la fiche colis, **jamais** dans le suivi public
+(projection `etapePublique()`). Contrôles serveur (`requireGerant`,
+session agent invalidée à la désactivation), tests API + métier + intégrité
+statique au vert.

@@ -258,7 +258,8 @@ test("les points d'entrée Vercel captent les routes API à un segment et imbriq
     "api/colis/[id].js": "../../lib/app.js",
     "api/colis/[id]/attach.js": "../../../lib/app.js",
     "api/colis/[id]/progress.js": "../../../lib/app.js",
-    "api/suivi/[code].js": "../../lib/app.js"
+    "api/suivi/[code].js": "../../lib/app.js",
+    "api/agents/[id].js": "../../../lib/app.js"
   };
   for (const [fichier, cible] of Object.entries(entreesImbriquees)) {
     assert.ok(existsSync(path.join(RACINE, fichier)), `${fichier} doit exister : sinon Vercel répond 404 NOT_FOUND sur cette route`);
@@ -267,7 +268,7 @@ test("les points d'entrée Vercel captent les routes API à un segment et imbriq
 
   // Les routes imbriquées appelées par le front doivent exister côté Express.
   const api = lire("lib/app.js");
-  for (const route of ["/api/colis/:id", "/api/colis/:id/attach", "/api/colis/:id/progress", "/api/suivi/:code"]) {
+  for (const route of ["/api/colis/:id", "/api/colis/:id/attach", "/api/colis/:id/progress", "/api/suivi/:code", "/api/agents/:id"]) {
     assert.ok(api.includes(route), `lib/app.js doit déclarer ${route} (captée par son point d'entrée Vercel)`);
   }
   assert.match(lire("js/colis.js"), /\/api\/colis\//, "la fiche colis appelle les routes imbriquées /api/colis/…");
@@ -280,4 +281,31 @@ test("les règles de protection sont rappelées dans le README", () => {
   assert.match(readme, /Neon/i);
   assert.match(readme, /rattachement/i);
   assert.match(readme, /npm test|npm run test/);
+});
+
+test("le LOT 1 (comptes agents) est câblé de bout en bout côté interface", () => {
+  // Paramètres > Équipe : le gérant invite et active/désactive ses agents ;
+  // l'agent désactivé est refusé côté serveur (couvert par tests/api.test.mjs).
+  const html = lire("parametres.html");
+  const script = lire("js/parametres.js");
+  assert.match(html, /id="teamSection"/, "section Équipe présente dans Paramètres");
+  assert.match(html, /id="agentForm"/, "formulaire d'invitation d'agent");
+  for (const id of ["agentName", "agentEmail", "agentPhone", "agentPassword", "agentsList", "teamMessage", "saveAgentButton"]) {
+    assert.match(html, new RegExp(`id="${id}"`), `parametres.html doit exposer #${id}`);
+  }
+  for (const id of ["agentForm", "agentsList", "teamMessage", "saveAgentButton"]) {
+    assert.match(script, new RegExp(id), `js/parametres.js manipule #${id}`);
+  }
+  assert.match(script, /\/api\/agents/, "les actions équipe passent par l'API");
+  assert.match(script, /"PATCH"/, "activation/désactivation par PATCH");
+  // La session expose le membre connecté (gérant ou agent).
+  assert.match(lire("js/auth.js"), /member/, "requireAgency remonte le membre connecté");
+  assert.match(lire("js/layout.js"), /data-member-label/, "la barre latérale affiche l'agent connecté");
+  // L'historique affiche l'acteur côté agence, jamais en public.
+  assert.match(lire("js/utils.js"), /actorName/, "l'historique affiche l'acteur");
+  const app = lire("lib/app.js");
+  assert.match(app, /etapePublique/, "le suivi public projette les étapes via etapePublique (aucun acteur)");
+  assert.match(app, /requireGerant/, "les écritures agents sont réservées au gérant côté serveur");
+  // README : les comptes agents sont documentés.
+  assert.match(lire("README.md"), /comptes agents|Agents/i, "le README documente les comptes agents");
 });

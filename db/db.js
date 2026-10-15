@@ -88,13 +88,25 @@ async function seedDemo(db) {
       "demo-bouake", "bouake@colisexpress.ci", hash, "Agence Bouaké Centre", "Bouaké", "0500000002", now
     ]
   );
+  // LOT 1 — équipe de démonstration : deux agents actifs et un agent désactivé.
+  await db.query(
+    `INSERT INTO agents (id, agency_id, name, email, phone, password_hash, role, active, created_at_iso)
+     VALUES ($1, $2, $3, $4, $5, $6, 'agent', TRUE, $7),
+            ($8, $9, $10, $11, $12, $6, 'agent', TRUE, $7),
+            ($13, $14, $15, $16, $17, $6, 'agent', FALSE, $7)`,
+    [
+      "demo-agent-koffi", "demo-abidjan", "Koffi N'Guessan", "koffi@colisexpress.ci", "0700000011", hash, now,
+      "demo-agent-aicha", "demo-bouake", "Aïcha Touré", "aicha@colisexpress.ci", "0500000012",
+      "demo-agent-yao", "demo-abidjan", "Yao Konan", "yao@colisexpress.ci", "0700000013"
+    ]
+  );
   const colis = [
     {
       id: "demo-colis-1", code: "CLI-DEMO01", owner: "demo-abidjan", dest: "demo-bouake",
       destName: "Agence Bouaké Centre", destCity: "Bouaké", status: "Expédié",
       history: [
-        { status: "Enregistré", date: now, agencyName: "Shopin30 Abidjan", city: "Abidjan" },
-        { status: "Expédié", date: now, agencyName: "Shopin30 Abidjan", city: "Abidjan" }
+        { status: "Enregistré", date: now, agencyName: "Shopin30 Abidjan", city: "Abidjan", actorId: "demo-agent-koffi", actorName: "Koffi N'Guessan" },
+        { status: "Expédié", date: now, agencyName: "Shopin30 Abidjan", city: "Abidjan", actorId: "demo-agent-koffi", actorName: "Koffi N'Guessan" }
       ], unreg: null
     },
     {
@@ -108,9 +120,9 @@ async function seedDemo(db) {
       destName: "Shopin30 Abidjan", destCity: "Abidjan", status: "Arrivé à l'agence de destination",
       history: [
         { status: "Enregistré", date: now, agencyName: "Agence Bouaké Centre", city: "Bouaké" },
-        { status: "Expédié", date: now, agencyName: "Agence Bouaké Centre", city: "Bouaké" },
-        { status: "En transit", date: now, agencyName: "Agence Bouaké Centre", city: "Bouaké" },
-        { status: "Arrivé à l'agence de destination", date: now, agencyName: "Shopin30 Abidjan", city: "Abidjan" }
+        { status: "Expédié", date: now, agencyName: "Agence Bouaké Centre", city: "Bouaké", actorId: "demo-agent-aicha", actorName: "Aïcha Touré" },
+        { status: "En transit", date: now, agencyName: "Agence Bouaké Centre", city: "Bouaké", actorId: "demo-agent-aicha", actorName: "Aïcha Touré" },
+        { status: "Arrivé à l'agence de destination", date: now, agencyName: "Shopin30 Abidjan", city: "Abidjan", actorId: "demo-abidjan", actorName: "Shopin30 Abidjan" }
       ], unreg: null
     }
   ];

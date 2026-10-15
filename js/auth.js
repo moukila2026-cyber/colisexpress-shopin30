@@ -7,8 +7,11 @@ import { redirectToLogin, showToast } from "./utils.js";
  */
 export async function requireAgency({ messageTarget = "#pageMessage" } = {}) {
   try {
-    const { agency } = await api("/api/me");
-    return agency;
+    const { agency, member } = await api("/api/me");
+    if (!agency) return null;
+    // Membre connecté (gérant ou agent) : sert à l'affichage et aux garde-fous
+    // d'interface — les vraies autorisations restent côté serveur.
+    return { ...agency, member };
   } catch (error) {
     if (error.status === 401) {
       redirectToLogin();
