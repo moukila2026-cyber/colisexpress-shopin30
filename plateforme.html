@@ -32,6 +32,18 @@
       </form>
     </section>
 
+    <section class="panel-card plateforme-login" id="amorcagePanel" hidden>
+      <h1>Créer le premier administrateur</h1>
+      <p>Aucun compte de console n'existe encore. Saisissez le jeton d'amorçage défini dans Vercel (<code>PLATEFORME_PREMIER_ADMIN_JETON</code>) pour créer le premier compte de l'équipe Shopin30. Cette étape ne sert qu'une seule fois : supprimez ensuite la variable.</p>
+      <form id="amorcageForm" class="form-stack" novalidate>
+        <div class="field"><label for="amorcageJeton">Jeton d'amorçage</label><input id="amorcageJeton" name="jeton" type="password" autocomplete="off" minlength="32" required></div>
+        <div class="field"><label for="amorcageEmail">E-mail de l'administrateur</label><input id="amorcageEmail" name="email" type="email" autocomplete="username" required></div>
+        <div class="field"><label for="amorcageNom">Nom affiché</label><input id="amorcageNom" name="nom" type="text" maxlength="80" autocomplete="name" required></div>
+        <div class="field"><label for="amorcagePassword">Mot de passe (12 caractères minimum)</label><input id="amorcagePassword" name="password" type="password" autocomplete="new-password" minlength="12" required></div>
+        <button class="button button-orange" id="amorcageButton" type="submit">Créer le premier administrateur</button>
+      </form>
+    </section>
+
     <div id="consolePanel" hidden>
       <div class="plateforme-heading">
         <div><h1>Vue d'ensemble du réseau</h1><p id="consolePeriode">—</p></div>

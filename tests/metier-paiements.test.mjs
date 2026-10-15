@@ -8,6 +8,10 @@ import test from "node:test";
 
 import {
   DEVISE,
+  MESSAGE_COLIS_GUICHET,
+  MODES_FRAIS_SASPAY,
+  OBJETS_PAIEMENT,
+  OBJETS_PAIEMENT_CREATION,
   PAYS,
   fcfaDepuisDecimal,
   libelleAvecMode,
@@ -15,6 +19,8 @@ import {
   libelleObjetPaiement,
   libelleStatutPaiement,
   montantDecimal,
+  montantDemandeFCFA,
+  normaliserModeFrais,
   statutDepuisSession,
   transactionConforme,
   validerDemandePaiement
@@ -34,9 +40,15 @@ test("montants : chaînes décimales SasPay, jamais de flottant ni de centimes",
   assert.equal(fcfaDepuisDecimal(null), null);
 });
 
-test("demandes : reste d'un colis, abonnement du mois, recharge bornée", () => {
-  assert.deepEqual(validerDemandePaiement({ objet: "colis", parcelId: " abc " }).valeur, { objet: "colis", parcelId: "abc" });
-  assert.match(validerDemandePaiement({ objet: "colis" }).error, /colis à régler/);
+test("demandes (LOT 8) : le colis est refusé (403, guichet), abonnement du mois et recharge bornée", () => {
+  assert.deepEqual([...OBJETS_PAIEMENT_CREATION], ["abonnement", "recharge"], "seuls l'abonnement et la recharge se paient en ligne");
+  assert.ok(OBJETS_PAIEMENT.includes("colis"), "l'objet colis reste reconnu dans l'historique");
+  const colis = validerDemandePaiement({ objet: "colis", parcelId: "abc" });
+  assert.equal(colis.status, 403);
+  assert.equal(colis.error, MESSAGE_COLIS_GUICHET);
+  assert.match(colis.error, /guichet/);
+  assert.match(colis.error, /abonnement et les recharges/);
+  assert.equal(validerDemandePaiement({ objet: "colis" }).status, 403);
   assert.deepEqual(validerDemandePaiement({ objet: "abonnement" }).valeur, { objet: "abonnement" });
   assert.deepEqual(validerDemandePaiement({ objet: "recharge", montantFCFA: 5000 }).valeur, { objet: "recharge", montantFCFA: 5000 });
   for (const montant of [0, 99, 12.5, "x", 1_000_001]) {
@@ -53,7 +65,7 @@ test("statuts : la session « PAID » n'est qu'un candidat, expirée et annulée
   assert.equal(statutDepuisSession("PENDING"), "en_attente");
   assert.equal(statutDepuisSession(undefined), "en_attente");
   assert.equal(libelleStatutPaiement("paye"), "Payé");
-  assert.equal(libelleObjetPaiement("colis"), "Reste à payer d'un colis");
+  assert.equal(libelleObjetPaiement("colis"), "Reste à payer d'un colis (historique)");
   assert.equal(libelleModePaiement("simulation"), "Simulation");
 });
 
@@ -65,6 +77,27 @@ test("transaction conforme : SUCCESS, XOF et montant demandé exact — sinon ri
   assert.equal(transactionConforme({ status: "SUCCESS", currency: "XOF", requested_amount: "100.00" }, 3500).raison, "montant inattendu");
   assert.equal(transactionConforme({ status: "SUCCESS", currency: "XOF" }, 3500).raison, "montant inattendu");
   assert.equal(transactionConforme({}, 3500).ok, false);
+});
+
+test("frais SasPay : requested_amount fait foi dans les deux modes ; replis cohérents avec fee_charge_mode", () => {
+  assert.deepEqual([...MODES_FRAIS_SASPAY], ["ADD_ON", "DEDUCTED"]);
+  assert.equal(normaliserModeFrais(" deducted "), "DEDUCTED");
+  assert.equal(normaliserModeFrais("add_on"), "ADD_ON");
+  assert.equal(normaliserModeFrais("autre"), null);
+  assert.equal(normaliserModeFrais(undefined), null);
+  // ADD_ON : le client paie 2537.50, le marchand reçoit 2500 ; demandé = 2500.
+  const addOn = { status: "SUCCESS", currency: "XOF", requested_amount: "2500.00", debited_amount: "2537.50", net_amount: "2500.00", fee_charge_mode: "ADD_ON" };
+  assert.deepEqual(transactionConforme(addOn, 2500), { ok: true });
+  assert.equal(montantDemandeFCFA(addOn), 2500);
+  // DEDUCTED : le client paie exactement 2500, le marchand reçoit 2462.50 ; demandé = 2500.
+  const deduit = { status: "SUCCESS", currency: "XOF", requested_amount: "2500.00", debited_amount: "2500.00", net_amount: "2462.50", fee_charge_mode: "DEDUCTED" };
+  assert.deepEqual(transactionConforme(deduit, 2500), { ok: true }, "les frais retenus ne rendent pas le paiement non conforme");
+  assert.equal(transactionConforme(deduit, 2462).ok, false, "le montant crédité reste le montant demandé, pas le net");
+  // Sans requested_amount : repli sur le champ égal au montant demandé selon le mode.
+  assert.equal(montantDemandeFCFA({ net_amount: "2500.00", debited_amount: "2537.50", fee_charge_mode: "ADD_ON" }), 2500);
+  assert.equal(montantDemandeFCFA({ net_amount: "2462.50", debited_amount: "2500.00", fee_charge_mode: "DEDUCTED" }), 2500);
+  assert.equal(montantDemandeFCFA({ amount: "2500.00" }), 2500);
+  assert.equal(montantDemandeFCFA({ net_amount: "2462.50", debited_amount: "2500.00" }), null, "mode inconnu et pas de montant demandé : refus");
 });
 
 test("traçabilité : le mode non réel est rappelé dans les libellés de caisse et de portefeuille", () => {

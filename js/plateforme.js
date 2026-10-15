@@ -23,6 +23,7 @@ import {
 
 const message = document.getElementById("pageMessage");
 const loginPanel = document.getElementById("loginPanel");
+const amorcagePanel = document.getElementById("amorcagePanel");
 const consolePanel = document.getElementById("consolePanel");
 const sessionBar = document.getElementById("plateformeSession");
 const modal = document.getElementById("agenceModal");
@@ -38,10 +39,55 @@ function afficherConnexion() {
   sessionBar.hidden = true;
   loginPanel.hidden = false;
   document.getElementById("plateformeEmail")?.focus();
+  verifierAmorcage();
+}
+
+/**
+ * LOT 8 — amorçage du premier administrateur sans terminal : le formulaire
+ * n'apparaît que si le serveur l'autorise (aucun administrateur actif ET
+ * jeton configuré dans Vercel). Après la première création, il disparaît
+ * définitivement.
+ */
+async function verifierAmorcage() {
+  try {
+    const etat = await api(`/api/plateforme/amorcage?_=${Date.now()}`);
+    amorcagePanel.hidden = etat.disponible !== true;
+  } catch {
+    amorcagePanel.hidden = true;
+  }
+}
+
+async function amorcer(event) {
+  event.preventDefault();
+  const button = document.getElementById("amorcageButton");
+  const corps = {
+    jeton: document.getElementById("amorcageJeton").value.trim(),
+    email: document.getElementById("amorcageEmail").value.trim(),
+    nom: document.getElementById("amorcageNom").value.trim(),
+    password: document.getElementById("amorcagePassword").value
+  };
+  if (!corps.jeton || !corps.email || !corps.nom || corps.password.length < 12) {
+    showPageMessage(message, "Renseignez le jeton, l'e-mail, le nom et un mot de passe d'au moins 12 caractères.");
+    return;
+  }
+  setButtonLoading(button, true, "Création…");
+  try {
+    const resultat = await api("/api/plateforme/amorcage", { method: "POST", body: corps });
+    document.getElementById("amorcageJeton").value = "";
+    document.getElementById("amorcagePassword").value = "";
+    amorcagePanel.hidden = true;
+    showToast(`Compte créé pour ${resultat.admin.email}. ${resultat.aFaire}`);
+    await charger();
+  } catch (error) {
+    showPageMessage(message, errorMessage(error));
+  } finally {
+    setButtonLoading(button, false);
+  }
 }
 
 function afficherConsole() {
   loginPanel.hidden = true;
+  amorcagePanel.hidden = true;
   consolePanel.hidden = false;
   sessionBar.hidden = false;
   document.getElementById("adminName").textContent = vue?.admin?.name || "";
@@ -264,6 +310,7 @@ async function crediter(event) {
 
 function boot() {
   document.getElementById("plateformeLoginForm").addEventListener("submit", connexion);
+  document.getElementById("amorcageForm").addEventListener("submit", amorcer);
   document.getElementById("logoutPlateforme").addEventListener("click", deconnexion);
   document.getElementById("refreshConsole").addEventListener("click", () => charger());
   document.getElementById("closeAgenceModal").addEventListener("click", fermerAgence);

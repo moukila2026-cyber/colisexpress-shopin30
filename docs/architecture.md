@@ -303,6 +303,55 @@ l'expéditeur) — les 5 statuts officiels du colis ne changent jamais.
   `/api/suivi/:code/:action` ; `/api/marque` est une route à un segment —
   toujours 10 fonctions.
 
+### Sécurité avant la mise en production (LOT 8)
+
+- **Shopin30 n'encaisse jamais l'argent des colis.** `validerDemandePaiement()`
+  distingue `OBJETS_PAIEMENT_CREATION` (`abonnement`, `recharge`) de
+  `OBJETS_PAIEMENT` (historique, `colis` compris) ; l'objet `colis` renvoie
+  `{ error, status: 403 }` et `POST /api/paiements` répond 403 avec le
+  message « l'agence encaisse elle-même au guichet ». `creerPaiement()`
+  refuse aussi l'objet (défense en profondeur). Les lignes historiques
+  `objet = 'colis'` restent lisibles (`GET /api/paiements?parcelId=`) et
+  `appliquerEffet()` sait encore les appliquer une seule fois : le webhook
+  et `confirmerPaiement()` ne plantent pas dessus. Aucune migration
+  destructive (la contrainte `CHECK (objet IN (…))` garde `colis`).
+  Interface : plus de bouton ni de lien SasPay dans `js/colis.js` ; la caisse
+  et l'encaissement au guichet ne changent pas ; `paiement-simulation.html`
+  ne traite que l'abonnement et la recharge.
+- **Garde-fous de paiement** (`configurationPaiements(env)`, selon
+  `VERCEL_ENV`) : production → `sk_live_` seule ; `sk_test_` ou
+  `PAIEMENTS_SIMULATION=1` → `desactive` avec raison explicite ; preview /
+  development → `sk_live_` refusée ; hors Vercel, `sk_live_` sans
+  `DATABASE_URL` refusée (jamais d'argent réel sur une base de test), et la
+  simulation reste le défaut sans `DATABASE_URL`.
+- **Frais SasPay** : `SASPAY_MODE_FRAIS` (`ADD_ON` | `DEDUCTED`) → champ
+  `fee_charge_mode` de `POST /checkout-sessions/`. D'après la doc SasPay,
+  `requested_amount` est toujours le montant demandé ; `ADD_ON` :
+  `debited_amount = montant + frais`, `net_amount = montant` ; `DEDUCTED` :
+  `debited_amount = montant`, `net_amount = montant − frais`.
+  `transactionConforme()` compare le montant attendu à
+  `montantDemandeFCFA()` (`requested_amount`, à défaut `net_amount` en
+  ADD_ON ou `debited_amount` en DEDUCTED) ; le crédit du portefeuille reste
+  le montant demandé dans les deux modes.
+- **Sessions** : `etatSecretSession(env)` → `{ ok, exige, longueur, raison }`
+  (jamais la valeur). `exige` = `DATABASE_URL` définie ou
+  `VERCEL_ENV=production` ; alors `SESSION_SECRET` doit faire ≥ 32
+  caractères, sinon `secret()` lève `ErreurConfigurationSession` (503) :
+  `getSessionCharge()`, `getPlatformCharge()`, `createSessionToken()` et
+  les routes de connexion/inscription refusent, le gestionnaire d'erreurs
+  renvoie le message clair. `SECRET_DEV` n'est utilisé qu'en démo locale.
+- **Amorçage du premier administrateur** (`lib/plateforme.js`) :
+  `GET /api/plateforme/amorcage` → `{ disponible, motif }` (`ouvert`,
+  `ferme`, `jeton_absent`) ; `POST /api/plateforme/amorcage` (jeton,
+  e-mail, nom, mot de passe ≥ 12). Jeton `PLATEFORME_PREMIER_ADMIN_JETON`
+  ≥ 32 caractères comparé via `timingSafeEqual` sur empreintes SHA-256 ;
+  création atomique en une instruction (`INSERT … ON CONFLICT (cle) DO
+  NOTHING` dans `plateforme_amorcage` + `INSERT … WHERE NOT EXISTS
+  (administrateur actif)`) ; 5 jetons faux par adresse et par 15 min → 429 ;
+  ensuite fermé pour toujours (même si tous les administrateurs sont
+  désactivés). Routes repliées par le rewrite `/api/plateforme/:action`
+  existant — toujours 10 fonctions.
+
 ## Autorisations (ex-`firestore.rules`)
 
 | Ancienne règle Firestore | Équivalent serveur |
@@ -319,6 +368,9 @@ l'expéditeur) — les 5 statuts officiels du colis ne changent jamais.
 | quota : la destination ne paie jamais | `reserverCreation({ agencyId: session })` uniquement dans `POST /api/colis` ; aucune autre route ne lit la facturation |
 | abonnement : gérant seul | `requireGerantFacturation` sur `POST /api/facturation/*` ; plan Réseau réservé à la console |
 | suivi personnalisé : gérant seul, rien de personnel | `PUT /api/marque` refusé aux agents ; `marquePublique()` ne projette ni contact ni clé de stockage |
+| colis jamais payés en ligne à Shopin30 | `POST /api/paiements` : objet `colis` → 403 (`validerDemandePaiement`), `creerPaiement()` refuse aussi |
+| secret de session fort hors démo | `verifierSecretSession()` sur connexion, inscription, `requireAgency`, `requirePlateforme` → 503 tant que `SESSION_SECRET` < 32 caractères |
+| premier administrateur : une seule fois | `creerPremierAdmin()` : jeton en temps constant, ligne unique `plateforme_amorcage`, aucun administrateur actif |
 | paiement appliqué une seule fois, après vérification | `confirmerPaiement()` (session `PAID` + `verify` `SUCCESS`, montant exact) et drapeau `effet_applique` dans la même instruction que l'écriture |
 | webhook authentique | `verifierSignatureWebhook()` : HMAC du corps brut, ± 300 s, temps constant |
 | console plateforme : compte séparé | `requirePlateforme` (cookie `ce_plateforme`, domaine de signature distinct, compte actif) |
