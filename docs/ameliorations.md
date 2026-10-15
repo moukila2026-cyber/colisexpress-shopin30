@@ -301,3 +301,26 @@ statique au vert.
 - Règles d'or respectées : la caisse et les encaissements n'existent que du
   côté des deux agences déjà concernées par le colis ; un impayé n'empêche ni
   la lecture ni l'avancement du colis.
+
+## 11. Livré : LOT 3 — mémoire client + devis public
+
+- **Carnet de clients** (table `clients`, page « Clients ») : expéditeurs et
+  destinataires mémorisés **par agence** (nom, téléphone, CNI expéditeur,
+  ville, note). La mémorisation est **automatique** à chaque enregistrement de
+  colis (upsert sur (agence, rôle, téléphone) : jamais de doublon, une CNI
+  déjà renseignée n'est jamais effacée), et possible à la main. Recherche par
+  téléphone (même partiel, format libre) ou par nom ; fiche client avec
+  **historique de ses colis** ; modification par PATCH ; **aucune
+  suppression**. Cloisonnement strict : le carnet n'est visible que par
+  l'agence propriétaire (garde serveur).
+- **Pré-remplissage au guichet** : dans « Nouveau colis », la saisie d'un
+  téléphone connu propose « Client connu : … · pré-remplir » (expéditeur :
+  prénom, nom, CNI ; destinataire : prénom, nom) — le guichet ne ressaisit
+  plus ce qu'il sait déjà.
+- **Devis public** (page d'accueil, `POST /api/devis` anonyme) : ville départ,
+  ville arrivée, poids, nature (facultative) → offres calculées depuis les
+  grilles tarifaires **actives** des agences (`estimerDevis()` partagé, tri
+  par prix croissant), chacune avec « Contacter l'agence » (WhatsApp
+  pré-rempli). Aucune donnée personnelle demandée ni renvoyée (ni e-mail, ni
+  identifiant interne). Axe non couvert = proposition de contact équipe,
+  jamais d'erreur.

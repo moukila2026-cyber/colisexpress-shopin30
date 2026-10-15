@@ -26,7 +26,7 @@
             <div class="form-grid">
               <div class="field"><label for="senderFirstName">Prénom <span class="required">*</span></label><input id="senderFirstName" name="senderFirstName" type="text" autocomplete="given-name" required></div>
               <div class="field"><label for="senderLastName">Nom <span class="required">*</span></label><input id="senderLastName" name="senderLastName" type="text" autocomplete="family-name" required></div>
-              <div class="field"><label for="senderPhone">Téléphone <span class="required">*</span></label><input id="senderPhone" name="senderPhone" type="tel" inputmode="numeric" placeholder="0700000000" required><small class="field-help">Format ivoirien, 10 chiffres.</small></div>
+              <div class="field"><label for="senderPhone">Téléphone <span class="required">*</span></label><input id="senderPhone" name="senderPhone" type="tel" inputmode="numeric" placeholder="0700000000" required><small class="field-help">Format ivoirien, 10 chiffres.</small><div class="client-match" id="senderMatch" hidden></div></div>
               <div class="field"><label for="senderCni">Numéro CNI <span class="required">*</span></label><input id="senderCni" name="senderCni" type="text" autocomplete="off" placeholder="Ex. CI12345678" required><small class="field-help">8 à 25 caractères, avec au moins un chiffre.</small></div>
             </div>
           </section>
@@ -36,7 +36,7 @@
             <div class="form-grid">
               <div class="field"><label for="recipientFirstName">Prénom <span class="required">*</span></label><input id="recipientFirstName" name="recipientFirstName" type="text" autocomplete="given-name" required></div>
               <div class="field"><label for="recipientLastName">Nom <span class="required">*</span></label><input id="recipientLastName" name="recipientLastName" type="text" autocomplete="family-name" required></div>
-              <div class="field field-full"><label for="recipientPhone">Téléphone <span class="required">*</span></label><input id="recipientPhone" name="recipientPhone" type="tel" inputmode="numeric" placeholder="0700000000" required><small class="field-help">Utilisé uniquement par les agences concernées et pour l'alerte WhatsApp à l'arrivée.</small></div>
+              <div class="field field-full"><label for="recipientPhone">Téléphone <span class="required">*</span></label><input id="recipientPhone" name="recipientPhone" type="tel" inputmode="numeric" placeholder="0700000000" required><small class="field-help">Utilisé uniquement par les agences concernées et pour l'alerte WhatsApp à l'arrivée.</small><div class="client-match" id="recipientMatch" hidden></div></div>
             </div>
           </section>
 

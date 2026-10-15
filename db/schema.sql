@@ -99,6 +99,30 @@ CREATE TABLE IF NOT EXISTS encaissements (
 
 CREATE INDEX IF NOT EXISTS idx_encaissements_agency_date ON encaissements (agency_id, date_key);
 
+-- LOT 3 — carnet de clients : expéditeurs et destinataires mémorisés par
+-- agence (nom, téléphone, CNI expéditeur, ville). Données privées : visibles
+-- uniquement par l'agence propriétaire. Unicité (agence, rôle, téléphone) :
+-- la mémorisation automatique à l'enregistrement d'un colis est un upsert.
+-- Pas de suppression : le carnet est la mémoire de l'agence.
+CREATE TABLE IF NOT EXISTS clients (
+  id             TEXT PRIMARY KEY,
+  agency_id      TEXT NOT NULL REFERENCES agencies(id),
+  kind           TEXT NOT NULL CHECK (kind IN ('expediteur', 'destinataire')),
+  first_name     TEXT NOT NULL,
+  last_name      TEXT NOT NULL,
+  phone          TEXT NOT NULL,
+  cni            TEXT,                        -- CNI expéditeur (jamais destinataire)
+  city           TEXT NOT NULL DEFAULT '',
+  notes          TEXT NOT NULL DEFAULT '',
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at_iso TEXT NOT NULL,
+  updated_at_iso TEXT NOT NULL,
+  UNIQUE (agency_id, kind, phone)
+);
+
+CREATE INDEX IF NOT EXISTS idx_clients_agency ON clients (agency_id);
+CREATE INDEX IF NOT EXISTS idx_clients_phone  ON clients (phone);
+
 -- LOT 2 — clôtures de caisse : une par agence et par jour, total compté
 -- validé par l'agent face au total calculé par le serveur.
 CREATE TABLE IF NOT EXISTS caisse_closures (

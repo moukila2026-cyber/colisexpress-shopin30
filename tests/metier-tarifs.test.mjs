@@ -10,6 +10,7 @@ import {
   TRANCHES_DEFAUT,
   cleVille,
   estModeEncaissement,
+  estimerDevis,
   normaliserTarif,
   optionsPrix,
   poidsDansTranche,
@@ -155,4 +156,69 @@ test("validerTarif refuse les lignes mal formées", () => {
   assert.match(validerTarif({ originCity: "Abidjan", destinationCity: "", weightMinKg: 5, weightMaxKg: 2, priceFCFA: 100 }).error, /supérieur/);
   assert.match(validerTarif({ originCity: "Abidjan", destinationCity: "", weightMinKg: 0, weightMaxKg: 2, priceFCFA: -5 }).error, /entier/);
   assert.match(validerTarif({ originCity: "Abidjan", destinationCity: "", weightMinKg: 0, weightMaxKg: 2, priceFCFA: "abc" }).error, /montant/);
+});
+
+/* ------------------------------ devis public (LOT 3) ----------------------- */
+
+function tarifDevis(id, agence, origine, destination, min, max, prix, active = true) {
+  return {
+    ...normaliserTarif({
+      id,
+      agency_id: agence.id,
+      origin_city: origine,
+      destination_city: destination,
+      weight_min_kg: min,
+      weight_max_kg: max,
+      price_fcfa: prix,
+      active,
+      created_at_iso: "2026-01-01T00:00:00.000Z"
+    }),
+    agence
+  };
+}
+
+test("estimerDevis retourne les offres des agences, triées par prix croissant", () => {
+  const agenceA = { name: "Shopin30 Abidjan", city: "Abidjan", phone: "0700000001" };
+  const agenceB = { name: "Agence Bouaké Centre", city: "Bouaké", phone: "0500000002" };
+  const tarifs = [
+    tarifDevis("t1", agenceA, "Abidjan", "Bouaké", 0, 2, 2500),
+    tarifDevis("t2", agenceA, "Abidjan", "Bouaké", 2, 5, 3500),
+    tarifDevis("t3", agenceB, "Abidjan", "Bouaké", 0, 5, 3000)
+  ];
+
+  const leger = estimerDevis({ tarifs, originCity: "Abidjan", destinationCity: "Bouaké", weightKg: 1 });
+  assert.deepEqual(leger.map((o) => o.priceFCFA), [2500, 3000]);
+  assert.equal(leger[0].agence.name, "Shopin30 Abidjan");
+  assert.equal(leger[0].tranche, "0 – 2 kg");
+
+  const lourd = estimerDevis({ tarifs, originCity: "abidjan ", destinationCity: "BOUAKÉ", weightKg: 3 });
+  assert.deepEqual(lourd.map((o) => o.priceFCFA), [3000, 3500], "insensible à la casse, tranche applicable par agence");
+});
+
+test("estimerDevis ignore les grilles désactivées, les axes non couverts et les poids hors tranche", () => {
+  const agenceA = { name: "Agence A", city: "Abidjan", phone: "0700000001" };
+  const tarifs = [
+    tarifDevis("t1", agenceA, "Abidjan", "Bouaké", 0, 2, 2500, false), // ligne désactivée
+    tarifDevis("t2", agenceA, "Abidjan", "", 2, 5, 4200)                // toutes destinations
+  ];
+  assert.deepEqual(estimerDevis({ tarifs, originCity: "Abidjan", destinationCity: "Bouaké", weightKg: 1 }), [], "grille désactivée : aucune offre");
+  assert.deepEqual(estimerDevis({ tarifs, originCity: "Abidjan", destinationCity: "Man", weightKg: 10 }), [], "poids hors tranche");
+  const toutes = estimerDevis({ tarifs, originCity: "Abidjan", destinationCity: "Man", weightKg: 3 });
+  assert.equal(toutes.length, 1);
+  assert.equal(toutes[0].destination, "toutes destinations");
+});
+
+test("estimerDevis n'expose aucune donnée interne ou personnelle", () => {
+  const agence = { name: "Agence A", city: "Abidjan", phone: "0700000001" };
+  const offres = estimerDevis({
+    tarifs: [tarifDevis("t1", agence, "Abidjan", "Bouaké", 0, 2, 2500)],
+    originCity: "Abidjan",
+    destinationCity: "Bouaké",
+    weightKg: 1
+  });
+  const brut = JSON.stringify(offres);
+  assert.ok(!brut.includes("agencyId") && !brut.includes("weightMinKg") && !brut.includes("t1"), "ni identifiant de grille, ni champ interne");
+  assert.ok(!brut.includes("agency_id") && !brut.includes("createdAtISO"), "aucune colonne SQL ne fuite");
+  assert.deepEqual(Object.keys(offres[0]).sort(), ["agence", "destination", "priceFCFA", "tranche"]);
+  assert.deepEqual(Object.keys(offres[0].agence).sort(), ["city", "name", "phone"]);
 });

@@ -20,6 +20,14 @@ plus aucune dépendance à Firebase.
   « À payer à l'arrivée » — puis encaissement du solde à la remise
 - **Caisse du jour** par agence : encaissements du jour par mode (espèces,
   mobile money), restes à encaisser, clôture avec total compté, export CSV
+- **Carnet de clients** : expéditeurs et destinataires mémorisés
+  automatiquement à chaque colis (ou à la main), recherche par téléphone,
+  pré-remplissage du formulaire « nouveau colis », historique des colis par
+  client — visible uniquement par l'agence propriétaire
+- **Devis public** : estimateur anonyme sur la page d'accueil (ville départ,
+  ville arrivée, poids, nature) calculé depuis les grilles tarifaires des
+  agences actives, avec contact WhatsApp de l'agence — aucune donnée
+  personnelle demandée
 
 ## Arborescence
 
@@ -101,6 +109,8 @@ peuvent être trafiquées sans effet) :
 | Inviter / désactiver des agents | **gérant** de l'agence uniquement (garde serveur `requireGerant`) |
 | Se connecter comme agent | agent **actif** uniquement ; un agent désactivé perd sa session immédiatement |
 | Suivi public (`/api/suivi/:code`) | monde entier, mais **strictement** les 7 champs publics (aucune donnée personnelle, y compris l'acteur `actorName` des étapes) |
+| Carnet de clients (`/api/clients…`) | agence propriétaire uniquement (cloisonnement serveur) ; aucune suppression |
+| Devis public (`POST /api/devis`) | anonyme, sans session : ne renvoie que prix, tranche et coordonnées professionnelles des agences (jamais d'e-mail ni d'identifiant interne) |
 | Supprimer quoi que ce soit | jamais (aucune route de suppression) |
 
 Les mots de passe sont hachés avec **scrypt** (bibliothèque standard Node) ; les
@@ -118,11 +128,15 @@ npm test
 - `tests/api.test.mjs` : parcours complets de l'API (session, colis inscrit et
   non inscrite, visibilité entre agences, suivi public anonyme, rattachement
   unique, progression des statuts, refus d'accès, comptes agents, grille
-  tarifaire, états de paiement, encaissements et clôture de caisse).
+  tarifaire, états de paiement, encaissements et clôture de caisse, carnet de
+  clients et devis public).
 - `tests/metier-colis.test.mjs` : règles métier (validation, construction,
   étapes, rattachement, acteur, états de paiement).
 - `tests/metier-tarifs.test.mjs` : grille tarifaire (tranches, axes,
-  priorité destination exacte, options du menu déroulant, validation).
+  priorité destination exacte, options du menu déroulant, validation) et
+  devis public (`estimerDevis`).
+- `tests/metier-clients.test.mjs` : carnet de clients (validation,
+  normalisation, mémorisation depuis un colis, recherche).
 - `tests/integration-page.test.mjs` : intégrité statique (syntaxe, imports,
   identifiants DOM, liens, absence de toute dépendance Firebase, points
   d'entrée Vercel de chaque route imbriquée).
@@ -157,6 +171,15 @@ npm test
     espèces / mobile money, restes à encaisser, clôture avec total compté
     validé par l'agent (écart conservé) et export CSV (date, code, expéditeur,
     destinataire, prix, payé, reste, mode, agent).
+11. **Carnet de clients** : page « Clients » — chaque colis enregistré
+    mémorise l'expéditeur (avec CNI) et le destinataire dans le carnet privé
+    de l'agence ; recherche par téléphone ou nom, ajout/modification à la
+    main, fiche client avec historique de ses colis. Dans « Nouveau colis »,
+    la saisie d'un téléphone connu propose le **pré-remplissage** en un clic.
+12. **Devis public** : sur la page d'accueil, l'estimateur (ville départ,
+    ville arrivée, poids, nature) calcule les prix depuis les grilles des
+    agences actives et propose « Contacter l'agence » sur WhatsApp. Aucune
+    donnée personnelle n'est demandée pour estimer.
 
 ## 7. Dépannage
 

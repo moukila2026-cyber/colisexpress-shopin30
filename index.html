@@ -18,6 +18,7 @@
     <a class="brand" href="index.html" aria-label="COLIS EXPRESS, accueil"><span class="brand-mark" aria-hidden="true">CE</span><span>COLIS <em>EXPRESS</em></span></a>
     <nav class="public-nav" id="publicNav" aria-label="Navigation principale">
       <a href="#comment-ca-marche">Comment ça marche</a>
+      <a href="#devis">Estimer un prix</a>
       <a href="#pourquoi">Pourquoi COLIS EXPRESS</a>
       <a href="#questions">Questions fréquentes</a>
       <a href="suivi.html">Suivre un colis</a>
@@ -69,6 +70,25 @@
       </div>
     </section>
 
+    <section class="home-section devis-section" id="devis">
+      <div class="section-heading">
+        <p class="eyebrow">Devis instantané</p>
+        <h2>Estimez le prix de votre envoi.</h2>
+        <p>Indiquez l'itinéraire et le poids : le prix est calculé depuis les grilles tarifaires des agences actives du réseau, puis vous contactez l'agence en un geste. <strong>Aucune information personnelle n'est demandée.</strong></p>
+      </div>
+      <form class="devis-form" id="devisForm" novalidate>
+        <div class="devis-grid">
+          <div class="field"><label for="devisOriginCity">Ville de départ <span class="required">*</span></label><input id="devisOriginCity" name="originCity" type="text" autocomplete="off" placeholder="Ex. Abidjan" required></div>
+          <div class="field"><label for="devisDestinationCity">Ville d'arrivée <span class="required">*</span></label><input id="devisDestinationCity" name="destinationCity" type="text" autocomplete="off" placeholder="Ex. Bouaké" required></div>
+          <div class="field"><label for="devisWeightKg">Poids (kg) <span class="required">*</span></label><input id="devisWeightKg" name="weightKg" type="number" inputmode="decimal" min="0.01" step="0.1" max="1000" placeholder="2,5" required></div>
+          <div class="field"><label for="devisNature">Nature du colis</label><input id="devisNature" name="packageNature" type="text" autocomplete="off" maxlength="120" placeholder="Ex. Vêtements (facultatif)"></div>
+        </div>
+        <div class="form-footer"><button class="button button-orange" id="devisButton" type="submit">Estimer le prix</button></div>
+        <div class="page-message" id="devisMessage" hidden role="alert"></div>
+      </form>
+      <div id="devisResult" aria-live="polite"></div>
+    </section>
+
     <section class="feature-band" id="pourquoi">
       <div class="home-section">
         <div class="section-heading">
@@ -111,7 +131,7 @@
         <details class="faq-item"><summary>Quelles sont les étapes de mon colis ?</summary><p>Enregistré, Expédié, En transit, Arrivé à l'agence de destination, puis Retiré. Chaque étape est horodatée dans l'historique visible sur le suivi.</p></details>
         <details class="faq-item"><summary>Mes informations personnelles sont-elles visibles ?</summary><p>Non. Le suivi public n'affiche ni nom, ni téléphone, ni numéro de pièce d'identité. Ces informations ne sont accessibles qu'aux agences concernées par le colis.</p></details>
         <details class="faq-item"><summary>Que dois-je apporter pour retirer mon colis ?</summary><p>Votre pièce d'identité (CNI) et votre code de suivi. L'agence enregistre le retrait avec le nom et le numéro de la pièce présentée.</p></details>
-        <details class="faq-item"><summary>Combien coûte l'envoi ?</summary><p>Le prix est fixé par l'agence expéditrice au moment de l'enregistrement, en FCFA, selon la nature et le poids du colis. Pour un devis, contactez l'agence ou notre équipe sur WhatsApp.</p></details>
+        <details class="faq-item"><summary>Combien coûte l'envoi ?</summary><p>Le prix est fixé par l'agence expéditrice au moment de l'enregistrement, en FCFA, selon la destination et le poids du colis. Utilisez notre <a href="#devis">estimateur de devis</a> ci-dessus pour connaître le prix depuis les grilles des agences actives, puis contactez l'agence sur WhatsApp.</p></details>
         <details class="faq-item"><summary>Comment rejoindre le réseau COLIS EXPRESS ?</summary><p>Créez un compte d'agence en quelques minutes. Pour envoyer un colis vers une autre ville, il faut qu'une agence de destination soit inscrite dans le réseau.</p></details>
         <details class="faq-item"><summary>J'ai oublié mon mot de passe agence.</summary><p>Sur la page de connexion, cliquez sur « Mot de passe oublié ? ». Un lien de réinitialisation vous est envoyé par e-mail.</p></details>
       </div>

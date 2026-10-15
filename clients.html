@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Carnet de clients de l'agence COLIS EXPRESS : expéditeurs et destinataires mémorisés.">
+  <title>Carnet de clients — COLIS EXPRESS</title>
+  <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body class="agency-page">
+  <div class="app-shell">
+    <div id="sidebarMount"></div>
+    <main class="agency-main">
+      <div id="topbarMount"></div>
+      <div class="agency-content">
+        <header class="desktop-page-heading">
+          <div><h1>Carnet de clients</h1><p>Expéditeurs et destinataires mémorisés par votre agence : recherche par téléphone, pré-remplissage et historique des colis.</p></div>
+          <button class="button button-orange" id="newClientButton" type="button">＋ Nouveau client</button>
+        </header>
+        <div class="page-heading-mobile"><h1>Carnet de clients</h1><p>Vos expéditeurs et destinataires mémorisés.</p></div>
+        <div class="page-message" id="pageMessage" hidden role="alert"></div>
+        <p class="notice-box">Le carnet est privé : ces coordonnées ne sont visibles que par votre agence et ne sortent jamais dans le suivi public. Chaque colis enregistré complète automatiquement le carnet.</p>
+
+        <section class="panel-card filter-panel">
+          <form id="clientsFilters" class="filter-grid" autocomplete="off">
+            <div class="field"><label for="searchClient">Rechercher</label><input id="searchClient" type="search" placeholder="Téléphone ou nom"></div>
+            <div class="field"><label for="kindFilter">Rôle</label><select id="kindFilter"><option value="">Tous</option><option value="expediteur">Expéditeurs</option><option value="destinataire">Destinataires</option></select></div>
+            <div class="filter-actions"><button class="button button-outline" id="clearClientFilters" type="button">Effacer</button></div>
+          </form>
+        </section>
+
+        <section class="panel-card parcels-panel">
+          <div class="panel-title-row"><h2>Clients</h2><span id="clientsCount">0 client</span></div>
+          <div id="clientsList"><div class="loading-state">Chargement du carnet…</div></div>
+        </section>
+
+        <section class="settings-card" id="clientFormSection" aria-labelledby="clientFormTitle" hidden>
+          <div class="page-message" id="clientFormMessage" hidden role="alert"></div>
+          <form id="clientForm" class="form-stack" novalidate>
+            <h3 class="form-subheading" id="clientFormTitle">Ajouter un client</h3>
+            <div class="form-grid">
+              <div class="field"><label for="clientKind">Rôle <span class="required">*</span></label><select id="clientKind" name="kind"><option value="expediteur">Expéditeur</option><option value="destinataire">Destinataire</option></select></div>
+              <div class="field"><label for="clientPhone">Téléphone <span class="required">*</span></label><input id="clientPhone" name="phone" type="tel" inputmode="numeric" placeholder="0700000000" required><small class="field-help">Format ivoirien, 10 chiffres : c'est la clé du carnet.</small></div>
+              <div class="field"><label for="clientFirstName">Prénom <span class="required">*</span></label><input id="clientFirstName" name="firstName" type="text" autocomplete="off" required></div>
+              <div class="field"><label for="clientLastName">Nom <span class="required">*</span></label><input id="clientLastName" name="lastName" type="text" autocomplete="off" required></div>
+              <div class="field" id="clientCniField"><label for="clientCni">Numéro CNI</label><input id="clientCni" name="cni" type="text" autocomplete="off" placeholder="Ex. CI12345678"><small class="field-help">Mémorisée pour un expéditeur uniquement (facultatif).</small></div>
+              <div class="field"><label for="clientCity">Ville</label><input id="clientCity" name="city" type="text" autocomplete="off" placeholder="Ex. Abidjan"></div>
+              <div class="field field-full"><label for="clientNotes">Note</label><input id="clientNotes" name="notes" type="text" autocomplete="off" maxlength="500" placeholder="Ex. préfère être livré le matin"></div>
+            </div>
+            <div class="form-footer">
+              <button class="button button-outline" id="cancelClientButton" type="button">Annuler</button>
+              <button class="button button-primary" id="saveClientButton" type="submit">Enregistrer ce client</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel-card" id="clientDetail" aria-labelledby="clientDetailTitle" hidden>
+          <div class="panel-title-row"><h2 id="clientDetailTitle">Fiche client</h2><button class="button button-outline button-small" id="closeClientDetail" type="button">Fermer</button></div>
+          <div id="clientDetailContent"></div>
+        </section>
+      </div>
+    </main>
+  </div>
+  <script type="module" src="js/clients.js"></script>
+</body>
+</html>

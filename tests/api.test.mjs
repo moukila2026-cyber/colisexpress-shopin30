@@ -772,6 +772,179 @@ test("la clôture de caisse valide le total compté, une seule fois par jour", a
   assert.equal(caisse.data.cloture.countedTotalFCFA, 6000);
 });
 
+/* --------------------- carnet de clients + devis public (LOT 3) ------------ */
+
+test("le carnet se remplit automatiquement à l'enregistrement d'un colis (upsert)", async () => {
+  const g = client();
+  await creerAgence(g, "Agence Carnet", "Abidjan");
+  assert.deepEqual((await g.get("/api/clients")).data.clients, [], "carnet vide au départ");
+
+  const cree = await g.post("/api/colis", {
+    agencyNotRegistered: true,
+    values: valeurs({
+      destinationAgencyId: "", senderFirstName: "Awa", senderLastName: "Traoré",
+      senderPhone: "0700000001", senderCni: "ci12345678",
+      recipientFirstName: "Ibrahim", recipientLastName: "Koné", recipientPhone: "0500000002",
+      declaredAgencyName: "Flash Carnet", declaredAgencyCity: "Bouaké", declaredAgencyPhone: "0700000009"
+    })
+  });
+  assert.equal(cree.status, 201, JSON.stringify(cree.data));
+
+  const carnet = await g.get("/api/clients");
+  assert.equal(carnet.status, 200);
+  assert.equal(carnet.data.clients.length, 2, "l'expéditeur et le destinataire sont mémorisés");
+  const expediteur = carnet.data.clients.find((c) => c.kind === "expediteur");
+  const destinataire = carnet.data.clients.find((c) => c.kind === "destinataire");
+  assert.equal(expediteur.phone, "0700000001");
+  assert.equal(expediteur.cni, "CI12345678");
+  assert.equal(expediteur.city, "Abidjan", "ville de départ mémorisée");
+  assert.equal(destinataire.phone, "0500000002");
+  assert.equal(destinataire.cni, null, "jamais de CNI destinataire");
+  assert.equal(destinataire.city, "Bouaké");
+
+  // Même expéditeur sur un second colis : pas de doublon, la fiche est complétée.
+  const second = await g.post("/api/colis", {
+    agencyNotRegistered: true,
+    values: valeurs({
+      destinationAgencyId: "", senderPhone: "+225 07 00 00 00 01",
+      recipientFirstName: "Zié", recipientLastName: "Kouassi", recipientPhone: "0100000003",
+      declaredAgencyName: "Flash Zié", declaredAgencyCity: "Man", declaredAgencyPhone: "0700000009"
+    })
+  });
+  assert.equal(second.status, 201);
+  const apres = await g.get("/api/clients");
+  assert.equal(apres.data.clients.length, 3, "upsert : l'expéditeur n'est pas dupliqué");
+  const expediteur2 = apres.data.clients.find((c) => c.kind === "expediteur" && c.phone === "0700000001");
+  assert.equal(expediteur2.id, expediteur.id);
+  assert.equal(expediteur2.cni, "CI12345678", "une CNI déjà renseignée n'est jamais effacée");
+});
+
+test("carnet : création manuelle, recherche, fiche avec historique, modification", async () => {
+  const g = client();
+  await creerAgence(g, "Agence Fiche", "Abidjan");
+
+  // Validations serveur.
+  assert.equal((await g.post("/api/clients", { kind: "autre", firstName: "A", lastName: "B", phone: "0700000001" })).status, 400);
+  assert.equal((await g.post("/api/clients", { kind: "expediteur", firstName: "A", lastName: "B", phone: "123" })).status, 400);
+
+  const cree = await g.post("/api/clients", {
+    kind: "expediteur", firstName: "Mariam", lastName: "Diarra",
+    phone: "+225 07-00-00-00-21", cni: "ci87654321", city: "Abidjan", notes: "cliente du marché"
+  });
+  assert.equal(cree.status, 201, JSON.stringify(cree.data));
+  assert.equal(cree.data.cree, true);
+  assert.equal(cree.data.client.phone, "0700000021");
+  const id = cree.data.client.id;
+
+  // Upsert manuel : même rôle + téléphone → mise à jour, pas de doublon.
+  const upsert = await g.post("/api/clients", { kind: "expediteur", firstName: "Mariam", lastName: "Diarra-Sow", phone: "0700000021" });
+  assert.equal(upsert.status, 200);
+  assert.equal(upsert.data.cree, false);
+  assert.equal(upsert.data.client.id, id);
+  assert.equal(upsert.data.client.lastName, "Diarra-Sow");
+  assert.equal(upsert.data.client.cni, "CI87654321", "la CNI existante est conservée");
+
+  // Recherche par téléphone (format libre) et par rôle.
+  const parTel = await g.get("/api/clients?recherche=07%2000%2000%2000%2021");
+  assert.equal(parTel.data.clients.length, 1);
+  const parNom = await g.get("/api/clients?recherche=diarra");
+  assert.equal(parNom.data.clients.length, 1);
+  assert.equal((await g.get("/api/clients?kind=inconnu")).status, 400);
+
+  // Fiche + historique : un colis enregistré pour cette cliente apparaît.
+  const colis = await g.post("/api/colis", {
+    agencyNotRegistered: true,
+    values: valeurs({
+      destinationAgencyId: "", senderFirstName: "Mariam", senderLastName: "Diarra-Sow",
+      senderPhone: "0700000021", senderCni: "CI87654321",
+      declaredAgencyName: "Flash Fiche", declaredAgencyCity: "Bouaké", declaredAgencyPhone: "0700000009"
+    })
+  });
+  assert.equal(colis.status, 201);
+  const fiche = await g.get(`/api/clients/${id}`);
+  assert.equal(fiche.status, 200);
+  assert.equal(fiche.data.client.id, id);
+  assert.equal(fiche.data.historique.length, 1);
+  assert.equal(fiche.data.historique[0].trackingCode, colis.data.parcel.trackingCode);
+  assert.deepEqual(fiche.data.historique[0].roles, ["expediteur"]);
+
+  // Modification, puis collision refusée.
+  const maj = await g.patch(`/api/clients/${id}`, { city: "Yamoussoukro", notes: "" });
+  assert.equal(maj.status, 200);
+  assert.equal(maj.data.client.city, "Yamoussoukro");
+  const autre = await g.post("/api/clients", { kind: "destinataire", firstName: "Paul", lastName: "Koffi", phone: "0500000099" });
+  assert.equal(autre.status, 201);
+  const collision = await g.patch(`/api/clients/${autre.data.client.id}`, { kind: "expediteur", phone: "0700000021" });
+  assert.equal(collision.status, 409);
+
+  assert.equal((await g.get("/api/clients/inexistant")).status, 404);
+  assert.equal((await g.patch("/api/clients/inexistant", { city: "X" })).status, 404);
+});
+
+test("le carnet est cloisonné : jamais visible d'une agence à l'autre", async () => {
+  const a = client();
+  const b = client();
+  await creerAgence(a, "Agence Carnet A", "Abidjan");
+  await creerAgence(b, "Agence Carnet B", "Bouaké");
+
+  const cree = await a.post("/api/clients", { kind: "expediteur", firstName: "Awa", lastName: "Traoré", phone: "0700000001" });
+  assert.equal(cree.status, 201);
+  const id = cree.data.client.id;
+
+  assert.deepEqual((await b.get("/api/clients")).data.clients, []);
+  assert.equal((await b.get(`/api/clients/${id}`)).status, 404);
+  assert.equal((await b.patch(`/api/clients/${id}`, { notes: "piraté" })).status, 404);
+
+  // Un colis de B vers A ne mémorise le client que dans le carnet de B.
+  await b.post("/api/colis", {
+    agencyNotRegistered: true,
+    values: valeurs({
+      destinationAgencyId: "", originCity: "Bouaké", senderPhone: "0500000011",
+      declaredAgencyName: "Flash B", declaredAgencyCity: "Abidjan", declaredAgencyPhone: "0700000009"
+    })
+  });
+  const carnetB = await b.get("/api/clients");
+  assert.equal(carnetB.data.clients.length, 2, "expéditeur + destinataire du colis de B");
+  const carnetA = await a.get("/api/clients");
+  assert.equal(carnetA.data.clients.length, 1, "le carnet de A ne bouge pas");
+
+  // Sans session : refus.
+  const anonyme = client();
+  assert.equal((await anonyme.get("/api/clients")).status, 401);
+});
+
+test("le devis public est anonyme, calcule depuis les grilles actives et ne demande rien de personnel", async () => {
+  const g = client();
+  await creerAgence(g, "Agence Devisville", "Devisville");
+  assert.equal((await g.post("/api/tarifs", { originCity: "Devisville", destinationCity: "Cibleville", weightMinKg: 0, weightMaxKg: 2, priceFCFA: 1500 })).status, 201);
+  assert.equal((await g.post("/api/tarifs", { originCity: "Devisville", destinationCity: "Cibleville", weightMinKg: 2, weightMaxKg: null, priceFCFA: 3000 })).status, 201);
+  const desactive = await g.post("/api/tarifs", { originCity: "Devisville", destinationCity: "Horsville", weightMinKg: 0, weightMaxKg: null, priceFCFA: 900 });
+  assert.equal((await g.patch(`/api/tarifs/${desactive.data.tarif.id}`, { active: false })).status, 200);
+
+  const anonyme = client();
+  const devis = await anonyme.post("/api/devis", { originCity: " devisville ", destinationCity: "Cibleville", weightKg: 1.5, packageNature: "Vêtements" });
+  assert.equal(devis.status, 200, JSON.stringify(devis.data));
+  assert.equal(devis.data.devis.offres.length, 1);
+  const offre = devis.data.devis.offres[0];
+  assert.equal(offre.priceFCFA, 1500);
+  assert.deepEqual(offre.agence, { name: "Agence Devisville", city: "Devisville", phone: "0700000001" });
+  assert.deepEqual(Object.keys(devis.data.devis).sort(), ["destinationCity", "offres", "originCity", "packageNature", "weightKg"]);
+
+  // Axe hors grille (ligne désactivée) : aucune offre, jamais d'erreur.
+  const hors = await anonyme.post("/api/devis", { originCity: "Devisville", destinationCity: "Horsville", weightKg: 1 });
+  assert.equal(hors.status, 200);
+  assert.deepEqual(hors.data.devis.offres, []);
+
+  // Validations : villes, poids.
+  assert.equal((await anonyme.post("/api/devis", { originCity: "D", destinationCity: "Cibleville", weightKg: 1 })).status, 400);
+  assert.equal((await anonyme.post("/api/devis", { originCity: "Devisville", destinationCity: "Cibleville", weightKg: 0 })).status, 400);
+  assert.equal((await anonyme.post("/api/devis", { originCity: "Devisville", destinationCity: "Cibleville", weightKg: 5000 })).status, 400);
+
+  // Aucune donnée personnelle ni identifiant interne dans la réponse.
+  const brut = JSON.stringify(devis.data);
+  assert.ok(!brut.includes("password") && !brut.includes("@") && !brut.includes("agencyId") && !brut.includes("agency_id"));
+});
+
 test.after(() => {
   server.close();
 });
