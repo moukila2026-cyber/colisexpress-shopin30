@@ -8,6 +8,7 @@
  */
 import { api } from "./api.js";
 import { affichageCompteur, libellePeriode, libellePlan, libelleStatutAbonnement } from "./metier-plans.js";
+import { libelleCanalNotification, libelleStatutNotification, libelleTypeNotification } from "./metier-notifications.js";
 import {
   clearPageMessage,
   errorMessage,
@@ -263,6 +264,43 @@ function renderTaches(executions = []) {
     }).join("")}</tbody></table></div>`;
 }
 
+function renderTransportsNotifications(data = {}) {
+  const configuration = data.configuration || {};
+  const etat = document.getElementById("transportsNotificationsEtat");
+  const detail = document.getElementById("transportsNotificationsDetail");
+  const target = document.getElementById("transportsNotificationsListe");
+  if (!etat || !detail || !target) return;
+  etat.textContent = configuration.simulation ? "SIMULATION" : `Actif : ${libelleCanalNotification(configuration.canal)}`;
+  detail.textContent = configuration.raison || "Les notifications sont journalisées ici.";
+  const envois = data.envois || [];
+  if (!envois.length) {
+    target.innerHTML = "<div class=\"empty-inline panel-empty\">Aucun envoi journalisé pour l'instant.</div>";
+    return;
+  }
+  target.innerHTML = `<div class="table-wrap"><table class="parcel-table plateforme-table">
+    <thead><tr><th>Date</th><th>Événement</th><th>Message</th><th>Canal</th><th>État</th></tr></thead>
+    <tbody>${envois.map((item) => `<tr>
+      <td>${escapeHTML(formatDateTime(item.createdAtISO))}</td>
+      <td>${escapeHTML(libelleTypeNotification(item.type))}</td>
+      <td class="cell-wrap"><strong>${escapeHTML(item.titre)}</strong><br><small>${escapeHTML(item.message)}</small>${item.erreur ? `<br><small>${escapeHTML(item.erreur)}</small>` : ""}</td>
+      <td>${escapeHTML(libelleCanalNotification(item.canal))}</td>
+      <td>${escapeHTML(libelleStatutNotification(item.statut))}</td>
+    </tr>`).join("")}</tbody></table></div>`;
+}
+
+async function chargerTransportsNotifications() {
+  const target = document.getElementById("transportsNotificationsListe");
+  const detail = document.getElementById("transportsNotificationsDetail");
+  if (!target || !detail) return;
+  try {
+    const data = await api(`/api/plateforme/notifications?_=${Date.now()}`);
+    renderTransportsNotifications(data);
+  } catch (error) {
+    detail.textContent = errorMessage(error);
+    target.innerHTML = "";
+  }
+}
+
 async function chargerTaches() {
   const target = document.getElementById("tachesExecutions");
   const messageTaches = document.getElementById("tachesMessage");
@@ -284,8 +322,7 @@ async function executerTacheMaintenant() {
   try {
     const data = await api("/api/plateforme/taches", { method: "POST", body: {} });
     showToast(data.execution?.statut === "erreur" ? "La tâche a rencontré une erreur." : "Tâche quotidienne terminée.");
-    await chargerTaches();
-    await chargerMiseEnService();
+    await Promise.all([chargerTaches(), chargerMiseEnService(), chargerTransportsNotifications()]);
   } catch (error) {
     target.textContent = errorMessage(error);
     showToast(errorMessage(error), "error");
@@ -300,7 +337,7 @@ async function charger({ silencieux = false } = {}) {
     clearPageMessage(message);
     afficherConsole();
     renderAll();
-    await Promise.all([chargerMiseEnService(), chargerTaches()]);
+    await Promise.all([chargerMiseEnService(), chargerTaches(), chargerTransportsNotifications()]);
   } catch (error) {
     if (error.status === 401) {
       vue = null;

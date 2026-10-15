@@ -1675,9 +1675,15 @@ test("notifications : fonction d'envoi unique — dédoublonnage, panne journali
   const envois = [];
   const branche = {
     ...TRANSPORTS,
-    whatsapp: { ...TRANSPORTS.whatsapp, envoyer: async (envoi) => { envois.push(envoi); return { statut: "envoye" }; } }
+    whatsapp: { ...TRANSPORTS.whatsapp, configured: () => true, envoyer: async (envoi) => { envois.push(envoi); return { statut: "envoye" }; } }
   };
-  const env = { NOTIFICATIONS_CANAL: "whatsapp", WHATSAPP_API_URL: "https://exemple.invalid", WHATSAPP_API_TOKEN: "jeton-test" };
+  const env = {
+    NOTIFICATIONS_CANAL: "whatsapp",
+    WHATSAPP_TOKEN: "jeton-test",
+    WHATSAPP_PHONE_ID: "123456789012345",
+    WHATSAPP_MODELE: "colisexpress_notification",
+    WHATSAPP_API_VERSION: "v23.0"
+  };
   const reel = await envoyerNotification({ ...base, cle: `essai:${agence.id}:3` }, { transports: branche, env });
   assert.deepEqual({ canal: reel.canal, statut: reel.statut }, { canal: "whatsapp", statut: "envoye" });
   assert.equal(envois.length, 1);
@@ -1704,6 +1710,90 @@ test("notifications : fonction d'envoi unique — dédoublonnage, panne journali
   } finally {
     await query("ALTER TABLE notifications_hors_service RENAME TO notifications");
   }
+});
+
+test("LOT 12 : WhatsApp échoué bascule sur Orange SMS, puis sur le journal simulation", async () => {
+  const agenceClient = client();
+  const agence = await creerAgence(agenceClient, "Agence RepliSMS", "Abidjan");
+  const env = {
+    WHATSAPP_TOKEN: "jeton-meta-test-secret",
+    WHATSAPP_PHONE_ID: "123456789012345",
+    WHATSAPP_MODELE: "colisexpress_notification",
+    WHATSAPP_API_VERSION: "v23.0",
+    ORANGE_SMS_CLIENT_ID: "orange-id-test",
+    ORANGE_SMS_CLIENT_SECRET: "orange-client-secret-test",
+    ORANGE_SMS_NOM_EXPEDITEUR: "0700000002"
+  };
+  const appelsSms = [];
+  const enPanneWhatsApp = {
+    ...TRANSPORTS.whatsapp,
+    configured: () => true,
+    async envoyer() { const error = new Error("provider failure"); error.code = "FAKE_WA_DOWN"; throw error; }
+  };
+  const orangeOK = {
+    ...TRANSPORTS.sms,
+    configured: () => true,
+    async envoyer(payload) { appelsSms.push(payload); return { statut: "envoye" }; }
+  };
+  const transports = { ...TRANSPORTS, whatsapp: enPanneWhatsApp, sms: orangeOK };
+  const note = {
+    agencyId: agence.id,
+    type: "abonnement_retard",
+    titre: "Abonnement en retard",
+    message: "Le paiement est à régler depuis la page Abonnement.",
+    lien: "abonnement.html",
+    cle: `fallback:${agence.id}:sms`
+  };
+  const ancienLog = console.error;
+  const logs = [];
+  console.error = (...args) => logs.push(args.join(" "));
+  try {
+    const envoi = await envoyerNotification(note, { env, transports });
+    assert.deepEqual({ canal: envoi.canal, statut: envoi.statut }, { canal: "sms", statut: "envoye" });
+    assert.equal(appelsSms.length, 1);
+    assert.equal(appelsSms[0].destinataire.phone, "0700000001");
+
+    const panneSms = {
+      ...orangeOK,
+      async envoyer() { const error = new Error("provider failure"); error.code = "FAKE_SMS_DOWN"; throw error; }
+    };
+    const repli = await envoyerNotification({ ...note, cle: `fallback:${agence.id}:simulation` }, {
+      env,
+      transports: { ...transports, sms: panneSms }
+    });
+    assert.deepEqual({ canal: repli.canal, statut: repli.statut }, { canal: "simulation", statut: "simule" });
+  } finally {
+    console.error = ancienLog;
+  }
+  const rows = await query("SELECT canal, statut, erreur FROM notifications WHERE dedup_key LIKE $1 ORDER BY created_at", [`fallback:${agence.id}:%`]);
+  assert.deepEqual(rows.rows.map((r) => [r.canal, r.statut]), [["sms", "envoye"], ["simulation", "simule"]]);
+  assert.ok(!JSON.stringify(rows.rows).includes("0700000001"), "aucun numéro dans le journal");
+  assert.ok(!JSON.stringify(rows.rows).includes("jeton-meta-test-secret"));
+  assert.ok(logs.every((line) => !line.includes("0700000001") && !line.includes("orange-client-secret-test")), "aucun numéro ni secret dans les logs");
+});
+
+test("LOT 12 : panneau console expose le mode et le journal sans téléphone ni secret", async () => {
+  const agenceClient = client();
+  const agence = await creerAgence(agenceClient, "Agence PanelTransport", "Abidjan");
+  const note = {
+    agencyId: agence.id,
+    type: "abonnement_echeance",
+    titre: "Échéance aujourd'hui",
+    message: "Règlement depuis la page Abonnement.",
+    lien: "abonnement.html",
+    cle: `panel-transport:${agence.id}:unique`
+  };
+  await envoyerNotification(note);
+  assert.equal((await agenceClient.get("/api/plateforme/notifications")).status, 401);
+  const { p } = await consolePlateforme();
+  const reponse = await p.get("/api/plateforme/notifications");
+  assert.equal(reponse.status, 200, JSON.stringify(reponse.data));
+  assert.equal(reponse.data.configuration.canal, "simulation");
+  assert.ok(reponse.data.envois.some((item) => item.titre === note.titre));
+  const jsonReponse = JSON.stringify(reponse.data);
+  assert.ok(!jsonReponse.includes("0700000001"), "aucun téléphone dans le panneau");
+  assert.ok(!jsonReponse.includes(agence.email), "aucun e-mail d'agence dans le panneau");
+  assert.ok(!jsonReponse.includes("WHATSAPP_TOKEN") && !jsonReponse.includes("ORANGE_SMS_CLIENT_SECRET"));
 });
 
 /* -------------------- LOT 6 — plans, quotas, portefeuille, console ------------------- */

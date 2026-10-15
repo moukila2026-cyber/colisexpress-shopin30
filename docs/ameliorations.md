@@ -513,11 +513,32 @@ l'inverse ».
   incidents (notification 24 h et comptage des escalades plateforme > 7 j),
   les colis qui dorment et les colis en souffrance, et envoie des rappels
   d'abonnement à J-2, le jour de l'échéance et en retard. Les notifications
-  sont dédoublonnées et gardent leur mode simulation tant que le LOT 12 n'est
-  pas configuré.
+  sont dédoublonnées et gardent leur mode simulation tant qu'aucun transport
+  n'est configuré.
 - Journal `taches_executions` (déjà préparé au LOT 9) : déclencheur, début,
   fin, durée, statut `en_cours|ok|partiel|erreur` et résumé non personnel.
   Console : dix dernières exécutions et bouton « Exécuter maintenant »,
   réservé à la session plateforme ; le cron public exige son en-tête Bearer.
 - Vérification côté développeur : l'API refuse un secret absent ou incorrect
   (401), et l'exécution manuelle met à jour le diagnostic « Mise en service ».
+
+
+## 20. Livré : LOT 12 — WhatsApp Cloud et Orange SMS CI
+
+- `lib/notifications.js` envoie vers les agences concernées via le modèle
+  WhatsApp Cloud approuvé, puis tente Orange SMS CI si WhatsApp échoue. Sans
+  transport complet ou après panne des deux fournisseurs, l'événement reste
+  journalisé en simulation ; une panne ne bloque jamais l'opération métier.
+- Variables Production : `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID` (alias
+  `WHATSAPP_PHONE_NUMBER_ID` accepté), `WHATSAPP_MODELE`,
+  `WHATSAPP_API_VERSION`, `ORANGE_SMS_CLIENT_ID`,
+  `ORANGE_SMS_CLIENT_SECRET`, `ORANGE_SMS_NOM_EXPEDITEUR`. Les variables
+  restent absentes en Preview par défaut.
+- `NOTIFICATIONS_CANAL` est facultative : défaut `auto` (WhatsApp → SMS →
+  simulation), `sms` pour forcer Orange, ou `simulation` pour couper les
+  envois réels.
+- La console affiche le canal effectif et les derniers envois, sans exposer
+  numéro, e-mail ni secret. Les erreurs fournisseurs sont réduites à un code
+  de statut ; aucun corps de réponse, numéro ou jeton n'est écrit dans les
+  logs.
+- Aucun nouveau point d'entrée Vercel : le total reste à 12/12.

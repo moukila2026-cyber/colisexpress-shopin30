@@ -3,8 +3,8 @@
  * ouvert / escalade 24 h, bordereau arrivé / écart, colis en souffrance,
  * retour décidé / reçu, colis qui dorment) est notifié aux DEUX agences
  * concernées, sans aucune donnée personnelle. Mode simulation par défaut :
- * rien ne sort de l'application tant qu'aucun transport réel (WhatsApp, SMS,
- * e-mail) n'est branché et configuré côté serveur (lib/notifications.js).
+ * rien ne sort de l'application tant qu'aucun transport réel (WhatsApp Cloud
+ * ou Orange SMS CI) n'est configuré côté serveur (lib/notifications.js).
  * Lecture, filtres et « marquer comme lu » ; aucune suppression.
  */
 import { api } from "./api.js";
@@ -63,8 +63,8 @@ function renderMode(configuration) {
   if (!configuration) return;
   modeTarget.classList.toggle("notif-mode-reel", configuration.simulation === false);
   modeTarget.innerHTML = configuration.simulation
-    ? `<strong>Mode simulation</strong> — aucun message n'est envoyé hors de l'application : chaque notification est journalisée ici, pour les deux agences concernées, sans aucune donnée personnelle (ni nom, ni téléphone, ni CNI). Le branchement WhatsApp, SMS ou e-mail se fera côté serveur, sans changer cet écran.`
-    : `<strong>Envoi réel actif</strong> (${escapeHTML(libelleCanalNotification(configuration.canal))}) — les notifications partent vers les coordonnées professionnelles de votre agence et restent journalisées ici.`;
+    ? `<strong>Mode simulation</strong> — aucun message n'est envoyé hors de l'application : chaque notification est journalisée ici, pour les agences concernées, sans donnée personnelle. WhatsApp Cloud puis Orange SMS sont pris automatiquement si leurs variables sont configurées dans Vercel ; le mode simulation reste le repli.`
+    : `<strong>Envoi réel actif</strong> (${escapeHTML(libelleCanalNotification(configuration.canal))}) — les notifications partent vers les coordonnées professionnelles des agences concernées et restent journalisées ici.`;
 }
 
 function renderCompteurs() {
