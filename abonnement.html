@@ -64,6 +64,15 @@
           <div class="panel-title-row"><h2>Historique des mois</h2><span id="periodesCount">—</span></div>
           <div id="periodesList"><div class="loading-state">Chargement…</div></div>
         </section>
+
+        <section class="panel-card parcels-panel" id="relevesPanel">
+          <div class="panel-title-row"><h2>Relevé mensuel PDF</h2></div>
+          <p class="muted-note">Téléchargez le récapitulatif des colis, encaissements, hors forfait, abonnement et mouvements de votre portefeuille. Aucun nom ni téléphone de client n'y figure.</p>
+          <form id="releveForm" class="filter-grid" autocomplete="off">
+            <div class="field"><label for="relevePeriode">Mois du relevé</label><select id="relevePeriode" name="periode"></select></div>
+            <div class="filter-actions"><button class="button button-primary" id="telechargerReleveButton" type="submit">Télécharger le PDF</button></div>
+          </form>
+        </section>
       </div>
     </main>
   </div>

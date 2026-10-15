@@ -191,6 +191,48 @@ function renderPeriodes() {
     </tr>`).join("")}</tbody></table></div>`;
 }
 
+function renderReleves() {
+  const select = document.getElementById("relevePeriode");
+  const button = document.getElementById("telechargerReleveButton");
+  if (!select || !button) return;
+  const anciennes = select.value;
+  const periodes = facturation?.periodes || [];
+  select.innerHTML = periodes.map((item) => `<option value="${escapeHTML(item.cle)}">${escapeHTML(item.libelle)}</option>`).join("");
+  if (periodes.some((item) => item.cle === anciennes)) select.value = anciennes;
+  button.disabled = periodes.length === 0;
+  if (!periodes.length) select.innerHTML = '<option value="">Aucun mois disponible</option>';
+}
+
+async function telechargerReleve(event) {
+  event.preventDefault();
+  const periode = document.getElementById("relevePeriode").value;
+  const button = document.getElementById("telechargerReleveButton");
+  if (!periode) return;
+  setButtonLoading(button, true, "Génération…");
+  try {
+    const response = await fetch(`/api/facturation/releve?periode=${encodeURIComponent(periode)}`, { credentials: "same-origin" });
+    if (!response.ok) {
+      const donnees = await response.json().catch(() => ({}));
+      const error = new Error(donnees.error || "Le relevé n'a pas pu être généré.");
+      error.status = response.status;
+      throw error;
+    }
+    const fichier = URL.createObjectURL(await response.blob());
+    const lien = document.createElement("a");
+    lien.href = fichier;
+    lien.download = `releve-colisexpress-${periode}.pdf`;
+    document.body.append(lien);
+    lien.click();
+    lien.remove();
+    window.setTimeout(() => URL.revokeObjectURL(fichier), 1000);
+    showToast(`Relevé ${periode} téléchargé.`);
+  } catch (error) {
+    showPageMessage(message, errorMessage(error));
+  } finally {
+    setButtonLoading(button, false);
+  }
+}
+
 function renderAll() {
   if (!facturation) return;
   renderSynthese();
@@ -198,6 +240,7 @@ function renderAll() {
   renderEcheances();
   renderMouvements();
   renderPeriodes();
+  renderReleves();
 }
 
 async function charger() {
@@ -293,6 +336,7 @@ async function boot() {
   const agency = await initAgencyLayout(user, "abonnement");
   if (!agency) return;
   document.getElementById("refreshAbonnement")?.addEventListener("click", charger);
+  document.getElementById("releveForm")?.addEventListener("submit", telechargerReleve);
   document.getElementById("rechargeEnLigneForm")?.addEventListener("submit", rechargerEnLigne);
   try {
     const { configuration } = await api(`/api/paiements?_=${Date.now()}`);

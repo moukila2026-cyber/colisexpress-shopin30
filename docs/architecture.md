@@ -548,3 +548,29 @@ signature refusés, montant vérifié). Les règles pures sont testées dans
   les libellés/messages, les canaux, les statuts et les dates — jamais les
   numéros, e-mails ou secrets. Aucune fonction Vercel ajoutée : les 12
   fonctions du plan Hobby restent inchangées.
+
+
+### Relevés mensuels PDF (LOT 13)
+
+- `lib/pdf.js` fabrique des PDF 1.4 multipages en Node pur, avec Helvetica
+  / WinAnsi ; aucun navigateur headless, module natif ou dépendance ajoutée.
+  Les textes sont en français, montants FCFA, caractères encodés avec des
+  séquences PDF sûres.
+- `lib/releves.js` assemble, pour une agence et un mois : colis enregistrés
+  (agence expéditrice), encaissements perçus par cette agence, coût/volume
+  hors forfait, montant/statut de l'abonnement et mouvements de portefeuille.
+  Aucune identité, aucun téléphone/CNI client et aucune référence de paiement
+  libre n'entre dans le relevé.
+- Téléchargement protégé : `GET /api/facturation/releve?periode=AAAA-MM`
+  (`requireAgency`, agence imposée par la session) et
+  `GET /api/plateforme/releve?agencyId=…&periode=AAAA-MM`
+  (`requirePlateforme`). Les deux routes sont repliées par les rewrites
+  existants ; aucun fichier `api/` supplémentaire, total 12/12.
+- `releves_mensuels` est une table additive/idempotente qui archive le binaire
+  PDF avec une contrainte unique (agence, mois). Le Cron du premier jour
+  archive le mois précédent ; les conflits sont ignorés, une exécution répétée
+  ne crée pas de doublon. Les téléchargements privilégient l'archive si elle
+  existe, sinon génèrent le relevé à la demande.
+- L'agence choisit un mois dans Abonnement ; la console peut télécharger un
+  relevé de n'importe quelle agence/mois. Aucun nouveau secret ou réglage
+  Vercel n'est nécessaire.
