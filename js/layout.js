@@ -82,6 +82,7 @@ export function agencySidebar() {
       <nav class="agency-nav">
         <a href="dashboard.html" data-nav="dashboard"><span aria-hidden="true">▦</span> Tableau de bord</a>
         <a href="nouveau-colis.html" data-nav="nouveau"><span aria-hidden="true">＋</span> Nouveau colis</a>
+        <a href="caisse.html" data-nav="caisse"><span aria-hidden="true">◈</span> Caisse</a>
         <a href="parametres.html" data-nav="parametres"><span aria-hidden="true">⚙</span> Paramètres</a>
       </nav>
       <div class="sidebar-footer">

@@ -1,10 +1,12 @@
 import { api } from "./api.js";
 import { requireAgency } from "./auth.js";
 import { agencySidebar, initAgencyLayout, mobileAgencyHeader } from "./layout.js";
+import { TRANCHES_DEFAUT, trancheLibelle, validerTarif } from "./metier-tarifs.js";
 import {
   clearPageMessage,
   errorMessage,
   escapeHTML,
+  formatFCFA,
   isValidIvorianPhone,
   normalizeIvorianPhone,
   setButtonLoading,
@@ -17,8 +19,13 @@ const message = document.getElementById("pageMessage");
 const agentForm = document.getElementById("agentForm");
 const teamMessage = document.getElementById("teamMessage");
 const agentsList = document.getElementById("agentsList");
+const tarifForm = document.getElementById("tarifForm");
+const tarifsList = document.getElementById("tarifsList");
+const tarifMessage = document.getElementById("tarifMessage");
 
 let currentMember = null;
+let tarifs = [];
+let tarifEnEdition = null;
 
 function mountLayout() {
   document.getElementById("sidebarMount").innerHTML = agencySidebar();
@@ -122,6 +129,160 @@ agentsList?.addEventListener("click", (event) => {
   if (button) basculerAgent(button);
 });
 
+/* ----------------------------- grille tarifaire ---------------------------- */
+
+function renderTarifs() {
+  const peutGerer = currentMember?.role === "gerant";
+  if (!tarifs.length) {
+    tarifsList.innerHTML = '<div class="empty-inline">Votre grille est vide : le formulaire « nouveau colis » accepte alors la saisie libre du prix. Ajoutez une ligne ci-dessous pour standardiser vos tarifs.</div>';
+    return;
+  }
+  tarifsList.innerHTML = `<div class="table-wrap"><table class="parcel-table tarifs-table">
+    <thead><tr><th>Axe</th><th>Tranche</th><th>Prix</th><th>Statut</th>${peutGerer ? "<th></th>" : ""}</tr></thead>
+    <tbody>${tarifs.map((tarif) => `<tr class="${tarif.active ? "" : "tarif-inactif"}">
+      <td><strong>${escapeHTML(tarif.originCity)}</strong> → ${escapeHTML(tarif.destinationCity || "toutes destinations")}</td>
+      <td>${escapeHTML(trancheLibelle(tarif.weightMinKg, tarif.weightMaxKg))}</td>
+      <td><strong>${escapeHTML(formatFCFA(tarif.priceFCFA))}</strong></td>
+      <td>${tarif.active ? '<span class="status-badge status-actif">Actif</span>' : '<span class="status-badge status-inactif">Hors grille</span>'}</td>
+      ${peutGerer ? `<td class="tarif-actions">
+        <button class="button button-outline button-small" type="button" data-tarif-edit="${escapeHTML(tarif.id)}">Modifier</button>
+        <button class="button button-outline button-small" type="button" data-tarif-toggle="${escapeHTML(tarif.id)}" data-tarif-active="${tarif.active}">${tarif.active ? "Désactiver" : "Réactiver"}</button>
+      </td>` : ""}
+    </tr>`).join("")}</tbody>
+  </table></div>`;
+}
+
+async function chargerTarifs() {
+  try {
+    const data = await api("/api/tarifs");
+    tarifs = data.tarifs || [];
+    renderTarifs();
+  } catch (error) {
+    showPageMessage(tarifMessage, errorMessage(error));
+  }
+}
+
+function reinitialiserFormulaireTarif() {
+  tarifEnEdition = null;
+  tarifForm.reset();
+  document.getElementById("tarifFormTitle").textContent = "Ajouter un tarif";
+  document.getElementById("tarifSubmitButton").textContent = "Ajouter à la grille";
+  document.getElementById("tarifCancelButton").hidden = true;
+  document.getElementById("tarifCustomBand").hidden = document.getElementById("tarifBand").value !== "libre";
+}
+
+function lireTarifFormulaire() {
+  const originCity = document.getElementById("tarifOriginCity").value;
+  const toutesDestinations = document.getElementById("tarifAllDestinations").checked;
+  const destinationCity = toutesDestinations ? "" : document.getElementById("tarifDestinationCity").value;
+  const bande = document.getElementById("tarifBand").value;
+  let weightMinKg;
+  let weightMaxKg;
+  if (bande === "libre") {
+    weightMinKg = document.getElementById("tarifWeightMin").value;
+    weightMaxKg = document.getElementById("tarifWeightMax").value;
+  } else {
+    const tranche = TRANCHES_DEFAUT.find((item) => item.cle === bande);
+    weightMinKg = tranche.minKg;
+    weightMaxKg = tranche.maxKg;
+  }
+  return {
+    originCity,
+    destinationCity,
+    weightMinKg,
+    weightMaxKg,
+    priceFCFA: document.getElementById("tarifPrice").value
+  };
+}
+
+async function sauvegarderTarif(event) {
+  event.preventDefault();
+  clearPageMessage(tarifMessage);
+  const brut = lireTarifFormulaire();
+  const controle = validerTarif(brut);
+  if (controle.error) {
+    showPageMessage(tarifMessage, controle.error);
+    return;
+  }
+  const button = document.getElementById("tarifSubmitButton");
+  setButtonLoading(button, true, tarifEnEdition ? "Mise à jour…" : "Ajout…");
+  try {
+    if (tarifEnEdition) {
+      await api(`/api/tarifs/${encodeURIComponent(tarifEnEdition)}`, { method: "PATCH", body: controle.valeur });
+      showToast("Tarif mis à jour.");
+    } else {
+      await api("/api/tarifs", { method: "POST", body: controle.valeur });
+      showToast("Tarif ajouté à la grille.");
+    }
+    reinitialiserFormulaireTarif();
+    await chargerTarifs();
+  } catch (error) {
+    showPageMessage(tarifMessage, errorMessage(error));
+  } finally {
+    setButtonLoading(button, false);
+  }
+}
+
+function editerTarif(id) {
+  const tarif = tarifs.find((item) => item.id === id);
+  if (!tarif) return;
+  tarifEnEdition = id;
+  document.getElementById("tarifOriginCity").value = tarif.originCity;
+  document.getElementById("tarifAllDestinations").checked = !tarif.destinationCity;
+  document.getElementById("tarifDestinationCity").value = tarif.destinationCity;
+  document.getElementById("tarifDestinationCity").disabled = !tarif.destinationCity;
+  document.getElementById("tarifPrice").value = String(tarif.priceFCFA);
+  const predefinie = TRANCHES_DEFAUT.find(
+    (item) => item.minKg === tarif.weightMinKg && item.maxKg === (tarif.weightMaxKg ?? null)
+  );
+  if (predefinie) {
+    document.getElementById("tarifBand").value = predefinie.cle;
+    document.getElementById("tarifCustomBand").hidden = true;
+  } else {
+    document.getElementById("tarifBand").value = "libre";
+    document.getElementById("tarifCustomBand").hidden = false;
+    document.getElementById("tarifWeightMin").value = String(tarif.weightMinKg);
+    document.getElementById("tarifWeightMax").value = tarif.weightMaxKg === null || tarif.weightMaxKg === undefined ? "" : String(tarif.weightMaxKg);
+  }
+  document.getElementById("tarifFormTitle").textContent = "Modifier un tarif";
+  document.getElementById("tarifSubmitButton").textContent = "Mettre à jour";
+  document.getElementById("tarifCancelButton").hidden = false;
+  tarifForm.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+async function basculerTarif(button) {
+  const id = button.dataset.tarifToggle;
+  const actif = button.dataset.tarifActive === "true";
+  clearPageMessage(tarifMessage);
+  setButtonLoading(button, true, actif ? "Désactivation…" : "Réactivation…");
+  try {
+    await api(`/api/tarifs/${encodeURIComponent(id)}`, { method: "PATCH", body: { active: !actif } });
+    showToast(actif ? "Tarif retiré de la grille (le prix reste sur les colis enregistrés)." : "Tarif réactivé dans la grille.");
+    await chargerTarifs();
+  } catch (error) {
+    showPageMessage(tarifMessage, errorMessage(error));
+    setButtonLoading(button, false);
+  }
+}
+
+tarifsList?.addEventListener("click", (event) => {
+  const edit = event.target.closest("[data-tarif-edit]");
+  if (edit) return editerTarif(edit.dataset.tarifEdit);
+  const toggle = event.target.closest("[data-tarif-toggle]");
+  if (toggle) basculerTarif(toggle);
+});
+
+tarifForm?.addEventListener("submit", sauvegarderTarif);
+document.getElementById("tarifCancelButton")?.addEventListener("click", reinitialiserFormulaireTarif);
+document.getElementById("tarifBand")?.addEventListener("change", (event) => {
+  document.getElementById("tarifCustomBand").hidden = event.target.value !== "libre";
+});
+document.getElementById("tarifAllDestinations")?.addEventListener("change", (event) => {
+  const champ = document.getElementById("tarifDestinationCity");
+  champ.disabled = event.target.checked;
+  if (event.target.checked) champ.value = "";
+});
+
 /* ------------------------------ profil agence ----------------------------- */
 
 async function boot() {
@@ -143,13 +304,19 @@ async function boot() {
   if (currentMember?.role === "gerant") {
     agentForm.hidden = false;
     agentForm.addEventListener("submit", inviterAgent);
+    tarifForm.hidden = false;
   } else {
     agentsList.insertAdjacentHTML(
       "beforeend",
       '<p class="muted-note">Seul le gérant de l\'agence peut inviter ou désactiver des agents.</p>'
     );
+    document.getElementById("tarifsList").insertAdjacentHTML(
+      "beforeend",
+      '<p class="muted-note">Seul le gérant de l\'agence peut modifier la grille tarifaire.</p>'
+    );
   }
   await chargerEquipe();
+  await chargerTarifs();
 }
 
 async function saveAgency(event) {

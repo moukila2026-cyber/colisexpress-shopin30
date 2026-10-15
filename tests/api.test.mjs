@@ -522,6 +522,256 @@ test("le rattachement trace l'acteur mais le suivi public ne l'expose jamais", a
   assert.equal(/Sarah Preuve|sarah\.preuve/.test(JSON.stringify(res.data)), false);
 });
 
+/* ---------------- grille tarifaire / paiement / caisse (LOT 2) ------------- */
+
+function jourCleTest() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Abidjan", year: "numeric", month: "2-digit", day: "2-digit"
+  }).format(new Date());
+}
+
+test("la grille tarifaire se gère en CRUD réservé au gérant (sans suppression)", async () => {
+  const g = client();
+  await creerAgence(g, "Agence Tarifs", "Abidjan");
+  assert.deepEqual((await g.get("/api/tarifs")).data.tarifs, [], "grille vide au départ");
+
+  // Écritures réservées au gérant.
+  const inv = await g.post("/api/agents", { name: "Agent Tarif", email: "agent.tarif@test.ci", password: "agent12" });
+  assert.equal(inv.status, 201);
+  const ag = client();
+  await ag.post("/api/login", { email: "agent.tarif@test.ci", password: "agent12" });
+  assert.equal((await ag.post("/api/tarifs", { originCity: "Abidjan", destinationCity: "Bouaké", weightMinKg: 0, weightMaxKg: 2, priceFCFA: 2500 })).status, 403);
+  assert.equal((await ag.get("/api/tarifs")).status, 200, "un agent peut lire la grille");
+
+  // Créations valides et refusées.
+  const valide = await g.post("/api/tarifs", { originCity: " Abidjan ", destinationCity: "Bouaké", weightMinKg: 0, weightMaxKg: 2, priceFCFA: 2500 });
+  assert.equal(valide.status, 201, JSON.stringify(valide.data));
+  assert.equal(valide.data.tarif.originCity, "Abidjan");
+  assert.equal(valide.data.tarif.priceFCFA, 2500);
+
+  const toutes = await g.post("/api/tarifs", { originCity: "Abidjan", destinationCity: "", weightMinKg: 2, weightMaxKg: null, priceFCFA: 4000 });
+  assert.equal(toutes.status, 201);
+  assert.equal(toutes.data.tarif.destinationCity, "", "'' = toutes destinations");
+
+  assert.equal((await g.post("/api/tarifs", { originCity: "A", destinationCity: "", weightMinKg: 0, weightMaxKg: 2, priceFCFA: 100 })).status, 400);
+  assert.equal((await g.post("/api/tarifs", { originCity: "Abidjan", destinationCity: "", weightMinKg: 0, weightMaxKg: 2, priceFCFA: -5 })).status, 400);
+
+  // Mise à jour et mise hors grille (pas de suppression).
+  const maj = await g.patch(`/api/tarifs/${valide.data.tarif.id}`, { priceFCFA: 2750 });
+  assert.equal(maj.status, 200);
+  assert.equal(maj.data.tarif.priceFCFA, 2750);
+  const hors = await g.patch(`/api/tarifs/${valide.data.tarif.id}`, { active: false });
+  assert.equal(hors.status, 200);
+  assert.equal(hors.data.tarif.active, false);
+
+  // Cloisonnement : une autre agence ne voit ni ne modifie cette grille.
+  const b = client();
+  await creerAgence(b, "Agence Voisine Tarifs", "Bouaké");
+  assert.deepEqual((await b.get("/api/tarifs")).data.tarifs, []);
+  assert.equal((await b.patch(`/api/tarifs/${valide.data.tarif.id}`, { priceFCFA: 1 })).status, 404);
+  assert.equal((await b.patch("/api/tarifs/inexistant", { priceFCFA: 1 })).status, 404);
+});
+
+test("le prix du colis vient de la grille (autorité serveur), saisie libre sinon", async () => {
+  const g = client();
+  await creerAgence(g, "Agence Grille", "Abidjan");
+  assert.equal((await g.post("/api/tarifs", { originCity: "Abidjan", destinationCity: "Bouaké", weightMinKg: 0, weightMaxKg: 2, priceFCFA: 2500 })).status, 201);
+  assert.equal((await g.post("/api/tarifs", { originCity: "Abidjan", destinationCity: "Bouaké", weightMinKg: 2, weightMaxKg: 5, priceFCFA: 3500 })).status, 201);
+
+  // Prix soumis ≠ prix de la grille : le serveur impose la grille.
+  const traverse = await g.post("/api/colis", {
+    agencyNotRegistered: true,
+    values: valeurs({
+      destinationAgencyId: "", weightKg: "2.5", priceFCFA: "99999",
+      destinationCity: "Bouaké",
+      declaredAgencyName: "Flash Bouaké", declaredAgencyCity: "Bouaké", declaredAgencyPhone: "0700000009"
+    })
+  });
+  assert.equal(traverse.status, 201, JSON.stringify(traverse.data));
+  assert.equal(traverse.data.parcel.priceFCFA, 3500, "la grille tranche");
+
+  const leger = await g.post("/api/colis", {
+    agencyNotRegistered: true,
+    values: valeurs({
+      destinationAgencyId: "", weightKg: "1", priceFCFA: "1",
+      destinationCity: "Bouaké",
+      declaredAgencyName: "Flash Bouaké", declaredAgencyCity: "Bouaké", declaredAgencyPhone: "0700000009"
+    })
+  });
+  assert.equal(leger.data.parcel.priceFCFA, 2500);
+
+  // Aucune ligne applicable → saisie libre acceptée (compatibilité).
+  const libre = await g.post("/api/colis", {
+    agencyNotRegistered: true,
+    values: valeurs({
+      destinationAgencyId: "", weightKg: "3", priceFCFA: "4321",
+      destinationCity: "Man",
+      declaredAgencyName: "Flash Man", declaredAgencyCity: "Man", declaredAgencyPhone: "0700000009"
+    })
+  });
+  assert.equal(libre.status, 201);
+  assert.equal(libre.data.parcel.priceFCFA, 4321);
+
+  // Une agence sans grille fonctionne exactement comme avant le LOT 2.
+  const sansGrille = client();
+  await creerAgence(sansGrille, "Agence Sans Grille", "Korhogo");
+  const legacy = await sansGrille.post("/api/colis", {
+    agencyNotRegistered: true,
+    values: valeurs({
+      destinationAgencyId: "", weightKg: "2.5", priceFCFA: "1234",
+      declaredAgencyName: "Flash Test", declaredAgencyCity: "Bouaké", declaredAgencyPhone: "0700000009"
+    })
+  });
+  assert.equal(legacy.status, 201);
+  assert.equal(legacy.data.parcel.priceFCFA, 1234);
+});
+
+test("l'état de paiement est validé à l'enregistrement et le paiement alimente la caisse", async () => {
+  const g = client();
+  await creerAgence(g, "Agence Paiement", "Abidjan");
+
+  const paye = await g.post("/api/colis", {
+    agencyNotRegistered: true,
+    payment: { status: "paye", mode: "especes" },
+    values: valeurs({ destinationAgencyId: "", priceFCFA: "3500", declaredAgencyName: "Flash Paye", declaredAgencyCity: "Bouaké", declaredAgencyPhone: "0700000009" })
+  });
+  assert.equal(paye.status, 201, JSON.stringify(paye.data));
+  assert.equal(paye.data.parcel.paymentStatus, "paye");
+  assert.equal(paye.data.parcel.paidAmountFCFA, 3500);
+
+  const arrivee = await g.post("/api/colis", {
+    agencyNotRegistered: true,
+    payment: { status: "arrivee" },
+    values: valeurs({ destinationAgencyId: "", priceFCFA: "3500", declaredAgencyName: "Flash Arrivee", declaredAgencyCity: "Bouaké", declaredAgencyPhone: "0700000009" })
+  });
+  assert.equal(arrivee.status, 201);
+  assert.equal(arrivee.data.parcel.paymentStatus, "arrivee");
+  assert.equal(arrivee.data.parcel.paidAmountFCFA, 0);
+
+  const partiel = await g.post("/api/colis", {
+    agencyNotRegistered: true,
+    payment: { status: "partiel", paidAmountFCFA: 1000, mode: "mobile_money" },
+    values: valeurs({ destinationAgencyId: "", priceFCFA: "3500", declaredAgencyName: "Flash Partiel", declaredAgencyCity: "Bouaké", declaredAgencyPhone: "0700000009" })
+  });
+  assert.equal(partiel.status, 201);
+  assert.equal(partiel.data.parcel.paymentStatus, "partiel");
+  assert.equal(partiel.data.parcel.paidAmountFCFA, 1000);
+
+  // Refus des incohérences.
+  assert.equal((await g.post("/api/colis", {
+    agencyNotRegistered: true,
+    payment: { status: "partiel", paidAmountFCFA: 5000, mode: "especes" },
+    values: valeurs({ destinationAgencyId: "", priceFCFA: "3500", declaredAgencyName: "Flash Refus", declaredAgencyCity: "Bouaké", declaredAgencyPhone: "0700000009" })
+  })).status, 400);
+  assert.equal((await g.post("/api/colis", {
+    agencyNotRegistered: true,
+    payment: { status: "paye" },
+    values: valeurs({ destinationAgencyId: "", priceFCFA: "3500", declaredAgencyName: "Flash Mode", declaredAgencyCity: "Bouaké", declaredAgencyPhone: "0700000009" })
+  })).status, 400, "payé au départ sans mode refusé");
+
+  // Sans paiement = colis legacy accepté (aucun champ imposé).
+  const legacy = await g.post("/api/colis", {
+    agencyNotRegistered: true,
+    values: valeurs({ destinationAgencyId: "", priceFCFA: "3500", declaredAgencyName: "Flash Legacy", declaredAgencyCity: "Bouaké", declaredAgencyPhone: "0700000009" })
+  });
+  assert.equal(legacy.status, 201);
+  assert.equal("paymentStatus" in legacy.data.parcel, false);
+
+  // Caisse du jour : payé + partiel encaissés par l'agence expéditrice.
+  const caisse = await g.get(`/api/caisse?date=${jourCleTest()}`);
+  assert.equal(caisse.status, 200);
+  assert.equal(caisse.data.totaux.especes, 3500);
+  assert.equal(caisse.data.totaux.mobile_money, 1000);
+  assert.equal(caisse.data.totaux.total, 4500);
+  assert.equal(caisse.data.encaissements.length, 2);
+  assert.equal(caisse.data.encaissements[0].trackingCode, paye.data.parcel.trackingCode);
+  assert.equal(caisse.data.encaissements[0].mode, "especes");
+  assert.ok(caisse.data.encaissements[0].agentName, "l'agent acteur est journalisé");
+});
+
+test("l'agence de destination encaisse le reste, jamais au-delà, dans SA caisse", async () => {
+  const a = client();
+  const b = client();
+  const c = client();
+  await creerAgence(a, "Agence CodA", "Abidjan");
+  const agenceB = await creerAgence(b, "Agence CodB", "Bouaké");
+  await creerAgence(c, "Agence CodC", "Korhogo");
+
+  const cree = await a.post("/api/colis", {
+    agencyNotRegistered: false,
+    payment: { status: "arrivee" },
+    values: valeurs({ destinationAgencyId: agenceB.id, priceFCFA: "3500" })
+  });
+  assert.equal(cree.status, 201, JSON.stringify(cree.data));
+  const id = cree.data.parcel.id;
+
+  // Reste visible côté destination.
+  const caisseB = await b.get(`/api/caisse?date=${jourCleTest()}`);
+  assert.ok(caisseB.data.restes.some((r) => r.id === id));
+  assert.equal(caisseB.data.restes.find((r) => r.id === id).resteFCFA, 3500);
+
+  // Une agence sans lien n'encaisse rien.
+  assert.equal((await c.post(`/api/colis/${id}/encaisser`, { amountFCFA: 1000, mode: "especes" })).status, 404);
+
+  // Bornes du montant.
+  assert.equal((await b.post(`/api/colis/${id}/encaisser`, { amountFCFA: 4000, mode: "especes" })).status, 400);
+  assert.equal((await b.post(`/api/colis/${id}/encaisser`, { amountFCFA: 0, mode: "especes" })).status, 400);
+  assert.equal((await b.post(`/api/colis/${id}/encaisser`, { amountFCFA: 1000, mode: "cheque" })).status, 400);
+
+  // Encaissement complet à la remise.
+  const encaisse = await b.post(`/api/colis/${id}/encaisser`, { amountFCFA: 3500, mode: "especes" });
+  assert.equal(encaisse.status, 201, JSON.stringify(encaisse.data));
+  assert.equal(encaisse.data.parcel.paymentStatus, "regle");
+  assert.equal(encaisse.data.parcel.paidAmountFCFA, 3500);
+  assert.equal((await b.post(`/api/colis/${id}/encaisser`, { amountFCFA: 100, mode: "especes" })).status, 400);
+
+  // L'encaissement revient à la caisse de B, pas à celle de A.
+  const apresB = await b.get(`/api/caisse?date=${jourCleTest()}`);
+  assert.ok(apresB.data.encaissements.some((e) => e.parcelId === id && e.amountFCFA === 3500));
+  const apresA = await a.get(`/api/caisse?date=${jourCleTest()}`);
+  assert.ok(!apresA.data.encaissements.some((e) => e.parcelId === id));
+});
+
+test("la clôture de caisse valide le total compté, une seule fois par jour", async () => {
+  const g = client();
+  await creerAgence(g, "Agence Cloture", "Abidjan");
+
+  await g.post("/api/colis", {
+    agencyNotRegistered: true,
+    payment: { status: "paye", mode: "especes" },
+    values: valeurs({ destinationAgencyId: "", priceFCFA: "2500", declaredAgencyName: "Flash Cloture", declaredAgencyCity: "Bouaké", declaredAgencyPhone: "0700000009" })
+  });
+  await g.post("/api/colis", {
+    agencyNotRegistered: true,
+    payment: { status: "paye", mode: "mobile_money" },
+    values: valeurs({ destinationAgencyId: "", priceFCFA: "3500", declaredAgencyName: "Flash Cloture", declaredAgencyCity: "Bouaké", declaredAgencyPhone: "0700000009" })
+  });
+
+  const jour = jourCleTest();
+  assert.equal((await g.post("/api/caisse/cloture", { date: "15/10/2026", countedTotalFCFA: 6000 })).status, 400, "format de date");
+
+  const cloture = await g.post("/api/caisse/cloture", { date: jour, countedTotalFCFA: 6000 });
+  assert.equal(cloture.status, 201, JSON.stringify(cloture.data));
+  assert.equal(cloture.data.cloture.countedTotalFCFA, 6000);
+  assert.equal(cloture.data.cloture.computedTotalFCFA, 6000);
+  assert.equal(cloture.data.cloture.ecartFCFA, 0);
+
+  // Écart signalé quand le compté diffère, mais seule la caisse de l'agence compte.
+  assert.equal((await g.post("/api/caisse/cloture", { date: jour, countedTotalFCFA: 6000 })).status, 409, "une seule clôture par jour");
+
+  const autre = client();
+  await creerAgence(autre, "Agence Cloture B", "Bouaké");
+  const clotureAutre = await autre.post("/api/caisse/cloture", { date: jour, countedTotalFCFA: 500 });
+  assert.equal(clotureAutre.status, 201);
+  assert.equal(clotureAutre.data.cloture.computedTotalFCFA, 0, "sa caisse est vide");
+  assert.equal(clotureAutre.data.cloture.ecartFCFA, 500, "l'écart est enregistré");
+
+  // La caisse du jour renvoie la clôture existante.
+  const caisse = await g.get(`/api/caisse?date=${jour}`);
+  assert.equal(caisse.data.cloture.dateKey, jour);
+  assert.equal(caisse.data.cloture.countedTotalFCFA, 6000);
+});
+
 test.after(() => {
   server.close();
 });

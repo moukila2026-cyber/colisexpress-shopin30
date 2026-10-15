@@ -322,3 +322,77 @@ export function villeDivergente({ parcel, agency }) {
   const actual = textePropre(agency?.city).toLowerCase();
   return Boolean(declared) && Boolean(actual) && declared !== actual;
 }
+
+/* --------------------------- état de paiement (LOT 2) ----------------------- */
+
+export const ETATS_PAIEMENT = ["paye", "partiel", "arrivee"];
+export const MODES_PAIEMENT = ["especes", "mobile_money"];
+
+export const LIBELLES_PAIEMENT = {
+  paye: "Payé au départ",
+  partiel: "Partiel",
+  arrivee: "À payer à l'arrivée",
+  regle: "Réglé à l'arrivée",
+  null: "Non renseigné"
+};
+
+/** Reste dû sur un colis (paiement antérieur non renseigné = 0 encaissé). */
+export function resteAPayer({ priceFCFA = 0, paidAmountFCFA = 0 }) {
+  return Math.max(0, Math.round(Number(priceFCFA) || 0) - Math.round(Number(paidAmountFCFA) || 0));
+}
+
+/** Libellé français de l'état de paiement, avec le reste à encaisser. */
+export function libelleEtatPaiement(paymentStatus, { priceFCFA = 0, paidAmountFCFA = 0 } = {}) {
+  const cle = paymentStatus && LIBELLES_PAIEMENT[paymentStatus] ? paymentStatus : null;
+  const label = cle ? LIBELLES_PAIEMENT[cle] : LIBELLES_PAIEMENT[null];
+  return { label, cle, reste: resteAPayer({ priceFCFA, paidAmountFCFA }) };
+}
+
+/**
+ * Contrôle et résolution de l'état de paiement saisi à l'enregistrement.
+ * Renvoie `{ error }` ou `{ valeur: { status, paid, mode } }`.
+ * `payment` absent ou nul = colis antérieur au LOT 2 (compatibilité).
+ */
+export function validerPaiement({ priceFCFA, payment = null }) {
+  if (payment === null || payment === undefined) return { valeur: null };
+
+  const price = Math.round(Number(priceFCFA));
+  if (!Number.isFinite(price) || price < 0) {
+    return { error: "Le prix du colis doit être un montant valide." };
+  }
+  const status = textePropre(payment.status);
+  if (!ETATS_PAIEMENT.includes(status)) {
+    return { error: "Choisissez l'état de paiement du colis (payé, partiel ou à payer à l'arrivée)." };
+  }
+
+  let paid = 0;
+  if (status === "paye") {
+    paid = price;
+  } else if (status === "partiel") {
+    paid = Math.round(Number(payment.paidAmountFCFA));
+    if (!Number.isFinite(paid) || paid <= 0) {
+      return { error: "Indiquez le montant déjà payé (supérieur à 0 FCFA)." };
+    }
+    if (paid >= price) {
+      return { error: "Un paiement partiel doit être inférieur au prix du colis : sinon choisissez « Payé au départ »." };
+    }
+  }
+
+  let mode = null;
+  if (paid > 0) {
+    mode = textePropre(payment.mode);
+    if (!MODES_PAIEMENT.includes(mode)) {
+      return { error: "Indiquez le mode de paiement : espèces ou mobile money." };
+    }
+  }
+  return { valeur: { status, paid, mode } };
+}
+
+/** Nouvel état après un encaissement (au guichet ou à la remise). */
+export function etatApresEncaissement({ priceFCFA, paidAmountFCFA, montant }) {
+  const total = Math.round(Number(paidAmountFCFA) || 0) + Math.round(Number(montant) || 0);
+  const prix = Math.round(Number(priceFCFA) || 0);
+  if (total >= prix) return { status: "regle", paid: total };
+  if (total > 0) return { status: "partiel", paid: total };
+  return { status: "arrivee", paid: total };
+}

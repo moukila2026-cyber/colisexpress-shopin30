@@ -26,7 +26,8 @@ Navigateur  ── fetch /api/* ──►  lib/app.js (Express)
   Firestore sont réécrites comme des contrôles serveur.
 - **Métier** (`js/metier-colis.js`) : inchangé, importé **à la fois** par le
   navigateur et par le serveur — une seule source de vérité.
-- **Base** (`db/schema.sql`) : `agencies`, `parcels` et `agents` (LOT 1).
+- **Base** (`db/schema.sql`) : `agencies`, `parcels`, `agents` (LOT 1),
+  `tarifs`, `encaissements`, `caisse_closures` (LOT 2).
 
 ### `agencies`
 
@@ -46,6 +47,28 @@ Navigateur  ── fetch /api/* ──►  lib/app.js (Express)
 | `password_hash` | mot de passe scrypt propre à l'agent |
 | `role` | `agent` (le gérant n'a pas de ligne : c'est le compte `agencies`) |
 | `active` | un agent désactivé ne peut plus se connecter et sa session expire |
+
+### `tarifs`, `encaissements`, `caisse_closures` (LOT 2)
+
+| table | rôle |
+|---|---|
+| `tarifs` | grille d'une agence : `origin_city` × `destination_city` ( `''` = toutes destinations) × tranche `[weight_min_kg ; weight_max_kg[` → `price_fcfa` ; sortie de grille par `active = FALSE` (**jamais de suppression**) |
+| `parcels.payment_status` / `paid_amount_fcfa` | état de paiement du colis (`paye` / `partiel` / `arrivee` / `regle` ; NULL = colis antérieur) et cumul encaissé |
+| `encaissements` | journal de caisse : montant, mode (`especes` / `mobile_money`), `date_key` (Afrique/Abidjan), agent acteur — alimenté à l'enregistrement et à chaque encaissement du solde |
+| `caisse_closures` | clôture : total compté par l'agent vs total calculé, écart conservé, UNIQUE (agence, jour) |
+
+**Prix (autorité serveur).** `POST /api/colis` recalcule les options avec
+`optionsPrix()` (`js/metier-tarifs.js`, partagé client/serveur) depuis la
+grille de l'agence connectée ; si une ligne s'applique, c'est **son** prix qui
+est enregistré (le menu déroulant côté client n'est qu'un affichage), sinon la
+saisie libre est acceptée. `validerPaiement()` contrôle l'état saisi ; le
+premier versement crée la ligne `encaissements` associée.
+
+**Routes du LOT 2.** `GET/POST /api/tarifs` (segments simples),
+`PATCH /api/tarifs/:id`, `POST /api/colis/:id/encaisser`,
+`GET /api/caisse`, `POST /api/caisse/cloture` — les trois formes imbriquées
+ont leur fichier dans `api/` (verrouillé par `npm test`), lecture/écriture
+réservées aux agences concernées, écritures de grille au gérant.
 
 ### `parcels`
 

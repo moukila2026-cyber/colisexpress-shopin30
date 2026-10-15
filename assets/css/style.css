@@ -619,3 +619,24 @@ dd { margin: 4px 0 0; color: var(--ink); overflow-wrap: anywhere; font-size: .88
 .agents-table td { vertical-align: middle; }
 .muted-note { color: var(--muted); font-size: .75rem; }
 #teamSection .muted-note { display: block; margin-top: 12px; }
+
+/* --- LOT 2 : grille tarifaire, paiement, caisse --- */
+.price-recap { max-width: 920px; margin-top: 4px; padding: 14px 16px; border: 1px solid #cfe3da; border-left: 4px solid var(--green-800); border-radius: var(--radius); background: #f4faf7; font-size: .86rem; }
+.price-recap strong { display: block; margin-bottom: 8px; color: var(--green-950); }
+.price-recap small { color: var(--muted); }
+.recap-grid { display: flex; flex-wrap: wrap; gap: 8px 26px; margin: 0 0 6px; }
+.recap-grid dt { color: var(--muted); font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; }
+.recap-grid dd { margin: 2px 0 0; font-weight: 800; color: var(--green-950); }
+.receipt-payment { margin: 10px 0 0; padding: 8px 10px; border-radius: 8px; background: #f4faf7; color: var(--green-900, #126656); font-size: .8rem; text-align: center; }
+.payment-card .payment-status { display: inline-flex; margin: 0 0 10px; padding: 5px 10px; border-radius: 20px; font-size: .74rem; font-weight: 820; background: #eaebed; color: #5b5961; }
+.payment-card .payment-status-ok { background: #e2f3e9; color: #226047; }
+.payment-card .payment-status-due { background: #fff0de; color: #8a4b13; }
+.payment-actions { margin-top: 12px; }
+.tarifs-list { margin-bottom: 24px; }
+.tarif-inactif td { opacity: .62; }
+.tarif-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.clauses-form, .cloture-form { display: flex; flex-direction: column; gap: 14px; margin-top: 14px; }
+.cloture-form .button { align-self: flex-start; }
+.cloture-done p { margin: 8px 0 0; font-size: .88rem; }
+.caisse-table td { white-space: nowrap; }
+.caisse-table td a.tracking-code, .caisse-table .tracking-code { white-space: nowrap; }

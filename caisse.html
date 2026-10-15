@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Caisse du jour de l'agence COLIS EXPRESS : encaissements, restes et clôture.">
+  <title>Caisse du jour — COLIS EXPRESS</title>
+  <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body class="agency-page">
+  <div class="app-shell">
+    <div id="sidebarMount"></div>
+    <main class="agency-main">
+      <div id="topbarMount"></div>
+      <div class="agency-content">
+        <header class="desktop-page-heading">
+          <div><h1>Caisse du jour</h1><p>Encaissements de votre agence, restes à recouvrer et clôture comptable.</p></div>
+          <button class="button button-outline" id="exportCsv" type="button">⬇ Exporter en CSV</button>
+        </header>
+        <div class="page-heading-mobile"><h1>Caisse du jour</h1><p>Encaissements et clôture de votre agence.</p></div>
+        <div class="page-message" id="pageMessage" hidden role="alert"></div>
+
+        <section class="panel-card filter-panel">
+          <form id="caisseFilters" class="filter-grid" autocomplete="off">
+            <div class="field"><label for="caisseDate">Date</label><input id="caisseDate" type="date"></div>
+            <div class="filter-actions"><button class="button button-outline" id="refreshCaisse" type="button">Actualiser</button></div>
+          </form>
+        </section>
+
+        <section class="stats-grid" aria-label="Totaux de caisse">
+          <article class="stat-card"><div class="stat-card-top"><small>Total du jour</small><span class="stat-icon" aria-hidden="true">◈</span></div><strong class="stat-number" id="totalJour">—</strong></article>
+          <article class="stat-card"><div class="stat-card-top"><small>Espèces</small><span class="stat-icon" aria-hidden="true">▣</span></div><strong class="stat-number" id="totalEspeces">—</strong></article>
+          <article class="stat-card"><div class="stat-card-top"><small>Mobile Money</small><span class="stat-icon" aria-hidden="true">↗</span></div><strong class="stat-number" id="totalMobile">—</strong></article>
+          <article class="stat-card"><div class="stat-card-top"><small>Restes à encaisser</small><span class="stat-icon" aria-hidden="true">⌖</span></div><strong class="stat-number" id="totalRestes">—</strong></article>
+        </section>
+
+        <section class="panel-card" id="cloturePanel" aria-labelledby="clotureTitle">
+          <div class="panel-title-row"><h2 id="clotureTitle">Clôture de caisse</h2></div>
+          <div id="clotureContent"><div class="loading-state">Chargement…</div></div>
+          <form id="clotureForm" class="cloture-form" novalidate hidden>
+            <div class="field"><label for="clotureTotal">Total compté par l'agent (FCFA) <span class="required">*</span></label><input id="clotureTotal" name="clotureTotal" type="number" inputmode="numeric" min="0" step="1" required><small class="field-help">Comptez la caisse physique puis saisissez le total : le serveur le compare aux encaissements de la journée.</small></div>
+            <button class="button button-primary" id="clotureButton" type="submit">Clôturer la caisse du jour</button>
+          </form>
+        </section>
+
+        <section class="panel-card parcels-panel">
+          <div class="panel-title-row"><h2>Colis encaissés</h2><span id="caisseCount">0 encaissement</span></div>
+          <div id="caisseList"><div class="loading-state">Chargement des encaissements…</div></div>
+        </section>
+
+        <section class="panel-card parcels-panel">
+          <div class="panel-title-row"><h2>Restes à encaisser</h2><span id="restesCount">0 colis</span></div>
+          <div id="restesList"><div class="loading-state">Chargement des restes…</div></div>
+        </section>
+      </div>
+    </main>
+  </div>
+  <script type="module" src="js/caisse.js"></script>
+</body>
+</html>

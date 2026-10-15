@@ -50,6 +50,40 @@
             <div class="form-footer"><button class="button button-primary" id="saveAgentButton" type="submit">Inviter cet agent</button></div>
           </form>
         </section>
+
+        <section class="settings-card" id="tarifsSection" aria-labelledby="tarifsTitle">
+          <div class="settings-summary">
+            <div>
+              <h2 id="tarifsTitle">Grille tarifaire</h2>
+              <p>Axe (ville départ → ville arrivée ou toutes destinations) × tranche de poids → prix FCFA. Les prix du formulaire « nouveau colis » sont choisis dans cette grille ; sans ligne applicable, la saisie libre reste possible.</p>
+            </div>
+          </div>
+          <div class="page-message" id="tarifMessage" hidden role="alert"></div>
+          <div id="tarifsList" class="tarifs-list"><div class="loading-state">Chargement de la grille…</div></div>
+          <form id="tarifForm" class="form-stack" novalidate hidden>
+            <h3 class="form-subheading" id="tarifFormTitle">Ajouter un tarif</h3>
+            <div class="form-grid">
+              <div class="field"><label for="tarifOriginCity">Ville de départ <span class="required">*</span></label><input id="tarifOriginCity" name="originCity" type="text" autocomplete="off" placeholder="Ex. Abidjan" required></div>
+              <div class="field"><label for="tarifDestinationCity">Ville d'arrivée</label><input id="tarifDestinationCity" name="destinationCity" type="text" autocomplete="off" placeholder="Ex. Bouaké"><label class="switch-field"><input type="checkbox" id="tarifAllDestinations" name="allDestinations"><span>Toutes destinations</span></label></div>
+              <div class="field"><label for="tarifBand">Tranche de poids <span class="required">*</span></label><select id="tarifBand" name="band">
+                <option value="0-2">0 – 2 kg</option>
+                <option value="2-5">2 – 5 kg</option>
+                <option value="5-10">5 – 10 kg</option>
+                <option value="10+">+ 10 kg</option>
+                <option value="libre">Tranche personnalisée…</option>
+              </select></div>
+              <div class="field" id="tarifCustomBand" hidden>
+                <label for="tarifWeightMin">Poids minimum (kg) <span class="required">*</span></label><input id="tarifWeightMin" name="weightMinKg" type="number" inputmode="decimal" min="0" step="0.1" placeholder="0">
+                <label for="tarifWeightMax">Poids maximum (kg)</label><input id="tarifWeightMax" name="weightMaxKg" type="number" inputmode="decimal" min="0.1" step="0.1" placeholder="Laisser vide : sans limite"><small class="field-help">Sans maximum, la tranche vaut « + poids minimum ».</small>
+              </div>
+              <div class="field"><label for="tarifPrice">Prix (FCFA) <span class="required">*</span></label><input id="tarifPrice" name="priceFCFA" type="number" inputmode="numeric" min="0" step="1" placeholder="0" required></div>
+            </div>
+            <div class="form-footer">
+              <button class="button button-outline" id="tarifCancelButton" type="button" hidden>Annuler la modification</button>
+              <button class="button button-primary" id="tarifSubmitButton" type="submit">Ajouter à la grille</button>
+            </div>
+          </form>
+        </section>
       </div>
     </main>
   </div>

@@ -13,6 +13,13 @@ plus aucune dépendance à Firebase.
   mots de passe hachés scrypt)
 - **Comptes agents nommés** : 1 compte = 1 agence, plusieurs agents ;
   chaque écriture d'étape trace l'agent acteur dans l'historique
+- **Grille tarifaire** (Paramètres > Tarifs) : axe ville départ → ville
+  arrivée (ou « toutes destinations ») × tranche de poids → prix FCFA,
+  sélectionnés en menu déroulant à l'enregistrement (saisie libre en repli)
+- **État de paiement par colis** : « Payé au départ », « Partiel »,
+  « À payer à l'arrivée » — puis encaissement du solde à la remise
+- **Caisse du jour** par agence : encaissements du jour par mode (espèces,
+  mobile money), restes à encaisser, clôture avec total compté, export CSV
 
 ## Arborescence
 
@@ -110,11 +117,15 @@ npm test
 
 - `tests/api.test.mjs` : parcours complets de l'API (session, colis inscrit et
   non inscrite, visibilité entre agences, suivi public anonyme, rattachement
-  unique, progression des statuts, refus d'accès).
+  unique, progression des statuts, refus d'accès, comptes agents, grille
+  tarifaire, états de paiement, encaissements et clôture de caisse).
 - `tests/metier-colis.test.mjs` : règles métier (validation, construction,
-  étapes, rattachement).
+  étapes, rattachement, acteur, états de paiement).
+- `tests/metier-tarifs.test.mjs` : grille tarifaire (tranches, axes,
+  priorité destination exacte, options du menu déroulant, validation).
 - `tests/integration-page.test.mjs` : intégrité statique (syntaxe, imports,
-  identifiants DOM, liens, absence de toute dépendance Firebase).
+  identifiants DOM, liens, absence de toute dépendance Firebase, points
+  d'entrée Vercel de chaque route imbriquée).
 
 ## 6. Parcours fonctionnel
 
@@ -133,6 +144,19 @@ npm test
    téléphone, mot de passe provisoire) et les active/désactive ; chaque agent
    se connecte avec son propre e-mail et ses étapes apparaissent « Par … »
    dans l'historique des colis.
+8. **Tarifs (Paramètres)** : le gérant construit sa grille (axe × tranche de
+   poids → prix) ; dans « Nouveau colis », le prix est ensuite **choisi dans
+   un menu déroulant** alimenté par la grille selon destination + poids, avec
+   récapitulatif avant validation. Si la grille ne couvre pas l'envoi, la
+   saisie libre reste autorisée (colis antérieurs et agences sans grille
+   inchangés). Le prix est figé à l'enregistrement.
+9. **Paiement** : l'état est saisi à l'enregistrement (payé au départ /
+   partiel / à payer à l'arrivée), puis l'agence qui encaisse le solde met
+   à jour la fiche colis (« Encaisser le solde »).
+10. **Caisse** : page « Caisse du jour » — encaissements du jour avec totaux
+    espèces / mobile money, restes à encaisser, clôture avec total compté
+    validé par l'agent (écart conservé) et export CSV (date, code, expéditeur,
+    destinataire, prix, payé, reste, mode, agent).
 
 ## 7. Dépannage
 
