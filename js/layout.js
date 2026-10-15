@@ -1,3 +1,4 @@
+import { api } from "./api.js";
 import { logout } from "./auth.js";
 import { escapeHTML, showToast } from "./utils.js";
 
@@ -56,11 +57,33 @@ export async function initAgencyLayout(agency, activePage) {
         '<footer class="agency-credit" id="agencyCredit"><a href="conditions.html">Conditions</a> <span>·</span> <a href="confidentialite.html">Confidentialité</a> <span>·</span> Conçu par <strong>Shopin30</strong> <span>·</span> <a href="https://wa.me/2250501303343" target="_blank" rel="noopener noreferrer">WhatsApp : +225 0501303343</a></footer>'
       );
     }
+    // LOT 5 — compteur des notifications non lues (non bloquant).
+    rafraichirBadgeNotifications();
     return agency;
   } catch (error) {
     console.error(error);
     showToast(error.message, "error");
     return null;
+  }
+}
+
+/** Affiche le nombre de notifications non lues dans la barre latérale (masqué à 0). */
+export function afficherBadgeNotifications(nonLues) {
+  const n = Math.max(0, Number(nonLues) || 0);
+  document.querySelectorAll("[data-notif-count]").forEach((element) => {
+    element.textContent = n > 99 ? "99+" : String(n);
+    element.hidden = n === 0;
+    element.setAttribute("aria-label", `${n} notification${n > 1 ? "s" : ""} non lue${n > 1 ? "s" : ""}`);
+  });
+}
+
+/** Compteur léger (sans balayage des échéances) : une requête par page, jamais bloquante. */
+export async function rafraichirBadgeNotifications() {
+  try {
+    const { nonLues } = await api(`/api/notifications?resume=1&_=${Date.now()}`);
+    afficherBadgeNotifications(nonLues);
+  } catch {
+    // Le badge est un confort : une erreur réseau ne gêne jamais la page.
   }
 }
 
@@ -85,6 +108,7 @@ export function agencySidebar() {
         <a href="bordereaux.html" data-nav="bordereaux"><span aria-hidden="true">▤</span> Bordereaux</a>
         <a href="clients.html" data-nav="clients"><span aria-hidden="true">✆</span> Clients</a>
         <a href="caisse.html" data-nav="caisse"><span aria-hidden="true">◈</span> Caisse</a>
+        <a href="notifications.html" data-nav="notifications"><span aria-hidden="true">✉</span> Notifications <b class="nav-badge" data-notif-count hidden></b></a>
         <a href="parametres.html" data-nav="parametres"><span aria-hidden="true">⚙</span> Paramètres</a>
       </nav>
       <div class="sidebar-footer">

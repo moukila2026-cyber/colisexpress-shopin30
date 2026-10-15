@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Journal des notifications de l'agence COLIS EXPRESS : incidents, bordereaux, colis en souffrance, retours et colis qui dorment.">
+  <title>Notifications — COLIS EXPRESS</title>
+  <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body class="agency-page">
+  <div class="app-shell">
+    <div id="sidebarMount"></div>
+    <main class="agency-main">
+      <div id="topbarMount"></div>
+      <div class="agency-content">
+        <header class="desktop-page-heading">
+          <div><h1>Notifications</h1><p>Les événements qui concernent votre agence, notifiés aux deux agences du colis : incidents, bordereaux, souffrance, retours et colis qui dorment.</p></div>
+          <button class="button button-outline" id="toutLireButton" type="button">✓ Tout marquer comme lu</button>
+        </header>
+        <div class="page-heading-mobile"><h1>Notifications</h1><p>Ce qui demande l'attention de votre agence.</p></div>
+        <div class="page-message" id="pageMessage" hidden role="alert"></div>
+
+        <p class="notice-box notif-mode" id="notifMode">Chargement de la configuration des envois…</p>
+
+        <section class="stats-grid" aria-label="Notifications par famille">
+          <article class="stat-card"><div class="stat-card-top"><small>Non lues</small><span class="stat-icon" aria-hidden="true">✉</span></div><strong class="stat-number" id="notifNonLues">—</strong></article>
+          <article class="stat-card"><div class="stat-card-top"><small>Incidents</small><span class="stat-icon" aria-hidden="true">!</span></div><strong class="stat-number" id="notifIncidents">—</strong></article>
+          <article class="stat-card"><div class="stat-card-top"><small>Bordereaux</small><span class="stat-icon" aria-hidden="true">▤</span></div><strong class="stat-number" id="notifBordereaux">—</strong></article>
+          <article class="stat-card"><div class="stat-card-top"><small>Colis qui dorment</small><span class="stat-icon" aria-hidden="true">◔</span></div><strong class="stat-number" id="notifDorment">—</strong></article>
+        </section>
+
+        <section class="panel-card filter-panel">
+          <form id="notifFilters" class="filter-grid notif-filters" autocomplete="off">
+            <div class="field"><label for="notifFamille">Événements</label><select id="notifFamille"><option value="">Tous les événements</option></select></div>
+            <div class="field"><label class="switch-field" for="notifNonLuesSeulement"><input id="notifNonLuesSeulement" type="checkbox"><span>Non lues uniquement</span></label></div>
+            <div class="filter-actions"><button class="button button-outline" id="refreshNotifications" type="button">Actualiser</button></div>
+          </form>
+        </section>
+
+        <section class="panel-card parcels-panel">
+          <div class="panel-title-row"><h2>Journal des notifications</h2><span id="notifCount">0 notification</span></div>
+          <div id="notifList"><div class="loading-state">Chargement des notifications…</div></div>
+        </section>
+      </div>
+    </main>
+  </div>
+  <script type="module" src="js/notifications.js"></script>
+</body>
+</html>
