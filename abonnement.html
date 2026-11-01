@@ -38,7 +38,15 @@
           <p class="muted-note">Seuls les colis que votre agence <strong>enregistre</strong> sont comptés : votre agence ne paie jamais pour les colis qu'elle reçoit. Au-delà du quota, chaque colis coûte 30 FCFA, prépayés sur le portefeuille. Un solde impayé ne bloque jamais un colis déjà enregistré : lecture, progression, réception et contrôle restent garantis.</p>
         </section>
 
-        <section class="plans-grid" id="plansGrid" aria-label="Plans disponibles"></section>
+        <section class="panel-card" id="plansSection" aria-labelledby="plansSectionTitle">
+          <div class="panel-title-row">
+            <div>
+              <h2 id="plansSectionTitle">Changer d'offre ou de forfait</h2>
+              <p class="muted-note" id="transitionGuidePanel">Pendant ou à la fin de vos 50 colis gratuits, vous pouvez soit <strong>passer immédiatement au forfait Pro (500 colis/mois pour 10 000 FCFA)</strong> en 1 clic ci-dessous, soit <strong>recharger votre portefeuille</strong> pour continuer à 30 FCFA par colis supplémentaire, soit demander un <strong>forfait Réseau sur mesure</strong>.</p>
+            </div>
+          </div>
+          <div class="plans-grid" id="plansGrid" aria-label="Plans disponibles"></div>
+        </section>
 
         <section class="panel-card parcels-panel">
           <div class="panel-title-row"><h2>Échéances</h2><span id="echeancesCount">—</span></div>
@@ -50,6 +58,12 @@
           <div class="panel-note" id="rechargeNote"><span id="recharge"></span>
             <form id="rechargeEnLigneForm" class="recharge-form" novalidate hidden>
               <label for="rechargeMontant">Recharger en ligne : mobile money ou carte, sur la page sécurisée SasPay</label>
+              <div class="quick-chips" id="quickRechargeAmounts" role="group" aria-label="Montants rapides de recharge">
+                <button class="quick-chip" type="button" data-quick-recharge="1500">1 500 FCFA (50 colis)</button>
+                <button class="quick-chip" type="button" data-quick-recharge="3000">3 000 FCFA (100 colis)</button>
+                <button class="quick-chip" type="button" data-quick-recharge="5000">5 000 FCFA</button>
+                <button class="quick-chip" type="button" data-quick-recharge="10000">10 000 FCFA (Forfait Pro)</button>
+              </div>
               <div class="recharge-row">
                 <input id="rechargeMontant" name="montantFCFA" type="number" min="100" max="1000000" step="1" inputmode="numeric" placeholder="Montant en FCFA">
                 <button class="button button-orange" id="rechargeEnLigneButton" type="submit">Recharger en ligne</button>
