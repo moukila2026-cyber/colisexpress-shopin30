@@ -32,6 +32,14 @@
             <div class="field"><label for="agencyPhone">Téléphone <span class="required">*</span></label><input id="agencyPhone" name="phone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="0700000000" required><small class="field-help">Format ivoirien : 10 chiffres.</small></div>
           </div>
           <div class="field"><label for="agencyEmail">E-mail <span class="required">*</span></label><input id="agencyEmail" name="email" type="email" autocomplete="email" placeholder="agence@exemple.ci" required></div>
+          <div class="field">
+            <label for="agencyPlan">Forfait de départ</label>
+            <select id="agencyPlan" name="plan">
+              <option value="gratuit">Gratuit — 0 FCFA/mois (50 colis/mois offerts, sans engagement)</option>
+              <option value="pro">Pro — 10 000 FCFA/mois (500 colis/mois inclus, échéance à 7 jours)</option>
+            </select>
+            <small class="field-help">Vous pourrez changer de forfait ou recharger votre portefeuille en 1 clic à tout moment depuis votre espace agence (menu Abonnement).</small>
+          </div>
           <div class="form-grid">
             <div class="field"><label for="password">Mot de passe <span class="required">*</span></label><div class="password-input-wrap"><input id="password" name="password" type="password" autocomplete="new-password" minlength="6" placeholder="6 caractères minimum" required><button class="password-toggle" type="button" data-password-toggle="password" aria-label="Afficher le mot de passe" aria-pressed="false" title="Afficher le mot de passe"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></button></div></div>
             <div class="field"><label for="confirmPassword">Confirmer le mot de passe <span class="required">*</span></label><div class="password-input-wrap"><input id="confirmPassword" name="confirmPassword" type="password" autocomplete="new-password" minlength="6" placeholder="Répétez le mot de passe" required><button class="password-toggle" type="button" data-password-toggle="confirmPassword" aria-label="Afficher le mot de passe" aria-pressed="false" title="Afficher le mot de passe"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></button></div></div>

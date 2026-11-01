@@ -2859,6 +2859,26 @@ test("LOT 13 : relevé PDF cloisonné, export console et archive mensuelle idemp
   assert.ok(deuxiemeTache.resultats.relevesDejaArchives >= premiereTache.resultats.relevesArchives);
 });
 
+test("inscription directe avec choix du forfait Pro active immédiatement le quota de 500 colis", async () => {
+  const c = client();
+  const email = compteUnique("pro-direct");
+  const res = await c.post("/api/register", {
+    name: "Agence Daloa Pro",
+    city: "Daloa",
+    phone: "+225 07 11 22 33 44",
+    email,
+    password: "secret12",
+    plan: "pro"
+  });
+  assert.equal(res.status, 201);
+  assert.equal(res.data.agency.plan, "pro");
+
+  const etat = await facturation(c);
+  assert.equal(etat.plan, "pro");
+  assert.equal(etat.periode.quotaEffectif, 500);
+});
+
 test.after(() => {
   server.close();
 });
+

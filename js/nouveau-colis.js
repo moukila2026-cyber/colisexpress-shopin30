@@ -66,7 +66,7 @@ async function rafraichirQuota() {
     notice.hidden = !resume.alerte;
     notice.classList.toggle("notice-danger", Boolean(insuffisant || resume.enRetard));
     notice.innerHTML = resume.alerte
-      ? `${escapeHTML(resume.alerte)} <a class="table-link" href="abonnement.html">Voir l'abonnement</a>`
+      ? `${escapeHTML(resume.alerte)} <a class="table-link" href="abonnement.html">Voir l'abonnement</a> · <a class="table-link" href="abonnement.html#plansSection">Passer au forfait Pro (500 colis)</a> · <a class="table-link" href="abonnement.html#recharge">Recharger le portefeuille</a>`
       : "";
   } catch {
     notice.hidden = true;

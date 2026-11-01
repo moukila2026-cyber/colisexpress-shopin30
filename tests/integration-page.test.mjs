@@ -1079,3 +1079,33 @@ test("Invitation d'agence WhatsApp pré-remplie et bouton œil sur les mots de p
   assert.equal(construireAxesCourants({ originCity: "Daloa", existingTarifs: lignesDaloa }).length, 0, "aucun doublon si déjà pré-rempli");
   assert.ok(existsSync(path.join(RACINE, "assets/img/admin-reseau.jpg")), "fond d'écran administrateur présent");
 });
+
+test("les forfaits et le parcours de changement d'offre (accueil, inscription, guichet, abonnement) sont câblés", () => {
+  // 1. Page d'accueil : section #forfaits avec Gratuit, Pro et Réseau + explication de la transition
+  const indexHtml = lire("index.html");
+  assert.match(indexHtml, /href="#forfaits"/, "navigation publique vers #forfaits");
+  assert.match(indexHtml, /id="forfaits"/, "section #forfaits présente sur index.html");
+  assert.match(indexHtml, /id="homePricingGrid"/, "grille #homePricingGrid présente sur index.html");
+  assert.match(indexHtml, /50 colis expédiés offerts/, "offre Gratuit 50 colis affichée sur l'accueil");
+  assert.match(indexHtml, /10 000 FCFA/, "offre Pro 10 000 FCFA affichée sur l'accueil");
+  assert.match(indexHtml, /500 colis expédiés inclus/, "quota 500 colis Pro affiché sur l'accueil");
+  assert.match(indexHtml, /inscription\.html\?plan=pro/, "CTA d'inscription directe au forfait Pro depuis l'accueil");
+
+  // 2. Page d'inscription : sélecteur #agencyPlan pré-rempli via ?plan=pro
+  const inscriptionHtml = lire("inscription.html");
+  assert.match(inscriptionHtml, /id="agencyPlan"/, "sélecteur de forfait initial sur inscription.html");
+  assert.match(lire("js/inscription.js"), /getQueryParam\("plan"\)/, "js/inscription.js lit ?plan= dans l'URL");
+
+  // 3. Tableau de bord, Nouveau colis et Abonnement : raccourcis de changement d'offre et de recharge
+  assert.match(lire("dashboard.html"), /id="forfaitChangerPlan"/, "bouton Changer d'offre sur le bandeau forfait du dashboard");
+  assert.match(lire("js/nouveau-colis.js"), /abonnement\.html#plansSection/, "lien direct vers le changement d'offre depuis l'alerte quota");
+  const aboHtml = lire("abonnement.html");
+  for (const id of ["plansSection", "transitionGuidePanel", "quickRechargeAmounts"]) {
+    assert.ok(aboHtml.includes(`id="${id}"`), `abonnement.html expose #${id}`);
+  }
+  const css = lire("assets/css/style.css");
+  for (const classe of [".pricing-section", ".pricing-grid", ".pricing-card", ".pricing-card-featured", ".pricing-Explainer"]) {
+    assert.ok(css.includes(classe), `style.css définit ${classe}`);
+  }
+});
+

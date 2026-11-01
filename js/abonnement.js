@@ -124,14 +124,36 @@ function boutonPlan(plan) {
   return `<button class="button ${plan.id === "pro" ? "button-primary" : "button-outline"}" type="button" data-plan="${escapeHTML(plan.id)}">${libelle}</button>`;
 }
 
+const AVANTAGES_PLAN = {
+  gratuit: [
+    "50 colis expédiés inclus chaque mois",
+    "Réception de colis 100 % gratuite et illimitée",
+    "30 FCFA / colis supplémentaire sur le portefeuille",
+    "Reçu QR, ticket 58 mm, caisse et bordereaux"
+  ],
+  pro: [
+    "500 colis expédiés inclus chaque mois (20 FCFA/colis)",
+    "Activation immédiate en 1 clic (délai de paiement 7 jours)",
+    "Comptes multi-agents nominatifs & suivi personnalisé (logo)",
+    "Relevé comptable PDF mensuel & 30 FCFA/colis hors forfait"
+  ],
+  reseau: [
+    "Quota mensuel sur mesure ou illimité négocié",
+    "Déploiement multi-gares & compagnies de transport",
+    "Accompagnement terrain & support prioritaire Shopin30"
+  ]
+};
+
 function renderPlans() {
   const target = document.getElementById("plansGrid");
   target.innerHTML = IDS_PLANS.map((id) => {
     const plan = facturation.plans[id];
     const courant = id === facturation.plan;
+    const avantages = (AVANTAGES_PLAN[id] || []).map((item) => `<li>${escapeHTML(item)}</li>`).join("");
     return `<article class="plan-card${courant ? " plan-card-current" : ""}">
       <div class="plan-card-head"><h3>${escapeHTML(plan.label)}</h3><strong>${escapeHTML(prixPlan(plan))}</strong></div>
       <p>${escapeHTML(plan.description)}</p>
+      <ul class="pricing-features plan-card-features">${avantages}</ul>
       <div class="plan-card-action">${boutonPlan(plan)}</div>
     </article>`;
   }).join("");
@@ -338,6 +360,15 @@ async function boot() {
   document.getElementById("refreshAbonnement")?.addEventListener("click", charger);
   document.getElementById("releveForm")?.addEventListener("submit", telechargerReleve);
   document.getElementById("rechargeEnLigneForm")?.addEventListener("submit", rechargerEnLigne);
+  document.getElementById("quickRechargeAmounts")?.addEventListener("click", (event) => {
+    const chip = event.target.closest("[data-quick-recharge]");
+    if (!chip) return;
+    const input = document.getElementById("rechargeMontant");
+    if (input) {
+      input.value = chip.dataset.quickRecharge;
+      input.focus();
+    }
+  });
   try {
     const { configuration } = await api(`/api/paiements?_=${Date.now()}`);
     paiementsEnLigne = configuration || paiementsEnLigne;

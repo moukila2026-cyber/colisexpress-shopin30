@@ -161,6 +161,13 @@ function renderForfait(resume, vue, estGerant) {
   document.getElementById("forfaitDetail").textContent = `${vue.detail}${depassements} · Portefeuille : ${Number(resume.soldeFCFA || 0).toLocaleString("fr-FR")} FCFA`;
   const bouton = document.getElementById("forfaitRecharger");
   if (bouton) bouton.hidden = !(vue.recharger && estGerant);
+  const boutonPlan = document.getElementById("forfaitChangerPlan");
+  if (boutonPlan) {
+    boutonPlan.hidden = !estGerant;
+    boutonPlan.textContent = resume.plan === "gratuit"
+      ? "⚡ Passer au forfait Pro (500 colis)"
+      : "Changer de forfait";
+  }
 }
 
 async function charger() {
