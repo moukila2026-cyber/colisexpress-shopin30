@@ -4,6 +4,8 @@ import { agencySidebar, initAgencyLayout, mobileAgencyHeader } from "./layout.js
 import {
   ACTIONS_STATUT,
   STATUTS,
+  agencyInviteMessage,
+  agencyInviteWhatsappLink,
   clearPageMessage,
   errorMessage,
   escapeHTML,
@@ -79,13 +81,26 @@ function destinationLabel(parcel) {
   return `${declared.name || parcel.destinationAgencyName || "—"} · non inscrite`;
 }
 
-function inscriptionUrl() {
-  return new URL("inscription.html", window.location.href).href;
+function inscriptionUrl(declared = {}) {
+  const url = new URL("inscription.html", window.location.href);
+  if (declared.name) url.searchParams.set("nom", declared.name);
+  if (declared.city) url.searchParams.set("ville", declared.city);
+  if (declared.phone) url.searchParams.set("tel", declared.phone);
+  return url.href;
 }
 
 function relanceTexte(parcel) {
   const declared = agenceDeclaree(parcel) || {};
-  return `Bonjour${declared.name ? ` ${declared.name}` : ""}, le colis ${parcel.trackingCode} (${parcel.originCity} → ${parcel.destinationCity}) vous est destiné sur COLIS EXPRESS. Créez votre compte agence pour le prendre en charge et être alertée à chaque étape : ${inscriptionUrl()}`;
+  return agencyInviteMessage({
+    targetAgencyName: declared.name || "",
+    targetCity: declared.city || parcel.destinationCity || "",
+    senderAgencyName: currentAgency?.name || parcel.ownerAgencyName || "",
+    senderCity: currentAgency?.city || parcel.ownerAgencyCity || "",
+    trackingCode: parcel.trackingCode,
+    originCity: parcel.originCity,
+    destinationCity: parcel.destinationCity,
+    registerUrl: inscriptionUrl(declared)
+  });
 }
 
 function whatsappLink(parcel) {
@@ -119,9 +134,8 @@ function attachCardHtml(parcel) {
   const options = rattachables
     .map((agency) => `<option value="${escapeHTML(agency.id)}">${escapeHTML(agency.name)} — ${escapeHTML(agency.city || "")}</option>`)
     .join("");
-  const relance = declared.phone
-    ? `<a class="button button-outline" target="_blank" rel="noopener noreferrer" href="${escapeHTML(whatsappShareLink(declared.phone, relanceTexte(parcel)))}">◉ Relancer l'agence sur WhatsApp</a>`
-    : "";
+  const texteInvitation = relanceTexte(parcel);
+  const relance = `<a class="button button-outline" target="_blank" rel="noopener noreferrer" href="${escapeHTML(agencyInviteWhatsappLink({ phone: declared.phone || "", text: texteInvitation }))}">◉ Relancer l'agence sur WhatsApp</a>`;
   return `
     <section class="info-card attach-card" aria-labelledby="attachTitle">
       <h2 id="attachTitle">Agence de destination à rattacher</h2>

@@ -27,17 +27,17 @@
         <div class="page-message" id="formMessage" hidden role="alert"></div>
         <form id="loginForm" class="form-stack" novalidate>
           <div class="field"><label for="loginEmail">E-mail</label><input id="loginEmail" name="email" type="email" autocomplete="email" placeholder="agence@exemple.ci" required></div>
-          <div class="field"><label for="loginPassword">Mot de passe</label><input id="loginPassword" name="password" type="password" autocomplete="current-password" placeholder="Votre mot de passe" required></div>
+          <div class="field"><label for="loginPassword">Mot de passe</label><div class="password-input-wrap"><input id="loginPassword" name="password" type="password" autocomplete="current-password" placeholder="Votre mot de passe" required><button class="password-toggle" type="button" data-password-toggle="loginPassword" aria-label="Afficher le mot de passe" aria-pressed="false" title="Afficher le mot de passe"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></button></div></div>
           <div><button class="forgot-button" id="forgotButton" type="button">Mot de passe oublié ?</button></div>
           <button class="button button-primary" id="loginButton" type="submit">Se connecter</button>
         </form>
         <section class="forgot-panel" id="forgotPanel" hidden aria-label="Récupérer l'accès au compte">
           <p>Vous avez oublié votre mot de passe ? L'équipe COLIS EXPRESS réinitialise votre accès après vérification.</p>
-          <p><a class="button button-outline" target="_blank" rel="noopener noreferrer" href="https://wa.me/2250501303343">Contacter le support sur WhatsApp</a></p>
+          <p><a class="button button-outline" id="forgotWhatsappLink" target="_blank" rel="noopener noreferrer" href="https://wa.me/2250501303343?text=Bonjour%20COLIS%20EXPRESS%2C%20j%27ai%20oubli%C3%A9%20le%20mot%20de%20passe%20de%20mon%20compte%20agence%20et%20je%20souhaite%20r%C3%A9initialiser%20mon%20acc%C3%A8s.">Contacter le support sur WhatsApp</a></p>
         </section>
         <p class="auth-switch">Nouvelle agence ? <a href="inscription.html">Créer un compte</a></p>
         <p class="auth-credit"><a href="conditions.html">Conditions</a> · <a href="confidentialite.html">Confidentialité</a></p>
-        <p class="auth-credit">Conçu par <strong>Shopin30</strong> · <a href="https://wa.me/2250501303343" target="_blank" rel="noopener noreferrer">WhatsApp : +225 0501303343</a></p>
+        <p class="auth-credit">Conçu par <strong>Shopin30</strong> · <a href="https://wa.me/2250501303343?text=Bonjour%20COLIS%20EXPRESS%2C%20j%27ai%20besoin%20d%27aide%20pour%20me%20connecter." target="_blank" rel="noopener noreferrer">WhatsApp : +225 0501303343</a></p>
       </div>
     </section>
   </main>

@@ -27,7 +27,7 @@
       <p>Espace réservé à l'équipe Shopin30, avec un compte distinct des comptes agence et agents.</p>
       <form id="plateformeLoginForm" class="form-stack" novalidate>
         <div class="field"><label for="plateformeEmail">E-mail</label><input id="plateformeEmail" name="email" type="email" autocomplete="username" required></div>
-        <div class="field"><label for="plateformePassword">Mot de passe</label><input id="plateformePassword" name="password" type="password" autocomplete="current-password" required></div>
+        <div class="field"><label for="plateformePassword">Mot de passe</label><div class="password-input-wrap"><input id="plateformePassword" name="password" type="password" autocomplete="current-password" required><button class="password-toggle" type="button" data-password-toggle="plateformePassword" aria-label="Afficher le mot de passe" aria-pressed="false" title="Afficher le mot de passe"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></button></div></div>
         <button class="button button-primary" id="plateformeLoginButton" type="submit">Se connecter à la console</button>
       </form>
     </section>
@@ -36,15 +36,22 @@
       <h1>Créer le premier administrateur</h1>
       <p>Aucun compte de console n'existe encore. Saisissez le jeton d'amorçage défini dans Vercel (<code>PLATEFORME_PREMIER_ADMIN_JETON</code>) pour créer le premier compte de l'équipe Shopin30. Cette étape ne sert qu'une seule fois : supprimez ensuite la variable.</p>
       <form id="amorcageForm" class="form-stack" novalidate>
-        <div class="field"><label for="amorcageJeton">Jeton d'amorçage</label><input id="amorcageJeton" name="jeton" type="password" autocomplete="off" minlength="32" required></div>
+        <div class="field"><label for="amorcageJeton">Jeton d'amorçage</label><div class="password-input-wrap"><input id="amorcageJeton" name="jeton" type="password" autocomplete="off" minlength="32" required><button class="password-toggle" type="button" data-password-toggle="amorcageJeton" aria-label="Afficher le mot de passe" aria-pressed="false" title="Afficher le mot de passe"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></button></div></div>
         <div class="field"><label for="amorcageEmail">E-mail de l'administrateur</label><input id="amorcageEmail" name="email" type="email" autocomplete="username" required></div>
         <div class="field"><label for="amorcageNom">Nom affiché</label><input id="amorcageNom" name="nom" type="text" maxlength="80" autocomplete="name" required></div>
-        <div class="field"><label for="amorcagePassword">Mot de passe (12 caractères minimum)</label><input id="amorcagePassword" name="password" type="password" autocomplete="new-password" minlength="12" required></div>
+        <div class="field"><label for="amorcagePassword">Mot de passe (12 caractères minimum)</label><div class="password-input-wrap"><input id="amorcagePassword" name="password" type="password" autocomplete="new-password" minlength="12" required><button class="password-toggle" type="button" data-password-toggle="amorcagePassword" aria-label="Afficher le mot de passe" aria-pressed="false" title="Afficher le mot de passe"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></button></div></div>
         <button class="button button-orange" id="amorcageButton" type="submit">Créer le premier administrateur</button>
       </form>
     </section>
 
     <div id="consolePanel" hidden>
+      <div class="page-banner plateforme-banner" aria-hidden="true">
+        <img src="assets/img/admin-reseau.jpg" alt="" width="1408" height="768" loading="lazy">
+        <div class="plateforme-banner-overlay">
+          <span class="eyebrow">Centre de supervision Shopin30</span>
+          <strong>Réseau inter-agences COLIS EXPRESS — Côte d'Ivoire</strong>
+        </div>
+      </div>
       <div class="plateforme-heading">
         <div><h1>Vue d'ensemble du réseau</h1><p id="consolePeriode">—</p></div>
         <button class="button button-outline" id="refreshConsole" type="button">Actualiser</button>

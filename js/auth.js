@@ -5,7 +5,7 @@ import { redirectToLogin, showToast } from "./utils.js";
  * Session courante : renvoie le profil de l'agence connectée,
  * ou redirige vers la page de connexion.
  */
-export async function requireAgency({ messageTarget = "#pageMessage" } = {}) {
+export async function requireAgency() {
   try {
     const { agency, member } = await api("/api/me");
     if (!agency) return null;

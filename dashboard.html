@@ -38,6 +38,30 @@
           </div>
         </section>
 
+        <section class="panel-card partner-invite-card" id="partnerInviteCard" aria-labelledby="partnerInviteTitle">
+          <div class="panel-title-row">
+            <div>
+              <h2 id="partnerInviteTitle">Réseau inter-agences — Inviter une agence partenaire</h2>
+              <p class="muted-note">Invitez vos agences correspondantes (Abidjan, Daloa, Bouaké, Gagnoa, Yamoussoukro, San-Pédro, Man…) sur COLIS EXPRESS avec un message WhatsApp pré-rempli.</p>
+            </div>
+            <div class="forfait-actions">
+              <a class="button button-whatsapp button-small" id="dashboardInviteWhatsapp" href="#" target="_blank" rel="noopener noreferrer">◉ Inviter sur WhatsApp</a>
+              <button class="button button-outline button-small" id="togglePartnerInviteDetails" type="button" aria-expanded="false">Personnaliser le message</button>
+            </div>
+          </div>
+          <div id="partnerInviteDetails" hidden>
+            <div class="form-grid" style="margin-top:12px;">
+              <div class="field"><label for="partnerInviteName">Nom de l'agence à inviter</label><input id="partnerInviteName" type="text" autocomplete="off" placeholder="Ex. Daloa Express"></div>
+              <div class="field"><label for="partnerInviteCity">Ville</label><input id="partnerInviteCity" type="text" autocomplete="off" placeholder="Ex. Daloa"></div>
+              <div class="field field-full"><label for="partnerInvitePhone">Téléphone WhatsApp de l'agence (facultatif)</label><input id="partnerInvitePhone" type="tel" inputmode="numeric" placeholder="0700000000"><small class="field-help">Si laissé vide, WhatsApp s'ouvrira avec le message pré-rempli et vous laissera choisir le contact.</small></div>
+              <div class="field field-full"><label for="dashboardInviteText">Message pré-rempli WhatsApp</label><textarea class="invite-message-preview" id="dashboardInviteText" rows="3"></textarea></div>
+            </div>
+            <div class="forfait-actions" style="margin-top:10px;">
+              <button class="button button-ghost button-small" id="dashboardInviteCopy" type="button">Copier le message</button>
+            </div>
+          </div>
+        </section>
+
         <section class="panel-card alerts-panel" id="alertsPanel" hidden aria-labelledby="alertsTitle">
           <div class="panel-title-row"><h2 id="alertsTitle">⚠ À traiter</h2><span id="alertsCount"></span></div>
           <p class="muted-note">Le système vous appelle avant la réclamation du client : colis qui dorment, arrivées non retirées, agences à rattacher, colis en souffrance (&gt; 7 jours, retour possible depuis la fiche).</p>

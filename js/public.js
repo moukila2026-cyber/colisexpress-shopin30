@@ -65,7 +65,8 @@ async function estimer(event) {
       }
     });
     if (!devis.offres.length) {
-      devisResult.innerHTML = `<div class="notice-box">Aucune agence du réseau ne couvre encore l'axe ${escapeHTML(devis.originCity)} → ${escapeHTML(devis.destinationCity)} dans sa grille tarifaire. <a href="https://wa.me/2250501303343" target="_blank" rel="noopener noreferrer">Contactez notre équipe sur WhatsApp</a> pour un devis personnalisé.</div>`;
+      const msgDevis = `Bonjour COLIS EXPRESS, je souhaite un devis pour un colis de ${devis.originCity} vers ${devis.destinationCity} (${devis.weightKg} kg).`;
+      devisResult.innerHTML = `<div class="notice-box">Aucune agence du réseau ne couvre encore l'axe ${escapeHTML(devis.originCity)} → ${escapeHTML(devis.destinationCity)} dans sa grille tarifaire. <a href="https://wa.me/2250501303343?text=${encodeURIComponent(msgDevis)}" target="_blank" rel="noopener noreferrer">Contactez notre équipe sur WhatsApp</a> pour un devis personnalisé.</div>`;
       return;
     }
     devisResult.innerHTML = `

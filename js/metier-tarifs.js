@@ -196,3 +196,64 @@ export function optionsPrix({ tarifs = [], originCity, destinationCity, weightKg
     label: `${new Intl.NumberFormat("fr-CI", { maximumFractionDigits: 0 }).format(tarif.priceFCFA)} FCFA — ${trancheLibelle(tarif.weightMinKg, tarif.weightMaxKg)}`
   }));
 }
+
+/** Villes principales du réseau inter-agences ivoirien pour le pré-remplissage en 1 clic. */
+export const VILLES_AXES_COURANTS = [
+  "Daloa",
+  "Abidjan",
+  "Yamoussoukro",
+  "Gagnoa",
+  "Bouaké",
+  "San-Pédro",
+  "Man"
+];
+
+/** Barème indicatif par tranche pour l'initialisation rapide d'une grille d'agence. */
+export const TARIFS_AXES_DEFAUT = [
+  { weightMinKg: 0, weightMaxKg: 2, priceFCFA: 1500 },
+  { weightMinKg: 2, weightMaxKg: 5, priceFCFA: 2500 },
+  { weightMinKg: 5, weightMaxKg: 10, priceFCFA: 4000 },
+  { weightMinKg: 10, weightMaxKg: null, priceFCFA: 6000 }
+];
+
+/**
+ * Construit les lignes tarifaires manquantes au départ de `originCity` vers
+ * les villes courantes (plus un tarif « toutes destinations » de repli), sans
+ * créer de doublon avec `existingTarifs`.
+ */
+export function construireAxesCourants({
+  originCity = "Daloa",
+  existingTarifs = [],
+  cities = VILLES_AXES_COURANTS
+} = {}) {
+  const depart = textePropre(originCity) || "Daloa";
+  const cleDepart = cleVille(depart);
+  const existants = new Set(
+    (Array.isArray(existingTarifs) ? existingTarifs : []).map((t) => {
+      const norm = t.originCity !== undefined ? t : normaliserTarif(t);
+      return `${cleVille(norm.originCity)}|${cleVille(norm.destinationCity)}|${norm.weightMinKg}|${norm.weightMaxKg ?? ""}`;
+    })
+  );
+
+  const destinations = [
+    ...cities.map((ville) => textePropre(ville)).filter((ville) => ville && cleVille(ville) !== cleDepart),
+    ""
+  ];
+
+  const aCreer = [];
+  for (const destinationCity of destinations) {
+    for (const tranche of TARIFS_AXES_DEFAUT) {
+      const cle = `${cleDepart}|${cleVille(destinationCity)}|${tranche.weightMinKg}|${tranche.weightMaxKg ?? ""}`;
+      if (existants.has(cle)) continue;
+      existants.add(cle);
+      aCreer.push({
+        originCity: depart,
+        destinationCity,
+        weightMinKg: tranche.weightMinKg,
+        weightMaxKg: tranche.weightMaxKg,
+        priceFCFA: tranche.priceFCFA
+      });
+    }
+  }
+  return aCreer;
+}

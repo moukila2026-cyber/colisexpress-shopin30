@@ -2,6 +2,8 @@ import { api } from "./api.js";
 import {
   clearPageMessage,
   errorMessage,
+  getQueryParam,
+  initPasswordToggles,
   isValidIvorianPhone,
   normalizeIvorianPhone,
   setButtonLoading,
@@ -11,6 +13,15 @@ import {
 const form = document.getElementById("signupForm");
 const message = document.getElementById("formMessage");
 const submitButton = document.getElementById("signupButton");
+
+initPasswordToggles();
+
+const prefillName = getQueryParam("nom");
+const prefillCity = getQueryParam("ville");
+const prefillPhone = getQueryParam("tel");
+if (prefillName && document.getElementById("agencyName")) document.getElementById("agencyName").value = prefillName;
+if (prefillCity && document.getElementById("agencyCity")) document.getElementById("agencyCity").value = prefillCity;
+if (prefillPhone && document.getElementById("agencyPhone")) document.getElementById("agencyPhone").value = prefillPhone;
 
 form?.addEventListener("submit", async (event) => {
   event.preventDefault();

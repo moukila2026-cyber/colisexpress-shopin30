@@ -21,6 +21,13 @@
         <p class="notice-box" id="noDestinationAgency" hidden>Aucune autre agence n'est encore inscrite sur COLIS EXPRESS. Vous pouvez tout de même enregistrer le colis en cochant « Mon agence de destination n'est pas encore inscrite », puis inviter l'agence à créer un compte.</p>
 
         <form class="parcel-form-card" id="parcelForm" novalidate>
+          <div class="express-mode-bar" id="expressModeBar">
+            <div class="express-mode-info">
+              <strong>⚡ Saisie rapide au guichet</strong>
+              <small id="expressModeNote">Tapez d'abord le téléphone pour pré-remplir le client, ou activez le mode express pour condenser l'écran aux heures de pointe.</small>
+            </div>
+            <button class="button button-outline button-small" id="expressModeToggle" type="button" aria-pressed="false">⚡ Mode guichet express</button>
+          </div>
           <section class="form-section">
             <h2 class="form-section-heading"><span aria-hidden="true">1</span> Expéditeur</h2>
             <div class="form-grid">
@@ -43,8 +50,29 @@
           <section class="form-section">
             <h2 class="form-section-heading"><span aria-hidden="true">3</span> Colis et acheminement</h2>
             <div class="form-grid">
-              <div class="field field-full"><label for="packageNature">Nature du colis <span class="required">*</span></label><input id="packageNature" name="packageNature" type="text" placeholder="Ex. Vêtements, documents, appareil…" required></div>
-              <div class="field"><label for="weightKg">Poids (kg) <span class="required">*</span></label><input id="weightKg" name="weightKg" type="number" inputmode="decimal" min="0.01" step="0.01" placeholder="0,5" required></div>
+              <div class="field field-full">
+                <label for="packageNature">Nature du colis <span class="required">*</span></label>
+                <input id="packageNature" name="packageNature" type="text" placeholder="Ex. Vêtements, documents, appareil…" required>
+                <div class="quick-chips" id="quickPackageNatures" role="group" aria-label="Natures fréquentes">
+                  <button class="quick-chip" type="button" data-quick-nature="Colis divers">Colis divers</button>
+                  <button class="quick-chip" type="button" data-quick-nature="Pli / Document">Pli / Document</button>
+                  <button class="quick-chip" type="button" data-quick-nature="Vêtements">Vêtements</button>
+                  <button class="quick-chip" type="button" data-quick-nature="Marchandises">Marchandises</button>
+                  <button class="quick-chip" type="button" data-quick-nature="Denrées / Vivres">Denrées / Vivres</button>
+                  <button class="quick-chip" type="button" data-quick-nature="Électronique">Électronique</button>
+                </div>
+              </div>
+              <div class="field">
+                <label for="weightKg">Poids (kg) <span class="required">*</span></label>
+                <input id="weightKg" name="weightKg" type="number" inputmode="decimal" min="0.01" step="0.01" placeholder="0,5" required>
+                <div class="quick-chips" id="quickWeights" role="group" aria-label="Poids fréquents">
+                  <button class="quick-chip" type="button" data-quick-weight="1">1 kg</button>
+                  <button class="quick-chip" type="button" data-quick-weight="2">2 kg</button>
+                  <button class="quick-chip" type="button" data-quick-weight="5">5 kg</button>
+                  <button class="quick-chip" type="button" data-quick-weight="10">10 kg</button>
+                  <button class="quick-chip" type="button" data-quick-weight="15">15 kg</button>
+                </div>
+              </div>
               <div class="field" id="priceField">
                 <label for="priceTarif" id="priceLabel">Prix (FCFA) <span class="required">*</span></label>
                 <select id="priceTarif" name="priceTarif" hidden><option value="">Renseignez l'itinéraire et le poids</option></select>
@@ -52,7 +80,19 @@
                 <small class="field-help" id="priceHelp">Saisie libre : votre agence n'a pas encore de grille tarifaire (Paramètres &gt; Tarifs).</small>
               </div>
               <div class="field"><label for="originCity">Ville de départ <span class="required">*</span></label><input id="originCity" name="originCity" type="text" required></div>
-              <div class="field"><label for="destinationCity">Ville de destination <span class="required">*</span></label><input id="destinationCity" name="destinationCity" type="text" required></div>
+              <div class="field">
+                <label for="destinationCity">Ville de destination <span class="required">*</span></label>
+                <input id="destinationCity" name="destinationCity" type="text" required>
+                <div class="quick-chips" id="quickDestinationCities" role="group" aria-label="Villes fréquentes">
+                  <button class="quick-chip" type="button" data-quick-city="Daloa">Daloa</button>
+                  <button class="quick-chip" type="button" data-quick-city="Abidjan">Abidjan</button>
+                  <button class="quick-chip" type="button" data-quick-city="Yamoussoukro">Yamoussoukro</button>
+                  <button class="quick-chip" type="button" data-quick-city="Gagnoa">Gagnoa</button>
+                  <button class="quick-chip" type="button" data-quick-city="Bouaké">Bouaké</button>
+                  <button class="quick-chip" type="button" data-quick-city="San-Pédro">San-Pédro</button>
+                  <button class="quick-chip" type="button" data-quick-city="Man">Man</button>
+                </div>
+              </div>
               <div class="field field-full">
                 <label for="destinationAgencyId">Agence de destination <span class="required" id="destinationRequired">*</span></label>
                 <select id="destinationAgencyId" name="destinationAgencyId"><option value="">Chargement des agences…</option></select>
@@ -71,8 +111,12 @@
                 <div class="field"><label for="declaredAgencyName">Nom de l'agence <span class="required">*</span></label><input id="declaredAgencyName" name="declaredAgencyName" type="text" autocomplete="off" placeholder="Ex. Rapid Express Yopougon" required><small class="field-help">Repris tel quel sur le reçu du client.</small></div>
                 <div class="field"><label for="declaredAgencyCity">Ville <span class="required">*</span></label><input id="declaredAgencyCity" name="declaredAgencyCity" type="text" autocomplete="off" placeholder="Ex. Bouaké" required></div>
                 <div class="field field-full"><label for="declaredAgencyPhone">Téléphone de l'agence <span class="required">*</span></label><input id="declaredAgencyPhone" name="declaredAgencyPhone" type="tel" inputmode="numeric" placeholder="0700000000" required><small class="field-help">Format ivoirien, 10 chiffres. Sert à joindre l'agence en cas de blocage.</small></div>
+                <div class="field field-full"><label for="declaredAgencyInviteText">Message pré-rempli WhatsApp</label><textarea class="invite-message-preview" id="declaredAgencyInviteText" rows="3"></textarea><small class="field-help">Ce message s'ouvre pré-rempli dans WhatsApp au clic sur le bouton ci-dessous. Vous pouvez le modifier librement.</small></div>
               </div>
-              <div class="declared-agency-actions"><a class="button button-outline button-small" id="inviteAgencyWhatsapp" href="#" target="_blank" rel="noopener noreferrer">◉ Inviter l'agence par WhatsApp</a></div>
+              <div class="declared-agency-actions">
+                <a class="button button-outline button-small" id="inviteAgencyWhatsapp" href="#" target="_blank" rel="noopener noreferrer">◉ Inviter l'agence par WhatsApp</a>
+                <button class="button button-ghost button-small" id="copyAgencyInvite" type="button">Copier le message</button>
+              </div>
             </div>
           </section>
 
@@ -118,7 +162,11 @@
       <div class="modal-heading"><div><h2 id="receiptTitle">Colis enregistré</h2><p>Remettez ce reçu à l'expéditeur.</p></div><button class="modal-close" id="closeReceipt" type="button" aria-label="Fermer">×</button></div>
       <div class="receipt" id="receiptContent"></div>
       <div class="receipt-share" id="receiptShare"></div>
-      <div class="modal-actions"><button class="button button-outline" id="printReceipt" type="button">Imprimer le reçu</button><a class="button button-primary" id="viewSavedParcel">Voir le colis</a></div>
+      <div class="modal-actions">
+        <button class="button button-ghost" id="toggleThermalReceipt" type="button" aria-pressed="false">🖨 Format ticket 58 mm</button>
+        <button class="button button-outline" id="printReceipt" type="button">Imprimer le reçu</button>
+        <a class="button button-primary" id="viewSavedParcel">Voir le colis</a>
+      </div>
     </div>
   </div>
   <script src="js/vendor/qrcode-generator.js"></script>

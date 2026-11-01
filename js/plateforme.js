@@ -16,6 +16,7 @@ import {
   formatDateTime,
   formatFCFA,
   formatShortDate,
+  initPasswordToggles,
   setButtonLoading,
   showPageMessage,
   showToast,
@@ -492,6 +493,7 @@ async function crediter(event) {
 }
 
 function boot() {
+  initPasswordToggles();
   document.getElementById("plateformeLoginForm").addEventListener("submit", connexion);
   document.getElementById("amorcageForm").addEventListener("submit", amorcer);
   document.getElementById("logoutPlateforme").addEventListener("click", deconnexion);
