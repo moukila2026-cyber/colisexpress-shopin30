@@ -896,3 +896,247 @@ dd { margin: 4px 0 0; color: var(--ink); overflow-wrap: anywhere; font-size: .88
 .console-quota[data-niveau="danger"] .compteur-barre span { background: #e5484d; }
 .console-quota[data-niveau="alerte"] strong, .console-quota[data-niveau="danger"] strong { color: #b24f0a; }
 .console-quota[data-niveau="danger"] strong { color: #a3262b; }
+
+/* Bouton œil — affichage/masquage du mot de passe */
+.password-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+.password-input-wrap input {
+  width: 100%;
+  padding-right: 46px !important;
+}
+.password-toggle {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted, #5b6b64);
+  cursor: pointer;
+  transition: background-color .15s ease, color .15s ease;
+}
+.password-toggle:hover,
+.password-toggle:focus-visible {
+  background: var(--green-50, #edf7f2);
+  color: var(--green-950, #0c2b21);
+  outline: none;
+}
+.password-toggle[aria-pressed="true"] {
+  color: var(--green-700, #167a52);
+  background: var(--green-100, #d8efe4);
+}
+
+/* Aperçu du message WhatsApp pré-rempli d'invitation d'agence */
+.invite-message-preview {
+  width: 100%;
+  min-height: 76px;
+  padding: 10px 12px;
+  border: 1px solid var(--line, #d7e2dc);
+  border-radius: 10px;
+  background: #f8fbf9;
+  color: var(--green-950, #0c2b21);
+  font: inherit;
+  font-size: .86rem;
+  line-height: 1.45;
+  resize: vertical;
+}
+.partner-invite-card {
+  border-left: 4px solid var(--green-700, #167a52);
+}
+.agent-credentials-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.agent-credentials-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Fond d'écran adapté et habillage de l'espace administrateur & agence */
+.plateforme-page {
+  min-height: 100vh;
+  background-color: #0b2e26;
+  background-image:
+    linear-gradient(135deg, rgba(6, 35, 29, 0.90) 0%, rgba(12, 59, 47, 0.85) 50%, rgba(15, 43, 35, 0.92) 100%),
+    url("../img/admin-reseau.jpg");
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+}
+.plateforme-page .plateforme-header {
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.14);
+}
+.plateforme-page .plateforme-heading h1 {
+  color: #ffffff;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
+}
+.plateforme-page .plateforme-heading p {
+  color: rgba(255, 255, 255, 0.84);
+}
+.plateforme-page #refreshConsole {
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--green-950);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+.plateforme-page .panel-card,
+.plateforme-page .stat-card {
+  background: rgba(255, 255, 255, 0.97);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 12px 32px rgba(4, 24, 19, 0.22);
+}
+.plateforme-banner {
+  height: 180px;
+  margin-bottom: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+.plateforme-banner-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 18px 22px;
+  color: #fff;
+}
+.plateforme-banner-overlay .eyebrow {
+  color: #ffd3b0;
+  margin-bottom: 4px;
+}
+.plateforme-banner-overlay strong {
+  font-size: 1.15rem;
+  letter-spacing: -0.01em;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.agency-page .agency-main {
+  background-color: #f3f8f5;
+  background-image:
+    radial-gradient(circle at 100% 0%, rgba(242, 118, 34, 0.07) 0%, transparent 42%),
+    radial-gradient(circle at 0% 100%, rgba(18, 102, 86, 0.09) 0%, transparent 48%),
+    linear-gradient(180deg, rgba(243, 248, 245, 0.94) 0%, rgba(235, 244, 239, 0.96) 100%),
+    url("../img/admin-reseau.jpg");
+  background-size: auto, auto, auto, cover;
+  background-position: top right, bottom left, center, center;
+  background-attachment: fixed;
+}
+
+/* Mode guichet express & puces de sélection rapide */
+.express-mode-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 12px 14px;
+  border: 1px solid #cde3d8;
+  border-radius: 12px;
+  background: linear-gradient(90deg, #edf7f2 0%, #fff8f2 100%);
+}
+.express-mode-info {
+  display: grid;
+  gap: 2px;
+}
+.express-mode-info strong {
+  color: var(--green-950);
+  font-size: .9rem;
+}
+.express-mode-info small {
+  color: var(--muted);
+  font-size: .8rem;
+}
+.parcel-form-card.express-guichet-mode .field-help {
+  display: none;
+}
+.parcel-form-card.express-guichet-mode .form-section {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+.quick-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.quick-chip {
+  padding: 4px 10px;
+  border: 1px solid var(--line, #d7e2dc);
+  border-radius: 99px;
+  background: #fff;
+  color: var(--green-900, #0f4d41);
+  font: inherit;
+  font-size: .76rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+.quick-chip:hover,
+.quick-chip:focus-visible {
+  border-color: var(--green-700, #167a52);
+  background: var(--green-50, #edf7f2);
+  color: var(--green-950, #0c2b21);
+  outline: none;
+}
+
+/* Format d'impression ticket thermique 58 mm / 80 mm */
+.receipt.receipt-thermal-58mm {
+  max-width: 240px;
+  margin: 0 auto;
+  padding: 12px 10px;
+  border: 1px dashed #222;
+  border-radius: 6px;
+  background: #fff;
+  color: #000;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: .78rem;
+  line-height: 1.35;
+}
+.receipt.receipt-thermal-58mm .receipt-grid {
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+.receipt.receipt-thermal-58mm .receipt-code {
+  font-size: 1.15rem;
+  padding: 6px 8px;
+}
+.receipt.receipt-thermal-58mm .receipt-qr svg {
+  width: 128px;
+  height: 128px;
+}
+@media print {
+  body.print-thermal-58mm .modal-card.receipt-modal {
+    width: 58mm !important;
+    max-width: 58mm !important;
+    margin: 0 !important;
+    padding: 2mm !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+  body.print-thermal-58mm .receipt {
+    max-width: 54mm !important;
+    padding: 0 !important;
+    font-size: 10pt !important;
+  }
+  body.print-thermal-58mm .receipt-grid {
+    grid-template-columns: 1fr !important;
+    gap: 4px !important;
+  }
+}

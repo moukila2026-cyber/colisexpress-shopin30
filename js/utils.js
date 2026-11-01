@@ -188,7 +188,98 @@ export function publicTrackingUrl(code) {
 }
 
 export function whatsappShareLink(phone, text) {
-  return `https://wa.me/${encodeURIComponent(toWhatsAppNumber(phone))}?text=${encodeURIComponent(text)}`;
+  const encodedText = encodeURIComponent(text || "");
+  if (isValidIvorianPhone(phone)) {
+    return `https://wa.me/${encodeURIComponent(toWhatsAppNumber(phone))}?text=${encodedText}`;
+  }
+  return `https://wa.me/?text=${encodedText}`;
+}
+
+export function publicRegisterUrl() {
+  if (typeof window !== "undefined" && window.location?.href) {
+    const base = new URL("inscription.html", window.location.href);
+    base.search = "";
+    base.hash = "";
+    return base.href;
+  }
+  return "https://colisexpress-shopin30.vercel.app/inscription.html";
+}
+
+/**
+ * Construit le message pré-rempli WhatsApp lorsqu'une agence invite une autre
+ * agence partenaire à rejoindre COLIS EXPRESS (à la création d'un colis, sur
+ * une fiche colis ou depuis le tableau de bord / les paramètres).
+ */
+export function agencyInviteMessage({
+  targetAgencyName = "",
+  targetCity = "",
+  senderAgencyName = "",
+  senderCity = "",
+  trackingCode = "",
+  originCity = "",
+  destinationCity = "",
+  registerUrl = ""
+} = {}) {
+  const cible = String(targetAgencyName || "").trim();
+  const villeCible = String(targetCity || "").trim();
+  const expediteur = String(senderAgencyName || "").trim();
+  const villeExpediteur = String(senderCity || "").trim();
+  const code = String(trackingCode || "").trim();
+  const depart = String(originCity || "").trim();
+  const arrivee = String(destinationCity || "").trim() || villeCible;
+  const url = String(registerUrl || "").trim() || publicRegisterUrl();
+
+  const salutation = `Bonjour${cible ? ` ${cible}` : ""},`;
+  const presentation = expediteur
+    ? `ici l'agence ${expediteur}${villeExpediteur ? ` (${villeExpediteur})` : ""}.`
+    : "nous utilisons COLIS EXPRESS pour le suivi de nos colis inter-agences.";
+
+  if (code) {
+    const trajet = depart && arrivee ? ` (${depart} → ${arrivee})` : arrivee ? ` vers ${arrivee}` : "";
+    return `${salutation} ${presentation} Un colis ${code}${trajet} vous est destiné sur COLIS EXPRESS. Créez gratuitement votre compte agence en 2 minutes (50 colis/mois offerts) pour confirmer la réception, suivre vos bordereaux et alerter vos clients : ${url}`;
+  }
+
+  const axe = villeCible ? ` vers ${villeCible}` : "";
+  return `${salutation} ${presentation} Nous utilisons COLIS EXPRESS pour envoyer et suivre nos colis inter-agences${axe} (code de suivi, reçu QR, bordereaux, caisse). Créez gratuitement le compte de votre agence en 2 minutes (50 colis/mois offerts) pour recevoir et expédier nos colis ensemble : ${url}`;
+}
+
+export function agencyInviteWhatsappLink({ phone = "", text = "", ...options } = {}) {
+  const message = String(text || "").trim() || agencyInviteMessage(options);
+  return whatsappShareLink(phone, message);
+}
+
+const EYE_OPEN_SVG = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
+const EYE_OFF_SVG = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
+
+/**
+ * Initialise les boutons « œil » d'affichage/masquage des champs mot de passe.
+ * Chaque bouton porte `data-password-toggle="<idDuChamp>"`.
+ */
+export function initPasswordToggles(root = document) {
+  if (!root?.querySelectorAll) return;
+  const buttons = root.querySelectorAll("[data-password-toggle]");
+  buttons.forEach((button) => {
+    if (button.dataset.passwordToggleBound === "true") return;
+    button.dataset.passwordToggleBound = "true";
+    const targetId = button.getAttribute("data-password-toggle");
+    const input = targetId ? document.getElementById(targetId) : button.closest(".password-input-wrap")?.querySelector("input");
+    if (!input) return;
+
+    const syncState = (visible) => {
+      input.type = visible ? "text" : "password";
+      button.setAttribute("aria-pressed", visible ? "true" : "false");
+      const label = visible ? "Masquer le mot de passe" : "Afficher le mot de passe";
+      button.setAttribute("aria-label", label);
+      button.setAttribute("title", label);
+      button.innerHTML = visible ? EYE_OFF_SVG : EYE_OPEN_SVG;
+    };
+
+    syncState(input.type === "text");
+    button.addEventListener("click", () => {
+      syncState(input.type === "password");
+      input.focus({ preventScroll: true });
+    });
+  });
 }
 
 export function renderHistory(history = [], { publicView = false } = {}) {

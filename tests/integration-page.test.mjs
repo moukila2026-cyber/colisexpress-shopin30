@@ -995,3 +995,87 @@ test("le LOT 10 (compteur de colis en temps réel) est câblé de bout en bout",
   assert.match(lire("docs/architecture.md"), /LOT 10/);
   assert.match(lire("docs/ameliorations.md"), /LOT 10/);
 });
+
+test("Invitation d'agence WhatsApp pré-remplie et bouton œil sur les mots de passe", async () => {
+  const { agencyInviteMessage, agencyInviteWhatsappLink, whatsappShareLink } = await import("../js/utils.js");
+
+  // 1. Message pré-rempli lors de l'invitation d'une agence partenaire
+  const msgGeneral = agencyInviteMessage({
+    targetAgencyName: "Daloa Express",
+    targetCity: "Daloa",
+    senderAgencyName: "COLIS EXPRESS Abidjan",
+    senderCity: "Abidjan",
+    registerUrl: "https://colisexpress-shopin30.vercel.app/inscription.html"
+  });
+  assert.match(msgGeneral, /Bonjour Daloa Express/);
+  assert.match(msgGeneral, /COLIS EXPRESS Abidjan \(Abidjan\)/);
+  assert.match(msgGeneral, /50 colis\/mois offerts/);
+  assert.match(msgGeneral, /inscription\.html/);
+
+  const msgColis = agencyInviteMessage({
+    targetAgencyName: "Gagnoa Transit",
+    senderAgencyName: "Daloa Express",
+    senderCity: "Daloa",
+    trackingCode: "CLI-AB23CD",
+    originCity: "Daloa",
+    destinationCity: "Gagnoa",
+    registerUrl: "https://colisexpress-shopin30.vercel.app/inscription.html"
+  });
+  assert.match(msgColis, /CLI-AB23CD/);
+  assert.match(msgColis, /Daloa → Gagnoa/);
+
+  // Lien WhatsApp avec téléphone ivoirien valide OU sans téléphone (sélecteur de contact WhatsApp)
+  const lienAvecTel = agencyInviteWhatsappLink({ phone: "0701020304", text: msgGeneral });
+  assert.match(lienAvecTel, /^https:\/\/wa\.me\/2250701020304\?text=/);
+  const lienSansTel = agencyInviteWhatsappLink({ phone: "", text: msgGeneral });
+  assert.match(lienSansTel, /^https:\/\/wa\.me\/\?text=/);
+  assert.match(whatsappShareLink("", "Test invitation"), /^https:\/\/wa\.me\/\?text=Test%20invitation$/);
+
+  // Présence dans nouveau-colis.html et dashboard.html
+  const nouveauHtml = lire("nouveau-colis.html");
+  for (const id of ["declaredAgencyInviteText", "inviteAgencyWhatsapp", "copyAgencyInvite"]) {
+    assert.ok(nouveauHtml.includes(`id="${id}"`), `nouveau-colis.html expose #${id}`);
+  }
+  const dashHtml = lire("dashboard.html");
+  for (const id of ["partnerInviteCard", "dashboardInviteWhatsapp", "dashboardInviteText", "dashboardInviteCopy"]) {
+    assert.ok(dashHtml.includes(`id="${id}"`), `dashboard.html expose #${id}`);
+  }
+
+  // 2. Bouton œil (affichage/masquage du mot de passe) sur inscription, connexion, paramètres et console
+  const inscriptionHtml = lire("inscription.html");
+  assert.match(inscriptionHtml, /data-password-toggle="password"/);
+  assert.match(inscriptionHtml, /data-password-toggle="confirmPassword"/);
+  assert.match(lire("js/inscription.js"), /initPasswordToggles\(\)/);
+
+  const connexionHtml = lire("connexion.html");
+  assert.match(connexionHtml, /data-password-toggle="loginPassword"/);
+  assert.match(lire("js/connexion.js"), /initPasswordToggles\(\)/);
+
+  const parametresHtml = lire("parametres.html");
+  assert.match(parametresHtml, /data-password-toggle="agentPassword"/);
+  assert.match(lire("js/parametres.js"), /initPasswordToggles\(\)/);
+
+  const plateformeHtml = lire("plateforme.html");
+  for (const id of ["plateformePassword", "amorcageJeton", "amorcagePassword"]) {
+    assert.match(plateformeHtml, new RegExp(`data-password-toggle="${id}"`));
+  }
+  assert.match(lire("js/plateforme.js"), /initPasswordToggles\(\)/);
+
+  const css = lire("assets/css/style.css");
+  for (const classe of [".password-input-wrap", ".password-toggle", ".invite-message-preview", ".express-mode-bar", ".quick-chip", ".receipt-thermal-58mm", ".plateforme-banner"]) {
+    assert.ok(css.includes(classe), `style.css définit ${classe}`);
+  }
+
+  // 3. Évolutions guichet express, ticket thermique 58 mm, axes courants 1 clic et fond admin
+  for (const id of ["expressModeBar", "expressModeToggle", "quickPackageNatures", "quickWeights", "quickDestinationCities", "toggleThermalReceipt"]) {
+    assert.ok(nouveauHtml.includes(`id="${id}"`), `nouveau-colis.html expose #${id}`);
+  }
+  for (const id of ["tarifsQuickBar", "seedDefaultTarifsButton"]) {
+    assert.ok(parametresHtml.includes(`id="${id}"`), `parametres.html expose #${id}`);
+  }
+  const { construireAxesCourants } = await import("../js/metier-tarifs.js");
+  const lignesDaloa = construireAxesCourants({ originCity: "Daloa", existingTarifs: [] });
+  assert.ok(lignesDaloa.length >= 24, "génère les tranches pour chaque axe courant au départ de Daloa");
+  assert.equal(construireAxesCourants({ originCity: "Daloa", existingTarifs: lignesDaloa }).length, 0, "aucun doublon si déjà pré-rempli");
+  assert.ok(existsSync(path.join(RACINE, "assets/img/admin-reseau.jpg")), "fond d'écran administrateur présent");
+});

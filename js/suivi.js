@@ -70,7 +70,7 @@ function showResult(tracking) {
         <h3>Historique de l'acheminement</h3>
         ${renderHistory(tracking.history, { publicView: true })}
       </div>
-      <p class="tracking-help">Une question sur votre colis ? <a href="https://wa.me/2250501303343" target="_blank" rel="noopener noreferrer">Contactez-nous sur WhatsApp</a>.</p>
+      <p class="tracking-help">Une question sur votre colis ? <a href="https://wa.me/2250501303343?text=${encodeURIComponent(`Bonjour COLIS EXPRESS, j'ai une question concernant le colis ${tracking.code}.`)}" target="_blank" rel="noopener noreferrer">Contactez-nous sur WhatsApp</a>.</p>
       <p class="privacy-note">Pour protéger les expéditeurs et destinataires, aucune donnée personnelle n'est affichée ici.</p>
     </article>`;
   result.hidden = false;

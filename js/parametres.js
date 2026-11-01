@@ -1,18 +1,20 @@
 import { api } from "./api.js";
 import { requireAgency } from "./auth.js";
 import { agencySidebar, initAgencyLayout, mobileAgencyHeader } from "./layout.js";
-import { TRANCHES_DEFAUT, trancheLibelle, validerTarif } from "./metier-tarifs.js";
+import { TRANCHES_DEFAUT, construireAxesCourants, trancheLibelle, validerTarif } from "./metier-tarifs.js";
 import { initMarque } from "./parametres-marque.js";
 import {
   clearPageMessage,
   errorMessage,
   escapeHTML,
   formatFCFA,
+  initPasswordToggles,
   isValidIvorianPhone,
   normalizeIvorianPhone,
   setButtonLoading,
   showPageMessage,
-  showToast
+  showToast,
+  whatsappShareLink
 } from "./utils.js";
 
 const form = document.getElementById("agencyForm");
@@ -98,6 +100,15 @@ async function inviterAgent(event) {
   try {
     await api("/api/agents", { method: "POST", body: { name, email, phone: values.phone.trim(), password } });
     agentForm.reset();
+    const loginUrl = new URL("connexion.html", window.location.href).href;
+    const agencyName = document.getElementById("settingsName")?.value?.trim() || "votre agence";
+    const waText = `Bonjour ${name}, votre compte agent COLIS EXPRESS pour l'agence ${agencyName} est prêt. Connectez-vous sur ${loginUrl} avec l'e-mail ${email} et le mot de passe provisoire : ${password}`;
+    const waHref = whatsappShareLink(phone, waText);
+    if (teamMessage) {
+      teamMessage.className = "page-message page-message-success agent-credentials-banner";
+      teamMessage.innerHTML = `<span>Agent <strong>${escapeHTML(name)}</strong> ajouté à l'équipe (${escapeHTML(email)}).</span><span class="agent-credentials-actions"><a class="button button-whatsapp button-small" target="_blank" rel="noopener noreferrer" href="${escapeHTML(waHref)}">◉ Envoyer ses accès sur WhatsApp</a></span>`;
+      teamMessage.hidden = false;
+    }
     showToast(`Agent ${name} ajouté à l'équipe. Transmettez-lui ses identifiants.`);
     await chargerEquipe();
   } catch (error) {
@@ -273,7 +284,34 @@ tarifsList?.addEventListener("click", (event) => {
   if (toggle) basculerTarif(toggle);
 });
 
+async function preRemplirAxesCourants() {
+  const button = document.getElementById("seedDefaultTarifsButton");
+  if (!button) return;
+  clearPageMessage(tarifMessage);
+  const originCity = document.getElementById("settingsCity")?.value?.trim() || document.getElementById("tarifOriginCity")?.value?.trim() || "Daloa";
+  const aCreer = construireAxesCourants({ originCity, existingTarifs: tarifs });
+  if (!aCreer.length) {
+    showToast(`Tous les axes courants au départ de ${originCity} figurent déjà dans votre grille.`, "info");
+    return;
+  }
+  setButtonLoading(button, true, "Création des tarifs…");
+  try {
+    let ajoutes = 0;
+    for (const ligne of aCreer) {
+      await api("/api/tarifs", { method: "POST", body: ligne });
+      ajoutes += 1;
+    }
+    showToast(`${ajoutes} lignes tarifaires ajoutées au départ de ${originCity}. Vous pouvez ajuster chaque prix.`);
+    await chargerTarifs();
+  } catch (error) {
+    showPageMessage(tarifMessage, errorMessage(error));
+  } finally {
+    setButtonLoading(button, false);
+  }
+}
+
 tarifForm?.addEventListener("submit", sauvegarderTarif);
+document.getElementById("seedDefaultTarifsButton")?.addEventListener("click", preRemplirAxesCourants);
 document.getElementById("tarifCancelButton")?.addEventListener("click", reinitialiserFormulaireTarif);
 document.getElementById("tarifBand")?.addEventListener("change", (event) => {
   document.getElementById("tarifCustomBand").hidden = event.target.value !== "libre";
@@ -288,6 +326,7 @@ document.getElementById("tarifAllDestinations")?.addEventListener("change", (eve
 
 async function boot() {
   mountLayout();
+  initPasswordToggles();
   const user = await requireAgency();
   if (!user) return;
   currentMember = user.member || null;
@@ -306,6 +345,8 @@ async function boot() {
     agentForm.hidden = false;
     agentForm.addEventListener("submit", inviterAgent);
     tarifForm.hidden = false;
+    const quickBar = document.getElementById("tarifsQuickBar");
+    if (quickBar) quickBar.hidden = false;
   } else {
     agentsList.insertAdjacentHTML(
       "beforeend",

@@ -3,6 +3,7 @@ import {
   clearPageMessage,
   errorMessage,
   getQueryParam,
+  initPasswordToggles,
   setButtonLoading,
   showPageMessage
 } from "./utils.js";
@@ -12,6 +13,18 @@ const message = document.getElementById("formMessage");
 const submitButton = document.getElementById("loginButton");
 const forgotPanel = document.getElementById("forgotPanel");
 const forgotButton = document.getElementById("forgotButton");
+const forgotWhatsappLink = document.getElementById("forgotWhatsappLink");
+
+initPasswordToggles();
+
+function syncForgotWhatsappLink() {
+  if (!forgotWhatsappLink) return;
+  const email = document.getElementById("loginEmail")?.value?.trim() || "";
+  const text = email
+    ? `Bonjour COLIS EXPRESS, j'ai oublié le mot de passe de mon compte (${email}) et je souhaite réinitialiser mon accès.`
+    : "Bonjour COLIS EXPRESS, j'ai oublié le mot de passe de mon compte agence et je souhaite réinitialiser mon accès.";
+  forgotWhatsappLink.href = `https://wa.me/2250501303343?text=${encodeURIComponent(text)}`;
+}
 
 form?.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -37,4 +50,6 @@ form?.addEventListener("submit", async (event) => {
 
 forgotButton?.addEventListener("click", () => {
   forgotPanel.hidden = !forgotPanel.hidden;
+  syncForgotWhatsappLink();
 });
+document.getElementById("loginEmail")?.addEventListener("input", syncForgotWhatsappLink);

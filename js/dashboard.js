@@ -3,12 +3,17 @@ import { requireAgency } from "./auth.js";
 import { afficherBadgeNotifications, agencySidebar, initAgencyLayout, mobileAgencyHeader, surCompteur } from "./layout.js";
 import { libellePlan } from "./metier-plans.js";
 import {
+  agencyInviteMessage,
+  agencyInviteWhatsappLink,
   clearPageMessage,
   errorMessage,
   escapeHTML,
   formatDateTime,
+  isValidIvorianPhone,
   localDateKey,
+  normalizeIvorianPhone,
   showPageMessage,
+  showToast,
   statusBadge
 } from "./utils.js";
 
@@ -184,6 +189,71 @@ async function charger() {
   }
 }
 
+function bindPartnerInvite(agency) {
+  const link = document.getElementById("dashboardInviteWhatsapp");
+  const toggleBtn = document.getElementById("togglePartnerInviteDetails");
+  const details = document.getElementById("partnerInviteDetails");
+  const nameInput = document.getElementById("partnerInviteName");
+  const cityInput = document.getElementById("partnerInviteCity");
+  const phoneInput = document.getElementById("partnerInvitePhone");
+  const textInput = document.getElementById("dashboardInviteText");
+  const copyBtn = document.getElementById("dashboardInviteCopy");
+  if (!link) return;
+
+  const buildAutoMessage = () => {
+    const targetName = nameInput?.value?.trim() || "";
+    const targetCity = cityInput?.value?.trim() || "";
+    const phone = phoneInput?.value || "";
+    const url = new URL("inscription.html", window.location.href);
+    if (targetName) url.searchParams.set("nom", targetName);
+    if (targetCity) url.searchParams.set("ville", targetCity);
+    if (isValidIvorianPhone(phone)) url.searchParams.set("tel", normalizeIvorianPhone(phone));
+    return agencyInviteMessage({
+      targetAgencyName: targetName,
+      targetCity,
+      senderAgencyName: agency?.name || "",
+      senderCity: agency?.city || "",
+      registerUrl: url.href
+    });
+  };
+
+  const syncInvite = () => {
+    const autoText = buildAutoMessage();
+    if (textInput && textInput.dataset.customEdited !== "true") {
+      textInput.value = autoText;
+    }
+    const text = textInput?.value?.trim() || autoText;
+    const phone = phoneInput?.value || "";
+    link.href = agencyInviteWhatsappLink({ phone, text });
+  };
+
+  syncInvite();
+  [nameInput, cityInput, phoneInput].forEach((input) => {
+    input?.addEventListener("input", syncInvite);
+  });
+  textInput?.addEventListener("input", () => {
+    textInput.dataset.customEdited = textInput.value.trim() ? "true" : "false";
+    syncInvite();
+  });
+  toggleBtn?.addEventListener("click", () => {
+    if (!details) return;
+    details.hidden = !details.hidden;
+    toggleBtn.setAttribute("aria-expanded", details.hidden ? "false" : "true");
+    toggleBtn.textContent = details.hidden ? "Personnaliser le message" : "Masquer les options";
+    syncInvite();
+  });
+  copyBtn?.addEventListener("click", async () => {
+    syncInvite();
+    const text = textInput?.value?.trim() || buildAutoMessage();
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast("Message d'invitation copié dans le presse-papiers.");
+    } catch {
+      showToast("Copiez le message affiché dans le champ ci-dessus.", "info");
+    }
+  });
+}
+
 async function boot() {
   mountLayout();
   const user = await requireAgency();
@@ -192,6 +262,7 @@ async function boot() {
   if (!agency) return;
   const estGerant = (agency.member?.role || "gerant") === "gerant";
   surCompteur((resume, vue) => renderForfait(resume, vue, estGerant));
+  bindPartnerInvite(agency);
 
   ["searchParcel", "statusFilter", "cityFilter", "dateFilter"].forEach((id) => {
     document.getElementById(id)?.addEventListener("input", renderList);

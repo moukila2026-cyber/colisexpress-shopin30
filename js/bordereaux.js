@@ -47,7 +47,7 @@ function mountLayout() {
   document.getElementById("sidebarMount").innerHTML = agencySidebar();
   document.getElementById("topbarMount").innerHTML = mobileAgencyHeader(
     "Bordereaux",
-    '<a class="button button-small button-orange" href="bordereaux.html">＋ <span>Nouveau</span></a>'
+    '<button class="button button-small button-orange" id="newBordereauTop" type="button">＋ <span>Nouveau</span></button>'
   );
 }
 
@@ -330,6 +330,7 @@ async function boot() {
   if (!currentAgency) return;
 
   document.getElementById("newBordereauButton")?.addEventListener("click", ouvrirFormulaire);
+  document.getElementById("newBordereauTop")?.addEventListener("click", ouvrirFormulaire);
   document.getElementById("cancelBordereau")?.addEventListener("click", () => {
     formSection.hidden = true;
     clearPageMessage(formMessage);

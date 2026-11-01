@@ -11,6 +11,8 @@ import {
 import { optionsPrix } from "./metier-tarifs.js";
 import { nomClient } from "./metier-clients.js";
 import {
+  agencyInviteMessage,
+  agencyInviteWhatsappLink,
   clearPageMessage,
   errorMessage,
   escapeHTML,
@@ -20,6 +22,7 @@ import {
   setButtonLoading,
   publicTrackingUrl,
   showPageMessage,
+  showToast,
   whatsappShareLink
 } from "./utils.js";
 
@@ -105,24 +108,47 @@ function renderDestinationAgencies() {
   document.getElementById("noDestinationAgency").hidden = Boolean(options);
 }
 
+function construireUrlInscriptionAgence({ name = "", city = "", phone = "" } = {}) {
+  const url = new URL("inscription.html", window.location.href);
+  if (name) url.searchParams.set("nom", name);
+  if (city) url.searchParams.set("ville", city);
+  if (isValidIvorianPhone(phone)) url.searchParams.set("tel", normalizeIvorianPhone(phone));
+  return url.href;
+}
+
+function construireTexteInvitationAgence() {
+  const phone = document.getElementById("declaredAgencyPhone")?.value || "";
+  const name = document.getElementById("declaredAgencyName")?.value?.trim() || "";
+  const city = document.getElementById("declaredAgencyCity")?.value?.trim() || document.getElementById("destinationCity")?.value?.trim() || "";
+  const registerUrl = construireUrlInscriptionAgence({ name, city, phone });
+  return agencyInviteMessage({
+    targetAgencyName: name,
+    targetCity: city,
+    senderAgencyName: currentAgency?.name || "",
+    senderCity: currentAgency?.city || "",
+    registerUrl
+  });
+}
+
 /** Lien d'invitation vers l'agence saisie à la main (elle n'a pas encore de compte). */
 function invitationAgence() {
-  const phone = document.getElementById("declaredAgencyPhone").value;
-  const name = document.getElementById("declaredAgencyName").value.trim();
-  const city = document.getElementById("declaredAgencyCity").value.trim();
-  const url = new URL("inscription.html", window.location.href);
-  const text = `Bonjour${name ? ` ${name}` : ""}, COLIS EXPRESS a un colis${city ? ` à livrer à ${city}` : ""} pour vous. Créez votre compte agence en 2 minutes pour être prévenue à chaque arrivée et suivre vos colis : ${url.href}`;
-  return isValidIvorianPhone(phone) ? whatsappShareLink(phone, text) : null;
+  const phone = document.getElementById("declaredAgencyPhone")?.value || "";
+  const preview = document.getElementById("declaredAgencyInviteText");
+  const autoText = construireTexteInvitationAgence();
+  if (preview && preview.dataset.customEdited !== "true") {
+    preview.value = autoText;
+  }
+  const text = preview?.value?.trim() || autoText;
+  return agencyInviteWhatsappLink({ phone, text });
 }
 
 function updateInviteLink() {
   const link = document.getElementById("inviteAgencyWhatsapp");
   if (!link) return;
   const href = invitationAgence();
-  if (href) link.setAttribute("href", href);
-  else link.setAttribute("href", "#");
-  link.classList.toggle("is-disabled", !href);
-  link.setAttribute("aria-disabled", href ? "false" : "true");
+  link.setAttribute("href", href || "#");
+  link.classList.remove("is-disabled");
+  link.setAttribute("aria-disabled", "false");
 }
 
 function validate(values) {
@@ -309,9 +335,22 @@ function renderReceiptShare(parcel) {
     links.push(`<a class="button button-outline" target="_blank" rel="noopener noreferrer" href="${escapeHTML(whatsappShareLink(parcel.sender.phone, text))}">Envoyer le code à l'expéditeur</a>`);
   }
   const declared = parcel.unregisteredDestinationAgency;
-  if (declared?.phone) {
-    const url = new URL("inscription.html", window.location.href);
-    const text = `Bonjour ${declared.name}, un colis ${parcel.trackingCode} (${parcel.originCity} → ${parcel.destinationCity}) est attendu chez vous. Suivi : ${link} — Créez votre compte agence pour être alertée à l'arrivée : ${url.href}`;
+  if (declared) {
+    const registerUrl = construireUrlInscriptionAgence({
+      name: declared.name,
+      city: declared.city || parcel.destinationCity,
+      phone: declared.phone
+    });
+    const text = agencyInviteMessage({
+      targetAgencyName: declared.name,
+      targetCity: declared.city || parcel.destinationCity,
+      senderAgencyName: currentAgency?.name || parcel.ownerAgencyName || "",
+      senderCity: currentAgency?.city || parcel.ownerAgencyCity || "",
+      trackingCode: parcel.trackingCode,
+      originCity: parcel.originCity,
+      destinationCity: parcel.destinationCity,
+      registerUrl
+    });
     links.push(`<a class="button button-outline" target="_blank" rel="noopener noreferrer" href="${escapeHTML(whatsappShareLink(declared.phone, text))}">Prévenir l'agence de destination</a>`);
   }
   share.innerHTML = links.join("");
@@ -460,19 +499,90 @@ async function boot() {
   ["declaredAgencyName", "declaredAgencyCity", "declaredAgencyPhone"].forEach((id) => {
     document.getElementById(id)?.addEventListener("input", updateInviteLink);
   });
+  document.getElementById("declaredAgencyInviteText")?.addEventListener("input", (event) => {
+    event.target.dataset.customEdited = event.target.value.trim() ? "true" : "false";
+    updateInviteLink();
+  });
   // La ville de l'agence déclarée et la ville de destination du colis doivent rester cohérentes.
   document.getElementById("declaredAgencyCity")?.addEventListener("change", (event) => {
     const cityInput = document.getElementById("destinationCity");
     if (cityInput && !cityInput.value.trim()) cityInput.value = event.target.value.trim();
   });
-  document.getElementById("inviteAgencyWhatsapp")?.addEventListener("click", (event) => {
-    if (!invitationAgence()) {
-      event.preventDefault();
-      showPageMessage(message, "Saisissez le téléphone ivoirien de l'agence (10 chiffres) pour l'inviter par WhatsApp.");
+  document.getElementById("inviteAgencyWhatsapp")?.addEventListener("click", () => {
+    updateInviteLink();
+  });
+  document.getElementById("copyAgencyInvite")?.addEventListener("click", async () => {
+    updateInviteLink();
+    const text = document.getElementById("declaredAgencyInviteText")?.value?.trim() || construireTexteInvitationAgence();
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast("Message d'invitation copié dans le presse-papiers.");
+    } catch {
+      showToast("Copiez le message affiché dans le champ ci-dessus.", "info");
+    }
+  });
+  updateInviteLink();
+
+  form.addEventListener("submit", saveParcel);
+
+  // Mode guichet express + puces de saisie rapide (nature, poids, ville)
+  const expressBtn = document.getElementById("expressModeToggle");
+  expressBtn?.addEventListener("click", () => {
+    const active = !form.classList.contains("express-guichet-mode");
+    form.classList.toggle("express-guichet-mode", active);
+    expressBtn.setAttribute("aria-pressed", active ? "true" : "false");
+    expressBtn.textContent = active ? "✓ Mode guichet express actif" : "⚡ Mode guichet express";
+    if (active) document.getElementById("senderPhone")?.focus();
+  });
+
+  document.getElementById("quickPackageNatures")?.addEventListener("click", (event) => {
+    const chip = event.target.closest("[data-quick-nature]");
+    if (!chip) return;
+    const input = document.getElementById("packageNature");
+    if (input) {
+      input.value = chip.dataset.quickNature;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
     }
   });
 
-  form.addEventListener("submit", saveParcel);
+  document.getElementById("quickWeights")?.addEventListener("click", (event) => {
+    const chip = event.target.closest("[data-quick-weight]");
+    if (!chip) return;
+    const input = document.getElementById("weightKg");
+    if (input) {
+      input.value = chip.dataset.quickWeight;
+      refreshPrix();
+    }
+  });
+
+  document.getElementById("quickDestinationCities")?.addEventListener("click", (event) => {
+    const chip = event.target.closest("[data-quick-city]");
+    if (!chip) return;
+    const ville = chip.dataset.quickCity;
+    const cityInput = document.getElementById("destinationCity");
+    if (cityInput) cityInput.value = ville;
+    if (!agencyMode() && destinationSelect) {
+      const correspondante = agencies.find(
+        (agency) => agency.id !== currentAgency?.id && (agency.city || "").trim().toLowerCase() === ville.toLowerCase()
+      );
+      if (correspondante) destinationSelect.value = correspondante.id;
+    } else {
+      const declaredCity = document.getElementById("declaredAgencyCity");
+      if (declaredCity && !declaredCity.value.trim()) declaredCity.value = ville;
+      updateInviteLink();
+    }
+    refreshPrix();
+  });
+
+  // Format d'impression ticket thermique 58 mm / 80 mm
+  const thermalBtn = document.getElementById("toggleThermalReceipt");
+  thermalBtn?.addEventListener("click", () => {
+    const active = !receiptContent?.classList.contains("receipt-thermal-58mm");
+    receiptContent?.classList.toggle("receipt-thermal-58mm", active);
+    document.body.classList.toggle("print-thermal-58mm", active);
+    thermalBtn.setAttribute("aria-pressed", active ? "true" : "false");
+    thermalBtn.textContent = active ? "✓ Ticket 58 mm activé" : "🖨 Format ticket 58 mm";
+  });
 
   document.getElementById("printReceipt")?.addEventListener("click", () => window.print());
   document.getElementById("closeReceipt")?.addEventListener("click", () => {
