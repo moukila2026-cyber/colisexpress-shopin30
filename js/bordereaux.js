@@ -64,7 +64,7 @@ async function chargerListe() {
     const { bordereaux } = await api("/api/bordereaux");
     listCount.textContent = `${bordereaux.length} bordereau${bordereaux.length > 1 ? "x" : ""}`;
     if (!bordereaux.length) {
-      listTarget.innerHTML = `<div class="empty-state"><h3>Aucun bordereau</h3><p>Regroupez les colis qui partent ensemble : une perte devient une ligne manquante détectée le jour même.</p></div>`;
+      listTarget.innerHTML = `<div class="empty-state"><div class="empty-icon" aria-hidden="true">▤</div><h3>Aucun bordereau</h3><p>Regroupez les colis qui partent ensemble : une perte devient une ligne manquante détectée le jour même.</p><div class="empty-state-actions"><button class="button button-orange" type="button" data-open-bordereau-form>＋ Créer un bordereau</button></div></div>`;
       return;
     }
     listTarget.innerHTML = `<div class="table-wrap"><table class="parcel-table">
@@ -331,6 +331,11 @@ async function boot() {
 
   document.getElementById("newBordereauButton")?.addEventListener("click", ouvrirFormulaire);
   document.getElementById("newBordereauTop")?.addEventListener("click", ouvrirFormulaire);
+  document.getElementById("newBordereauPanelButton")?.addEventListener("click", ouvrirFormulaire);
+  document.addEventListener("click", (event) => {
+    const trigger = event.target.closest("[data-open-bordereau-form]");
+    if (trigger) ouvrirFormulaire();
+  });
   document.getElementById("cancelBordereau")?.addEventListener("click", () => {
     formSection.hidden = true;
     clearPageMessage(formMessage);

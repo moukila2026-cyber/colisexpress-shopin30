@@ -217,22 +217,106 @@ function renderPeriodes() {
     </tr>`).join("")}</tbody></table></div>`;
 }
 
-function renderReleves() {
-  const select = document.getElementById("relevePeriode");
-  const button = document.getElementById("telechargerReleveButton");
-  if (!select || !button) return;
-  const anciennes = select.value;
-  const periodes = facturation?.periodes || [];
-  select.innerHTML = periodes.map((item) => `<option value="${escapeHTML(item.cle)}">${escapeHTML(item.libelle)}</option>`).join("");
-  if (periodes.some((item) => item.cle === anciennes)) select.value = anciennes;
-  button.disabled = periodes.length === 0;
-  if (!periodes.length) select.innerHTML = '<option value="">Aucun mois disponible</option>';
+const MOIS_ANNEE = [
+  { code: "01", nom: "Janvier" },
+  { code: "02", nom: "Février" },
+  { code: "03", nom: "Mars" },
+  { code: "04", nom: "Avril" },
+  { code: "05", nom: "Mai" },
+  { code: "06", nom: "Juin" },
+  { code: "07", nom: "Juillet" },
+  { code: "08", nom: "Août" },
+  { code: "09", nom: "Septembre" },
+  { code: "10", nom: "Octobre" },
+  { code: "11", nom: "Novembre" },
+  { code: "12", nom: "Décembre" }
+];
+
+function anneesDisponibles() {
+  const maintenant = new Date();
+  const anneeCourante = Number((facturation?.periode || `${maintenant.getUTCFullYear()}-01`).slice(0, 4)) || maintenant.getUTCFullYear();
+  const set = new Set([anneeCourante - 2, anneeCourante - 1, anneeCourante, anneeCourante + 1]);
+  for (const item of facturation?.periodes || []) {
+    const annee = Number(String(item.cle || "").slice(0, 4));
+    if (annee >= 2020 && annee <= 2100) set.add(annee);
+  }
+  return [...set].sort((a, b) => b - a);
 }
 
-async function telechargerReleve(event) {
-  event.preventDefault();
-  const periode = document.getElementById("relevePeriode").value;
+function synchroniserReleveDepuisMoisAnnee() {
+  const selectMois = document.getElementById("releveMois");
+  const selectAnnee = document.getElementById("releveAnnee");
+  const selectPeriode = document.getElementById("relevePeriode");
+  if (!selectMois || !selectAnnee || !selectPeriode) return;
+  const annee = selectAnnee.value;
+  const mois = selectMois.value;
+  const cible = `${annee}-${mois}`;
+  const periodesMap = new Map((facturation?.periodes || []).map((item) => [item.cle, item]));
+
+  selectPeriode.innerHTML = MOIS_ANNEE.map((m) => {
+    const cle = `${annee}-${m.code}`;
+    const hist = periodesMap.get(cle);
+    const detail = hist ? ` (${hist.compteur} colis)` : "";
+    return `<option value="${escapeHTML(cle)}">${escapeHTML(libellePeriode(cle))}${escapeHTML(detail)}</option>`;
+  }).join("");
+  selectPeriode.value = cible;
+  renderGrilleDouzeMois(annee, mois, periodesMap);
+}
+
+function renderGrilleDouzeMois(annee, moisActif, periodesMap) {
+  const grid = document.getElementById("releveMonthsGrid");
+  if (!grid) return;
+  const periodeCourante = facturation?.periode || "";
+  grid.innerHTML = MOIS_ANNEE.map((m) => {
+    const cle = `${annee}-${m.code}`;
+    const hist = periodesMap.get(cle);
+    const estActif = m.code === moisActif;
+    const estCourant = cle === periodeCourante;
+    const resume = hist
+      ? `${hist.compteur} colis · ${libellePlan(hist.plan)}`
+      : estCourant
+        ? "Mois en cours"
+        : "Relevé disponible";
+    return `<div class="releve-month-card${estActif ? " releve-month-active" : ""}${hist ? " releve-month-has-data" : ""}" data-select-periode="${escapeHTML(cle)}">
+      <div class="releve-month-top">
+        <strong>${escapeHTML(m.nom)} ${escapeHTML(annee)}</strong>
+        ${estCourant ? '<span class="releve-month-badge">En cours</span>' : hist ? `<span class="releve-month-badge">${hist.compteur} colis</span>` : ""}
+      </div>
+      <small>${escapeHTML(resume)}</small>
+      <div class="releve-month-actions">
+        <button class="button button-small ${estActif ? "button-primary" : "button-outline"}" type="button" data-download-periode="${escapeHTML(cle)}">⬇ PDF ${escapeHTML(m.nom)}</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function renderReleves() {
+  const selectPeriode = document.getElementById("relevePeriode");
+  const selectMois = document.getElementById("releveMois");
+  const selectAnnee = document.getElementById("releveAnnee");
   const button = document.getElementById("telechargerReleveButton");
+  if (!selectPeriode || !button) return;
+
+  const defautPeriode = selectPeriode.value || facturation?.periode || new Date().toISOString().slice(0, 7);
+  const [defautAnnee, defautMois] = defautPeriode.split("-");
+  const annees = anneesDisponibles();
+
+  if (selectMois) {
+    selectMois.innerHTML = MOIS_ANNEE.map(
+      (m) => `<option value="${escapeHTML(m.code)}">${escapeHTML(m.code)} — ${escapeHTML(m.nom)}</option>`
+    ).join("");
+    selectMois.value = MOIS_ANNEE.some((m) => m.code === defautMois) ? defautMois : "01";
+  }
+  if (selectAnnee) {
+    selectAnnee.innerHTML = annees.map((a) => `<option value="${a}">${a}</option>`).join("");
+    selectAnnee.value = annees.includes(Number(defautAnnee)) ? String(defautAnnee) : String(annees[0]);
+  }
+  synchroniserReleveDepuisMoisAnnee();
+  button.disabled = false;
+}
+
+async function telechargerRelevePeriode(periode, boutonSource) {
+  const button = boutonSource || document.getElementById("telechargerReleveButton");
   if (!periode) return;
   setButtonLoading(button, true, "Génération…");
   try {
@@ -251,12 +335,18 @@ async function telechargerReleve(event) {
     lien.click();
     lien.remove();
     window.setTimeout(() => URL.revokeObjectURL(fichier), 1000);
-    showToast(`Relevé ${periode} téléchargé.`);
+    showToast(`Relevé ${libellePeriode(periode)} (${periode}) téléchargé.`);
   } catch (error) {
     showPageMessage(message, errorMessage(error));
   } finally {
     setButtonLoading(button, false);
   }
+}
+
+async function telechargerReleve(event) {
+  event.preventDefault();
+  const periode = document.getElementById("relevePeriode").value;
+  await telechargerRelevePeriode(periode, document.getElementById("telechargerReleveButton"));
 }
 
 function renderAll() {
@@ -366,6 +456,39 @@ async function boot() {
   if (!agency) return;
   document.getElementById("refreshAbonnement")?.addEventListener("click", charger);
   document.getElementById("releveForm")?.addEventListener("submit", telechargerReleve);
+  document.getElementById("releveMois")?.addEventListener("change", synchroniserReleveDepuisMoisAnnee);
+  document.getElementById("releveAnnee")?.addEventListener("change", synchroniserReleveDepuisMoisAnnee);
+  document.getElementById("relevePeriode")?.addEventListener("change", (event) => {
+    const [annee, mois] = String(event.target.value || "").split("-");
+    const selectMois = document.getElementById("releveMois");
+    const selectAnnee = document.getElementById("releveAnnee");
+    if (selectAnnee && annee) selectAnnee.value = annee;
+    if (selectMois && mois) selectMois.value = mois;
+    synchroniserReleveDepuisMoisAnnee();
+  });
+  document.getElementById("releveMonthsGrid")?.addEventListener("click", (event) => {
+    const downloadBtn = event.target.closest("[data-download-periode]");
+    if (downloadBtn) {
+      const periode = downloadBtn.dataset.downloadPeriode;
+      const [annee, mois] = periode.split("-");
+      const selectMois = document.getElementById("releveMois");
+      const selectAnnee = document.getElementById("releveAnnee");
+      if (selectAnnee && annee) selectAnnee.value = annee;
+      if (selectMois && mois) selectMois.value = mois;
+      synchroniserReleveDepuisMoisAnnee();
+      telechargerRelevePeriode(periode, downloadBtn);
+      return;
+    }
+    const card = event.target.closest("[data-select-periode]");
+    if (card) {
+      const [annee, mois] = card.dataset.selectPeriode.split("-");
+      const selectMois = document.getElementById("releveMois");
+      const selectAnnee = document.getElementById("releveAnnee");
+      if (selectAnnee && annee) selectAnnee.value = annee;
+      if (selectMois && mois) selectMois.value = mois;
+      synchroniserReleveDepuisMoisAnnee();
+    }
+  });
   document.getElementById("rechargeEnLigneForm")?.addEventListener("submit", rechargerEnLigne);
   document.getElementById("quickRechargeAmounts")?.addEventListener("click", (event) => {
     const chip = event.target.closest("[data-quick-recharge]");

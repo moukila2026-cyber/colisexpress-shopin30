@@ -1112,5 +1112,22 @@ test("les forfaits et le parcours de changement d'offre (accueil, inscription, g
   for (const classe of [".pricing-section", ".pricing-grid", ".pricing-card", ".pricing-card-featured", ".pricing-Explainer"]) {
     assert.ok(css.includes(classe), `style.css définit ${classe}`);
   }
+
+  // 4. Boutons de déconnexion accessibles, création de bordereau visible et sélecteur 12 mois + année du relevé PDF
+  const layoutJs = lire("js/layout.js");
+  assert.match(layoutJs, /desktop-logout-button/, "bouton de déconnexion dans l'en-tête desktop");
+  assert.match(layoutJs, /topbar-logout/, "bouton de déconnexion dans la barre supérieure mobile");
+  assert.match(layoutJs, /sidebar-quick-logout/, "bouton rapide de déconnexion dans l'identité de la barre latérale");
+
+  const bordereauxHtml = lire("bordereaux.html");
+  assert.match(bordereauxHtml, /id="newBordereauPanelButton"/, "bouton Créer un bordereau visible dans le panneau Mes bordereaux");
+  assert.match(bordereauxHtml, /data-open-bordereau-form/, "déclencheur d'ouverture du formulaire de bordereau");
+
+  for (const id of ["releveMois", "releveAnnee", "relevePeriode", "releveMonthsGrid"]) {
+    assert.ok(aboHtml.includes(`id="${id}"`), `abonnement.html expose #${id} pour le relevé PDF mensuel`);
+  }
+  const aboJs = lire("js/abonnement.js");
+  assert.match(aboJs, /MOIS_ANNEE/, "les 12 mois de l'année sont définis dans js/abonnement.js");
 });
+
 

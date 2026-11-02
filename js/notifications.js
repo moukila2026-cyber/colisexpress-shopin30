@@ -63,8 +63,8 @@ function renderMode(configuration) {
   if (!configuration) return;
   modeTarget.classList.toggle("notif-mode-reel", configuration.simulation === false);
   modeTarget.innerHTML = configuration.simulation
-    ? `<strong>Mode simulation</strong> — aucun message n'est envoyé hors de l'application : chaque notification est journalisée ici, pour les agences concernées, sans donnée personnelle. WhatsApp Cloud puis Orange SMS sont pris automatiquement si leurs variables sont configurées dans Vercel ; le mode simulation reste le repli.`
-    : `<strong>Envoi réel actif</strong> (${escapeHTML(libelleCanalNotification(configuration.canal))}) — les notifications partent vers les coordonnées professionnelles des agences concernées et restent journalisées ici.`;
+    ? `<strong>Journal opérationnel en temps réel</strong> — Retrouvez ici toutes les alertes inter-agences qui concernent votre guichet : arrivée ou écart de bordereau, ouverture ou escalade d'incident, colis en souffrance, colis qui dorment (+5 jours) et rappels de forfait.`
+    : `<strong>Journal opérationnel + alertes ${escapeHTML(libelleCanalNotification(configuration.canal))}</strong> — Chaque événement est enregistré dans ce journal et transmis aux coordonnées professionnelles de votre agence.`;
 }
 
 function renderCompteurs() {
@@ -108,7 +108,11 @@ function renderListe() {
       <strong class="notif-title">${escapeHTML(item.titre)}</strong>
       <p class="notif-message">${escapeHTML(item.message)}</p>
       <div class="notif-meta">
-        <span class="notif-canal">${escapeHTML(libelleCanalNotification(item.canal))} · ${escapeHTML(libelleStatutNotification(item.statut))}${item.statut === "echec" && item.erreur ? ` — ${escapeHTML(item.erreur)}` : ""}</span>
+        <span class="notif-canal">${
+          item.canal === "simulation" || item.statut === "simulee"
+            ? "Notification interne · Reçue dans l'espace agence"
+            : `${escapeHTML(libelleCanalNotification(item.canal))} · ${escapeHTML(libelleStatutNotification(item.statut))}${item.statut === "echec" && item.erreur ? ` — ${escapeHTML(item.erreur)}` : ""}`
+        }</span>
         <span class="notif-actions">
           ${lien ? `<a class="table-link" href="${escapeHTML(lien)}" data-ouvrir="${escapeHTML(item.id)}">${libelleLien(lien)}</a>` : ""}
           ${item.lu ? "" : `<button class="button button-small button-outline" type="button" data-lire="${escapeHTML(item.id)}">Marquer comme lue</button>`}
