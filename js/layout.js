@@ -89,13 +89,18 @@ export async function initAgencyLayout(agency, activePage) {
     document.querySelectorAll("[data-agency-initial]").forEach((element) => {
       element.textContent = (agency.name || "A").trim().charAt(0).toUpperCase();
     });
-    // Membre connecté : l'agent voit son nom, le gérant n'a pas d'affichage
-    // supplémentaire (le nom de l'agence le représente déjà).
+    // Membre connecté : l'agent ou le gérant invité voit son nom et son point d'agence.
     document.querySelectorAll("[data-member-label]").forEach((element) => {
       const member = agency.member;
-      const estAgent = member && member.role === "agent";
-      element.hidden = !estAgent;
-      element.textContent = estAgent ? `${member.name} · Agent` : "";
+      const estInvite = Boolean(member && (member.role === "agent" || (member.role === "gerant" && !member.isOwner)));
+      element.hidden = !estInvite;
+      if (estInvite) {
+        const roleTxt = member.role === "gerant" ? "Gérant" : "Agent";
+        const villeTxt = member.city ? ` (${member.city})` : "";
+        element.textContent = `${member.name} · ${roleTxt}${villeTxt}`;
+      } else {
+        element.textContent = "";
+      }
     });
     if (!document.getElementById("agencyCredit")) {
       const texteSupport = `Bonjour Shopin30, ici l'agence ${agency.name || ""} (${agency.city || ""}) sur COLIS EXPRESS.`;

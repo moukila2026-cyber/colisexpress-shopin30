@@ -26,7 +26,10 @@ import {
   messageQuotaAtteint,
   normaliserPeriode,
   periodeSuivante,
+  peutInviterGerant,
   quotaEffectif,
+  quotaGerantsEffectif,
+  quotaGerantsPlan,
   resumeFacturation,
   validerChangementPlan,
   validerPlanPlateforme,
@@ -207,3 +210,33 @@ test("phrase du prochain colis (LOT 10) : inclus, hors forfait débité, refus a
   assert.deepEqual([refus.niveau, refus.bloque], ["danger", true]);
   assert.match(phraseProchainColis({ compteur: 99, quotaEffectif: null }).texte, /100e du mois — plan Réseau, sans limite/);
 });
+
+test("quota de gérants par forfait : 2 max (Gratuit), 5 max (Pro), illimité (Réseau)", () => {
+  assert.equal(PLANS.gratuit.quotaGerants, 2);
+  assert.equal(PLANS.pro.quotaGerants, 5);
+  assert.equal(PLANS.reseau.quotaGerants, null);
+  assert.equal(quotaGerantsPlan("gratuit"), 2);
+  assert.equal(quotaGerantsPlan("pro"), 5);
+  assert.equal(quotaGerantsPlan("reseau"), null);
+
+  assert.deepEqual(peutInviterGerant({ plan: "gratuit", gerantsActifs: 1 }), {
+    ok: true, plan: "gratuit", gerantsActifs: 1, quotaGerants: 2, restants: 1, enRetard: false
+  });
+  const bloqueGratuit = peutInviterGerant({ plan: "gratuit", gerantsActifs: 2 });
+  assert.equal(bloqueGratuit.ok, false);
+  assert.match(bloqueGratuit.error, /2 gérants invités/);
+
+  assert.equal(peutInviterGerant({ plan: "pro", gerantsActifs: 4 }).ok, true);
+  const bloquePro = peutInviterGerant({ plan: "pro", gerantsActifs: 5 });
+  assert.equal(bloquePro.ok, false);
+  assert.match(bloquePro.error, /5 gérants invités/);
+
+  const reseau = peutInviterGerant({ plan: "reseau", gerantsActifs: 25 });
+  assert.equal(reseau.ok, true);
+  assert.equal(reseau.quotaGerants, null);
+
+  // Abonnement Pro impayé après échéance : quota de gérants ramené à 2 (Gratuit)
+  const enRetard = { montantFCFA: 10000, statut: "du", echeanceISO: "2026-10-01T00:00:00.000Z" };
+  assert.equal(quotaGerantsEffectif({ plan: "pro", abonnement: enRetard, now: new Date("2026-10-15T00:00:00.000Z") }), 2);
+});
+

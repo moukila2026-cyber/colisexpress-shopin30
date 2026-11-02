@@ -37,24 +37,90 @@ function mountLayout() {
 
 /* -------------------------------- équipe ---------------------------------- */
 
+const LABELS_FORFAIT = { gratuit: "Gratuit", pro: "Pro", reseau: "Réseau" };
+
 function roleBadge(agent) {
+  if (agent.isOwner) {
+    return '<span class="status-badge status-gerant">Gérant fondateur</span>';
+  }
   return agent.role === "gerant"
-    ? '<span class="status-badge status-gerant">Gérant</span>'
+    ? '<span class="status-badge status-gerant">Gérant de point</span>'
     : '<span class="status-badge status-agent">Agent</span>';
+}
+
+function renderQuotaGerants(quotaGerants, points = []) {
+  const banner = document.getElementById("gerantsQuotaBanner");
+  const roleSelect = document.getElementById("agentRole");
+  const optionGerant = document.getElementById("agentRoleGerantOption");
+  if (!banner || !quotaGerants) return;
+
+  const planNom = LABELS_FORFAIT[quotaGerants.plan] || quotaGerants.plan || "Gratuit";
+  const maxTexte = quotaGerants.quotaGerants === null
+    ? `${quotaGerants.gerantsActifs} gérant${quotaGerants.gerantsActifs > 1 ? "s" : ""} invité${quotaGerants.gerantsActifs > 1 ? "s" : ""} · Illimité (Forfait Réseau)`
+    : `${quotaGerants.gerantsActifs} / ${quotaGerants.quotaGerants} gérant${quotaGerants.quotaGerants > 1 ? "s" : ""} invité${quotaGerants.quotaGerants > 1 ? "s" : ""} (Forfait ${planNom})`;
+
+  const pointsHtml = points.length
+    ? points.map((p) => `<span class="point-chip">${escapeHTML(p.city)}${p.isHeadquarters ? " (Siège)" : ""} · ${p.gerantsCount} gérant${p.gerantsCount > 1 ? "s" : ""}${p.agentsCount ? `, ${p.agentsCount} agent${p.agentsCount > 1 ? "s" : ""}` : ""}</span>`).join("")
+    : "";
+
+  const peutInviter = Boolean(currentMember?.isOwner && quotaGerants.peutInviterGerant);
+  if (optionGerant && roleSelect) {
+    if (!currentMember?.isOwner) {
+      optionGerant.disabled = true;
+      optionGerant.textContent = "Gérant de point (réservé au créateur de l'agence)";
+      roleSelect.value = "agent";
+    } else if (!quotaGerants.peutInviterGerant) {
+      optionGerant.disabled = true;
+      optionGerant.textContent = `Gérant de point (limite ${quotaGerants.gerantsActifs}/${quotaGerants.quotaGerants} atteinte sur ${planNom})`;
+      roleSelect.value = "agent";
+    } else {
+      optionGerant.disabled = false;
+      const reste = quotaGerants.restants === null ? "illimité" : `${quotaGerants.restants} place${quotaGerants.restants > 1 ? "s" : ""} disponible${quotaGerants.restants > 1 ? "s" : ""}`;
+      optionGerant.textContent = `Gérant de point / Co-gérant (${reste})`;
+    }
+  }
+
+  banner.hidden = false;
+  banner.className = `gerants-quota-banner${!peutInviter && currentMember?.isOwner ? " gerants-quota-plein" : ""}`;
+  banner.innerHTML = `
+    <div class="gerants-quota-head">
+      <div>
+        <strong>Quota de gérants centralisé : ${escapeHTML(maxTexte)}</strong>
+        <p>${
+          quotaGerants.peutInviterGerant
+            ? "Tous vos points d'envoi et de réception en Côte d'Ivoire partagent le forfait, le portefeuille et la traçabilité de l'agence."
+            : escapeHTML(quotaGerants.messageQuota || "La limite de gérants de votre forfait actuel est atteinte.")
+        }</p>
+      </div>
+      ${
+        quotaGerants.quotaGerants !== null
+          ? `<a class="button button-small ${quotaGerants.peutInviterGerant ? "button-outline" : "button-orange"}" href="abonnement.html#plansSection">${
+              quotaGerants.plan === "gratuit" ? "Passer au Pro (5 gérants) ou Réseau (illimité)" : "Passer au Réseau (gérants illimités)"
+            }</a>`
+          : ""
+      }
+    </div>
+    ${pointsHtml ? `<div class="gerants-points-row"><small>Points d'envoi &amp; réception actifs en CI :</small><div class="gerants-points-list">${pointsHtml}</div></div>` : ""}
+  `;
 }
 
 function renderAgents(agents) {
   const peutGerer = currentMember?.role === "gerant";
+  const estFondateur = currentMember?.isOwner === true;
+  const villeAgence = document.getElementById("settingsCity")?.value?.trim() || "—";
   agentsList.innerHTML = `<div class="table-wrap"><table class="parcel-table agents-table">
-    <thead><tr><th>Nom</th><th>Contact</th><th>Rôle</th><th>Statut</th>${peutGerer ? "<th></th>" : ""}</tr></thead>
+    <thead><tr><th>Nom</th><th>Point / Ville (CI)</th><th>Contact</th><th>Rôle</th><th>Statut</th>${peutGerer ? "<th></th>" : ""}</tr></thead>
     <tbody>${agents.map((agent) => {
-      const estCompteGerant = agent.role === "gerant";
+      const estFondateurLigne = Boolean(agent.isOwner);
+      const peutBasculer = !estFondateurLigne && (estFondateur || (peutGerer && agent.role === "agent"));
+      const villeMembre = agent.city || villeAgence;
       return `<tr>
-        <td><strong>${escapeHTML(agent.name)}</strong>${estCompteGerant ? '<br><small class="muted-note">Compte principal de l\'agence</small>' : ""}</td>
+        <td><strong>${escapeHTML(agent.name)}</strong>${estFondateurLigne ? '<br><small class="muted-note">Créateur &amp; compte principal de l\'agence</small>' : ""}</td>
+        <td><span class="route-cell">${escapeHTML(villeMembre)}</span></td>
         <td>${escapeHTML(agent.email)}${agent.phone ? `<br><small>${escapeHTML(agent.phone)}</small>` : ""}</td>
         <td>${roleBadge(agent)}</td>
         <td>${agent.active ? '<span class="status-badge status-actif">Actif</span>' : '<span class="status-badge status-inactif">Inactif</span>'}</td>
-        ${peutGerer && !estCompteGerant ? `<td><button class="button button-outline button-small" type="button" data-agent-toggle="${escapeHTML(agent.id)}" data-agent-active="${agent.active}">${agent.active ? "Désactiver" : "Réactiver"}</button></td>` : ""}
+        ${peutGerer ? `<td>${peutBasculer ? `<button class="button button-outline button-small" type="button" data-agent-toggle="${escapeHTML(agent.id)}" data-agent-role="${escapeHTML(agent.role)}" data-agent-active="${agent.active}">${agent.active ? "Désactiver" : "Réactiver"}</button>` : ""}</td>` : ""}
       </tr>`;
     }).join("")}</tbody>
   </table></div>`;
@@ -62,7 +128,8 @@ function renderAgents(agents) {
 
 async function chargerEquipe() {
   try {
-    const { agents } = await api("/api/agents");
+    const { agents, quotaGerants, points } = await api("/api/agents");
+    renderQuotaGerants(quotaGerants, points || []);
     renderAgents(agents);
   } catch (error) {
     showPageMessage(teamMessage, errorMessage(error));
@@ -73,20 +140,27 @@ async function inviterAgent(event) {
   event.preventDefault();
   clearPageMessage(teamMessage);
   const values = Object.fromEntries(new FormData(agentForm));
-  const name = values.name.trim();
-  const email = values.email.trim().toLowerCase();
+  const name = (values.name || "").trim();
+  const email = (values.email || "").trim().toLowerCase();
   const phone = normalizeIvorianPhone(values.phone || "");
-  const password = values.password;
+  const password = values.password || "";
+  const role = values.role === "gerant" ? "gerant" : "agent";
+  const city = (values.city || "").trim() || document.getElementById("settingsCity")?.value?.trim() || "";
+  const labelRole = role === "gerant" ? "gérant" : "agent";
 
   if (name.length < 2) {
-    showPageMessage(teamMessage, "Le nom de l'agent doit contenir au moins 2 caractères.");
+    showPageMessage(teamMessage, `Le nom du ${labelRole} doit contenir au moins 2 caractères.`);
+    return;
+  }
+  if (city && city.length < 2) {
+    showPageMessage(teamMessage, "Indiquez la ville du point d'envoi/réception (au moins 2 caractères).");
     return;
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     showPageMessage(teamMessage, "L'adresse e-mail saisie n'est pas valide.");
     return;
   }
-  if (values.phone.trim() && !isValidIvorianPhone(phone)) {
+  if ((values.phone || "").trim() && !isValidIvorianPhone(phone)) {
     showPageMessage(teamMessage, "Saisissez un téléphone ivoirien valide (10 chiffres), ou laissez vide.");
     return;
   }
@@ -98,18 +172,24 @@ async function inviterAgent(event) {
   const button = document.getElementById("saveAgentButton");
   setButtonLoading(button, true, "Invitation…");
   try {
-    await api("/api/agents", { method: "POST", body: { name, email, phone: values.phone.trim(), password } });
+    await api("/api/agents", {
+      method: "POST",
+      body: { name, email, phone: (values.phone || "").trim(), password, role, city }
+    });
     agentForm.reset();
+    const cityInput = document.getElementById("agentCity");
+    if (cityInput) cityInput.value = document.getElementById("settingsCity")?.value?.trim() || "";
     const loginUrl = new URL("connexion.html", window.location.href).href;
     const agencyName = document.getElementById("settingsName")?.value?.trim() || "votre agence";
-    const waText = `Bonjour ${name}, votre compte agent COLIS EXPRESS pour l'agence ${agencyName} est prêt. Connectez-vous sur ${loginUrl} avec l'e-mail ${email} et le mot de passe provisoire : ${password}`;
+    const pointInfo = city ? ` (point ${city})` : "";
+    const waText = `Bonjour ${name}, votre compte ${labelRole} COLIS EXPRESS pour l'agence ${agencyName}${pointInfo} est prêt. Connectez-vous sur ${loginUrl} avec l'e-mail ${email} et le mot de passe provisoire : ${password}`;
     const waHref = whatsappShareLink(phone, waText);
     if (teamMessage) {
       teamMessage.className = "page-message page-message-success agent-credentials-banner";
-      teamMessage.innerHTML = `<span>Agent <strong>${escapeHTML(name)}</strong> ajouté à l'équipe (${escapeHTML(email)}).</span><span class="agent-credentials-actions"><a class="button button-whatsapp button-small" target="_blank" rel="noopener noreferrer" href="${escapeHTML(waHref)}">◉ Envoyer ses accès sur WhatsApp</a></span>`;
+      teamMessage.innerHTML = `<span>${role === "gerant" ? "Gérant" : "Agent"} <strong>${escapeHTML(name)}</strong>${city ? ` (${escapeHTML(city)})` : ""} ajouté à l'équipe (${escapeHTML(email)}).</span><span class="agent-credentials-actions"><a class="button button-whatsapp button-small" target="_blank" rel="noopener noreferrer" href="${escapeHTML(waHref)}">◉ Envoyer ses accès sur WhatsApp</a></span>`;
       teamMessage.hidden = false;
     }
-    showToast(`Agent ${name} ajouté à l'équipe. Transmettez-lui ses identifiants.`);
+    showToast(`${role === "gerant" ? "Gérant" : "Agent"} ${name} ajouté à l'équipe.`);
     await chargerEquipe();
   } catch (error) {
     showPageMessage(teamMessage, errorMessage(error));
@@ -120,6 +200,7 @@ async function inviterAgent(event) {
 
 async function basculerAgent(button) {
   const agentId = button.dataset.agentToggle;
+  const role = button.dataset.agentRole === "gerant" ? "Gérant" : "Agent";
   const actif = button.dataset.agentActive === "true";
   clearPageMessage(teamMessage);
   setButtonLoading(button, true, actif ? "Désactivation…" : "Réactivation…");
@@ -128,7 +209,7 @@ async function basculerAgent(button) {
       method: "PATCH",
       body: { active: !actif }
     });
-    showToast(actif ? "Agent désactivé : il ne peut plus se connecter." : "Agent réactivé.");
+    showToast(actif ? `${role} désactivé : il ne peut plus se connecter.` : `${role} réactivé.`);
     await chargerEquipe();
   } catch (error) {
     showPageMessage(teamMessage, errorMessage(error));
@@ -343,6 +424,10 @@ async function boot() {
   // Seul le gérant invite/désactive : le serveur applique la même règle.
   if (currentMember?.role === "gerant") {
     agentForm.hidden = false;
+    const cityInput = document.getElementById("agentCity");
+    if (cityInput && !cityInput.value) {
+      cityInput.value = currentMember?.city || agency.city || "";
+    }
     agentForm.addEventListener("submit", inviterAgent);
     tarifForm.hidden = false;
     const quickBar = document.getElementById("tarifsQuickBar");

@@ -40,6 +40,7 @@ const priceHelp = document.getElementById("priceHelp");
 const priceRecap = document.getElementById("priceRecap");
 let currentAgency = null;
 let agencies = [];
+let myPoints = [];
 let tarifs = [];
 
 /**
@@ -98,14 +99,28 @@ function syncDestinationMode() {
 function renderDestinationAgencies() {
   if (agencyMode()) return;
   const previous = destinationSelect.value;
-  const options = agencies
+  const originActuelle = (document.getElementById("originCity")?.value || currentAgency?.city || "").trim().toLowerCase();
+  const pointsInternes = (myPoints || [])
+    .filter((ville) => ville && ville.trim().toLowerCase() !== originActuelle)
+    .map((ville) => {
+      const val = `point:${currentAgency?.id}:${ville}`;
+      return `<option value="${escapeHTML(val)}">${escapeHTML(currentAgency?.name || "Mon agence")} — Point ${escapeHTML(ville)} (interne)</option>`;
+    })
+    .join("");
+  const partenaires = agencies
     .filter((agency) => agency.id !== currentAgency?.id)
     .sort((a, b) => (a.name || "").localeCompare(b.name || "", "fr"))
     .map((agency) => `<option value="${escapeHTML(agency.id)}">${escapeHTML(agency.name)} — ${escapeHTML(agency.city)}</option>`)
     .join("");
-  destinationSelect.innerHTML = `<option value="">Choisir une agence de destination</option>${options}`;
-  if (agencies.some((agency) => agency.id === previous)) destinationSelect.value = previous;
-  document.getElementById("noDestinationAgency").hidden = Boolean(options);
+  const groupes = [
+    pointsInternes ? `<optgroup label="Nos points en Côte d'Ivoire (réseau interne centralisé)">${pointsInternes}</optgroup>` : "",
+    partenaires ? `<optgroup label="Agences partenaires du réseau">${partenaires}</optgroup>` : ""
+  ].filter(Boolean).join("");
+  destinationSelect.innerHTML = `<option value="">Choisir une agence ou un point de destination</option>${groupes}`;
+  if ([...destinationSelect.options].some((opt) => opt.value === previous)) {
+    destinationSelect.value = previous;
+  }
+  document.getElementById("noDestinationAgency").hidden = Boolean(pointsInternes || partenaires);
 }
 
 function construireUrlInscriptionAgence({ name = "", city = "", phone = "" } = {}) {
@@ -458,11 +473,12 @@ async function boot() {
   // LOT 10 — la ligne « Ce colis sera le … » suit le compteur temps réel.
   surCompteur((resume) => afficherProchainColis(resume));
   if (!currentAgency) return;
-  document.getElementById("originCity").value = currentAgency.city || "";
+  document.getElementById("originCity").value = currentAgency.member?.city || currentAgency.city || "";
 
   try {
     const data = await api("/api/agences");
-    agencies = data.agencies;
+    agencies = data.agencies || [];
+    myPoints = data.myPoints || [];
     renderDestinationAgencies();
   } catch (error) {
     showPageMessage(message, errorMessage(error));
@@ -488,10 +504,17 @@ async function boot() {
   document.getElementById("paymentStatus")?.addEventListener("change", syncPaiement);
   document.getElementById("paidAmountFCFA")?.addEventListener("input", rendreResteDu);
 
+  document.getElementById("originCity")?.addEventListener("change", renderDestinationAgencies);
   destinationSelect.addEventListener("change", () => {
-    const agency = agencies.find((item) => item.id === destinationSelect.value);
+    const val = destinationSelect.value;
     const cityInput = document.getElementById("destinationCity");
-    if (agency && !cityInput.value.trim()) cityInput.value = agency.city || "";
+    if (val.startsWith("point:")) {
+      const villePoint = val.split(":").slice(2).join(":");
+      if (villePoint && cityInput) cityInput.value = villePoint;
+    } else {
+      const agency = agencies.find((item) => item.id === val);
+      if (agency && !cityInput.value.trim()) cityInput.value = agency.city || "";
+    }
     refreshPrix();
   });
 

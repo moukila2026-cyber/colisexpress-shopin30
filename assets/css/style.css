@@ -1365,4 +1365,67 @@ dd { margin: 4px 0 0; color: var(--ink); overflow-wrap: anywhere; font-size: .88
   justify-content: center;
 }
 
+/* Bandeau de quota de gérants & points multi-villes en Côte d'Ivoire */
+.gerants-quota-banner {
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--green-800);
+  background: var(--green-50);
+  display: grid;
+  gap: 10px;
+}
+.gerants-quota-banner.gerants-quota-plein {
+  border-left-color: var(--orange);
+  background: #fff8f2;
+}
+.gerants-quota-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.gerants-quota-head strong {
+  color: var(--green-950);
+  font-size: .92rem;
+}
+.gerants-quota-head p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: .82rem;
+  line-height: 1.45;
+}
+.gerants-points-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(15, 77, 54, .16);
+}
+.gerants-points-row small {
+  color: var(--green-900);
+  font-weight: 700;
+  font-size: .78rem;
+}
+.gerants-points-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.point-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid var(--line);
+  color: var(--green-950);
+  font-size: .76rem;
+  font-weight: 700;
+}
+
+
 

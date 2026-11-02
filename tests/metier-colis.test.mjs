@@ -483,3 +483,26 @@ test("le suivi public projette les étapes sans jamais exposer l'acteur", () => 
   });
   assert.equal(/agent-7|Koffi/.test(JSON.stringify(suivi)), false);
 });
+
+test("multi-points d'une même agence en Côte d'Ivoire : point:<agencyId>:<ville> autorisé entre deux villes distinctes", () => {
+  const ok = resoudreDestination({
+    values: valeurs({ originCity: "Abidjan", destinationCity: "Bouaké", destinationAgencyId: "point:uid-1:Bouaké" }),
+    agencies: [EXPEDITRICE, AGENCE],
+    currentAgencyId: "uid-1"
+  });
+  assert.equal(ok.ok, true);
+  assert.deepEqual(ok.destination, {
+    destinationAgencyId: "uid-1",
+    destinationAgencyName: "Shopin30 Abidjan (Bouaké)",
+    destinationAgencyCity: "Bouaké"
+  });
+
+  const memeVille = resoudreDestination({
+    values: valeurs({ originCity: "Abidjan", destinationCity: "Abidjan", destinationAgencyId: "point:uid-1:Abidjan" }),
+    agencies: [EXPEDITRICE, AGENCE],
+    currentAgencyId: "uid-1"
+  });
+  assert.equal(memeVille.ok, false);
+  assert.match(memeVille.error, /ville différente/);
+});
+

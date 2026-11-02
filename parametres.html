@@ -34,21 +34,52 @@
         <section class="settings-card" id="teamSection" aria-labelledby="teamTitle">
           <div class="settings-summary">
             <div>
-              <h2 id="teamTitle">Équipe de l'agence</h2>
-              <p>Chaque agent dispose de son propre identifiant de connexion : les étapes qu'il valide sont tracées dans l'historique des colis.</p>
+              <h2 id="teamTitle">Équipe, Gérants &amp; Points en Côte d'Ivoire</h2>
+              <p>Invitez vos gérants de points d'envoi/réception et vos agents de guichet. Tout est centralisé selon votre forfait : <strong>2 gérants max (Gratuit)</strong>, <strong>5 gérants max (Pro)</strong>, <strong>gérants illimités (Réseau)</strong> et agents illimités.</p>
             </div>
           </div>
+          <div class="gerants-quota-banner" id="gerantsQuotaBanner" hidden></div>
           <div class="page-message" id="teamMessage" hidden role="alert"></div>
           <div id="agentsList" class="agents-list"><div class="loading-state">Chargement de l'équipe…</div></div>
           <form id="agentForm" class="form-stack" novalidate hidden>
-            <h3 class="form-subheading">Inviter un agent</h3>
+            <h3 class="form-subheading">Inviter un gérant ou un agent</h3>
             <div class="form-grid">
+              <div class="field">
+                <label for="agentRole">Rôle dans l'agence <span class="required">*</span></label>
+                <select id="agentRole" name="role">
+                  <option value="gerant" id="agentRoleGerantOption">Gérant de point / Co-gérant (gestion complète)</option>
+                  <option value="agent">Agent de guichet (enregistrement, suivi &amp; caisse)</option>
+                </select>
+                <small class="field-help">Forfait Gratuit : 2 gérants max · Pro : 5 gérants max · Réseau : illimité.</small>
+              </div>
+              <div class="field">
+                <label for="agentCity">Point d'envoi / réception (Ville en CI) <span class="required">*</span></label>
+                <input id="agentCity" name="city" type="text" list="ciCitiesList" autocomplete="off" placeholder="Ex. Abidjan, Bouaké, Korhogo, San-Pédro…">
+                <datalist id="ciCitiesList">
+                  <option value="Abidjan"></option>
+                  <option value="Bouaké"></option>
+                  <option value="Yamoussoukro"></option>
+                  <option value="Korhogo"></option>
+                  <option value="San-Pédro"></option>
+                  <option value="Daloa"></option>
+                  <option value="Man"></option>
+                  <option value="Gagnoa"></option>
+                  <option value="Abengourou"></option>
+                  <option value="Odienné"></option>
+                  <option value="Bondoukou"></option>
+                  <option value="Soubré"></option>
+                  <option value="Divo"></option>
+                  <option value="Séguéla"></option>
+                  <option value="Aboisso"></option>
+                </datalist>
+                <small class="field-help">Ville ou gare rattachée à ce membre (centralisée sur le forfait de l'agence).</small>
+              </div>
               <div class="field"><label for="agentName">Nom complet <span class="required">*</span></label><input id="agentName" name="name" type="text" autocomplete="off" placeholder="Ex. Koffi N'Guessan" required></div>
-              <div class="field"><label for="agentEmail">E-mail de connexion <span class="required">*</span></label><input id="agentEmail" name="email" type="email" autocomplete="off" placeholder="agent@exemple.ci" required><small class="field-help">Unique sur tout le réseau, il sert à se connecter.</small></div>
+              <div class="field"><label for="agentEmail">E-mail de connexion <span class="required">*</span></label><input id="agentEmail" name="email" type="email" autocomplete="off" placeholder="membre@exemple.ci" required><small class="field-help">Unique sur tout le réseau, il sert à se connecter.</small></div>
               <div class="field"><label for="agentPhone">Téléphone</label><input id="agentPhone" name="phone" type="tel" inputmode="numeric" placeholder="0700000000"><small class="field-help">Format ivoirien, 10 chiffres (facultatif).</small></div>
-              <div class="field"><label for="agentPassword">Mot de passe provisoire <span class="required">*</span></label><div class="password-input-wrap"><input id="agentPassword" name="password" type="password" autocomplete="new-password" minlength="6" placeholder="6 caractères minimum" required><button class="password-toggle" type="button" data-password-toggle="agentPassword" aria-label="Afficher le mot de passe" aria-pressed="false" title="Afficher le mot de passe"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></button></div><small class="field-help">Transmettez-le à l'agent par WhatsApp : il l'utilisera pour sa première connexion.</small></div>
+              <div class="field"><label for="agentPassword">Mot de passe provisoire <span class="required">*</span></label><div class="password-input-wrap"><input id="agentPassword" name="password" type="password" autocomplete="new-password" minlength="6" placeholder="6 caractères minimum" required><button class="password-toggle" type="button" data-password-toggle="agentPassword" aria-label="Afficher le mot de passe" aria-pressed="false" title="Afficher le mot de passe"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></button></div><small class="field-help">Transmettez-le au gérant ou à l'agent par WhatsApp pour sa première connexion.</small></div>
             </div>
-            <div class="form-footer"><button class="button button-primary" id="saveAgentButton" type="submit">Inviter cet agent</button></div>
+            <div class="form-footer"><button class="button button-primary" id="saveAgentButton" type="submit">Inviter ce membre</button></div>
           </form>
         </section>
 
