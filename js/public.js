@@ -82,6 +82,31 @@ async function estimer(event) {
 
 devisForm?.addEventListener("submit", estimer);
 
+document.getElementById("quickDevisChips")?.addEventListener("click", (event) => {
+  const chip = event.target.closest("[data-devis-origin]");
+  if (!chip || !devisForm) return;
+  document.getElementById("devisOriginCity").value = chip.dataset.devisOrigin || "";
+  document.getElementById("devisDestinationCity").value = chip.dataset.devisDest || "";
+  document.getElementById("devisWeightKg").value = chip.dataset.devisWeight || "2";
+  document.getElementById("devisNature").value = chip.dataset.devisNature || "";
+  devisForm.requestSubmit();
+});
+
+/* Onglets interactifs « Mode d'emploi facile » sur la page d'accueil */
+document.getElementById("easyGuideTabs")?.addEventListener("click", (event) => {
+  const btn = event.target.closest("[data-easy-tab]");
+  if (!btn) return;
+  const cible = btn.dataset.easyTab;
+  document.querySelectorAll("[data-easy-tab]").forEach((tab) => {
+    const actif = tab.dataset.easyTab === cible;
+    tab.classList.toggle("is-active", actif);
+    tab.setAttribute("aria-selected", actif ? "true" : "false");
+  });
+  document.querySelectorAll("[data-easy-panel]").forEach((panel) => {
+    panel.hidden = panel.dataset.easyPanel !== cible;
+  });
+});
+
 /* Menu mobile de la vitrine */
 const menuToggle = document.querySelector(".menu-toggle");
 const publicNav = document.getElementById("publicNav");
