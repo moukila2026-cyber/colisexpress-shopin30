@@ -232,12 +232,20 @@ const MOIS_ANNEE = [
   { code: "12", nom: "Décembre" }
 ];
 
+function clePeriodeCourante() {
+  const brute = typeof facturation?.periode === "string"
+    ? facturation.periode
+    : facturation?.periode?.cle || facturation?.periodes?.[0]?.cle || "";
+  if (typeof brute === "string" && /^\d{4}-\d{2}$/.test(brute)) return brute;
+  return new Date().toISOString().slice(0, 7);
+}
+
 function anneesDisponibles() {
   const maintenant = new Date();
-  const anneeCourante = Number((facturation?.periode || `${maintenant.getUTCFullYear()}-01`).slice(0, 4)) || maintenant.getUTCFullYear();
+  const anneeCourante = Number(clePeriodeCourante().slice(0, 4)) || maintenant.getUTCFullYear();
   const set = new Set([anneeCourante - 2, anneeCourante - 1, anneeCourante, anneeCourante + 1]);
   for (const item of facturation?.periodes || []) {
-    const annee = Number(String(item.cle || "").slice(0, 4));
+    const annee = Number(String(item?.cle || "").slice(0, 4));
     if (annee >= 2020 && annee <= 2100) set.add(annee);
   }
   return [...set].sort((a, b) => b - a);
@@ -266,7 +274,7 @@ function synchroniserReleveDepuisMoisAnnee() {
 function renderGrilleDouzeMois(annee, moisActif, periodesMap) {
   const grid = document.getElementById("releveMonthsGrid");
   if (!grid) return;
-  const periodeCourante = facturation?.periode || "";
+  const periodeCourante = clePeriodeCourante();
   grid.innerHTML = MOIS_ANNEE.map((m) => {
     const cle = `${annee}-${m.code}`;
     const hist = periodesMap.get(cle);
@@ -297,8 +305,13 @@ function renderReleves() {
   const button = document.getElementById("telechargerReleveButton");
   if (!selectPeriode || !button) return;
 
-  const defautPeriode = selectPeriode.value || facturation?.periode || new Date().toISOString().slice(0, 7);
-  const [defautAnnee, defautMois] = defautPeriode.split("-");
+  const valeurSelect = typeof selectPeriode.value === "string" && /^\d{4}-\d{2}$/.test(selectPeriode.value)
+    ? selectPeriode.value
+    : "";
+  const defautPeriode = valeurSelect || clePeriodeCourante();
+  const parties = String(defautPeriode).split("-");
+  const defautAnnee = parties[0] || String(new Date().getUTCFullYear());
+  const defautMois = parties[1] || "01";
   const annees = anneesDisponibles();
 
   if (selectMois) {

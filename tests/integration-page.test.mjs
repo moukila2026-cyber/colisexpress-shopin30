@@ -1081,7 +1081,7 @@ test("Invitation d'agence WhatsApp pré-remplie et bouton œil sur les mots de p
   assert.ok(existsSync(path.join(RACINE, "assets/img/admin-reseau.jpg")), "fond d'écran administrateur présent");
 });
 
-test("les forfaits et le parcours de changement d'offre (accueil, inscription, guichet, abonnement) sont câblés", () => {
+test("les forfaits et le parcours de changement d'offre (accueil, inscription, guichet, abonnement) sont câblés", async () => {
   // 1. Page d'accueil : section #forfaits avec Gratuit, Pro et Réseau + explication de la transition
   const indexHtml = lire("index.html");
   assert.match(indexHtml, /href="#forfaits"/, "navigation publique vers #forfaits");
@@ -1128,6 +1128,23 @@ test("les forfaits et le parcours de changement d'offre (accueil, inscription, g
   }
   const aboJs = lire("js/abonnement.js");
   assert.match(aboJs, /MOIS_ANNEE/, "les 12 mois de l'année sont définis dans js/abonnement.js");
+  assert.match(aboJs, /function clePeriodeCourante\(/, "clePeriodeCourante normalise facturation.periode.cle en chaîne AAAA-MM");
+
+  // 5. Aucun message technique du navigateur n'est affiché tel quel par errorMessage()
+  const { errorMessage } = await import("../js/utils.js");
+  assert.equal(
+    errorMessage(new TypeError("defautPeriode.split is not a function or its return value is not iterable")),
+    "L'opération n'a pas pu aboutir automatiquement. Actualisez la page et réessayez."
+  );
+  assert.equal(
+    errorMessage(new Error("Failed to fetch")),
+    "Connexion momentanément interrompue. Vérifiez votre accès internet et réessayez."
+  );
+  assert.equal(
+    errorMessage(new Error("Solde insuffisant pour enregistrer ce colis hors forfait.")),
+    "Solde insuffisant pour enregistrer ce colis hors forfait."
+  );
 });
+
 
 
