@@ -59,6 +59,7 @@ export function getDb() {
       // seedDemo utilise le driver directement : passer par query() ici
       // attendrait la promesse `ready` en cours — deadlock garanti.
       if (modeDemo() && process.env.SEED_DEMO !== "0") await seedDemo(driver);
+      if (process.env.SEED_DEMO !== "0") await assurerComptesOperationnels(driver);
       return driver;
     })();
   }
@@ -511,3 +512,243 @@ async function seedDemo(db) {
     ["demo-enc-1", "demo-colis-1", "demo-abidjan", "demo-agent-koffi", "Koffi N'Guessan", 3500, "especes", jour, now]
   );
 }
+
+/**
+ * Mise en place opérationnelle idempotente (Shopin30 + Agence Pilote Daloa +
+ * Agences Démo Abidjan/Bouaké) pour que la console plateforme et les comptes
+ * de démonstration terrain soient immédiatement accessibles en production.
+ */
+async function assurerComptesOperationnels(db) {
+  try {
+    const now = new Date().toISOString();
+    const hashAdmin = hashPassword("Shopin30@2026!");
+    const hashDemo = hashPassword("demo1234");
+    const hashDaloa = hashPassword("Daloa2026!");
+
+    // 1. Comptes Administrateurs de la Console Plateforme (/plateforme.html)
+    await db.query(
+      `INSERT INTO plateforme_admins (id, email, name, password_hash, active, created_at_iso)
+       VALUES ($1, $2, $3, $4, TRUE, $5),
+              ($6, $7, $8, $9, TRUE, $5)
+       ON CONFLICT (email) DO UPDATE
+         SET name = EXCLUDED.name,
+             password_hash = EXCLUDED.password_hash,
+             active = TRUE`,
+      [
+        "admin-shopin30", "admin@shopin30.ci", "Direction Shopin30 (+225 05 01 30 33 43)", hashAdmin, now,
+        "demo-plateforme", "plateforme@colisexpress.ci", "Console Shopin30", hashDemo
+      ]
+    );
+    await db.query(
+      `INSERT INTO plateforme_amorcage (cle, admin_id, created_at_iso)
+       VALUES ('premier-admin', 'admin-shopin30', $1)
+       ON CONFLICT (cle) DO NOTHING`,
+      [now]
+    );
+
+    // 2. Agences de démonstration Abidjan & Bouaké (si absentes en production)
+    await db.query(
+      `INSERT INTO agencies (id, email, password_hash, name, city, phone, plan, portefeuille_fcfa, created_at_iso)
+       VALUES ($1, $2, $3, $4, $5, $6, 'pro', 2500, $7),
+              ($8, $9, $3, $10, $11, $12, 'gratuit', 500, $7)
+       ON CONFLICT (id) DO NOTHING`,
+      [
+        "demo-abidjan", "demo@colisexpress.ci", hashDemo, "Shopin30 Abidjan", "Abidjan", "0700000001", now,
+        "demo-bouake", "bouake@colisexpress.ci", "Agence Bouaké Centre", "Bouaké", "0500000002"
+      ]
+    );
+
+    // 3. Agence Pilote Daloa (prête pour les démonstrations terrain à Daloa)
+    await db.query(
+      `INSERT INTO agencies (id, email, password_hash, name, city, phone, plan, portefeuille_fcfa, marque_active, marque_nom, marque_couleur, marque_couleur_2, created_at_iso)
+       VALUES ($1, $2, $3, $4, $5, $6, 'pro', 5000, TRUE, $4, '#073b31', '#f27622', $7)
+       ON CONFLICT (id) DO UPDATE
+         SET email = EXCLUDED.email,
+             password_hash = EXCLUDED.password_hash,
+             name = EXCLUDED.name,
+             city = EXCLUDED.city`,
+      [
+        "pilote-daloa",
+        "daloa@colisexpress.ci",
+        hashDaloa,
+        "Gare Centrale Daloa (Shopin30)",
+        "Daloa",
+        "0501303343",
+        now
+      ]
+    );
+
+    // Équipe multi-villes de l'agence Pilote Daloa (1 gérant invité à Abidjan + 1 agent guichet à Daloa)
+    await db.query(
+      `INSERT INTO agents (id, agency_id, name, email, phone, city, password_hash, role, active, created_at_iso)
+       VALUES ($1, 'pilote-daloa', $2, $3, $4, 'Abidjan', $5, 'gerant', TRUE, $6),
+              ($7, 'pilote-daloa', $8, $9, $10, 'Daloa', $5, 'agent', TRUE, $6)
+       ON CONFLICT (email) DO UPDATE
+         SET password_hash = EXCLUDED.password_hash,
+             role = EXCLUDED.role,
+             city = EXCLUDED.city,
+             active = TRUE`,
+      [
+        "daloa-gerant-abidjan", "Konan Kouadio (Gérant Gare Abidjan)", "gerant.abidjan@colisexpress.ci", "0707066378", hashDaloa, now,
+        "daloa-agent-commerce", "Fatou Bamba (Guichet Daloa Commerce)", "guichet.daloa@colisexpress.ci", "0545511115"
+      ]
+    );
+
+    // Grille tarifaire au départ de Daloa
+    const tarifsDaloa = [
+      ["tarif-daloa-abj-1", "pilote-daloa", "Daloa", "Abidjan", 0, 2, 2000],
+      ["tarif-daloa-abj-2", "pilote-daloa", "Daloa", "Abidjan", 2, 5, 3000],
+      ["tarif-daloa-abj-3", "pilote-daloa", "Daloa", "Abidjan", 5, 15, 5000],
+      ["tarif-daloa-sp-1", "pilote-daloa", "Daloa", "San-Pédro", 0, 5, 3000],
+      ["tarif-daloa-man-1", "pilote-daloa", "Daloa", "Man", 0, 5, 2500],
+      ["tarif-daloa-bke-1", "pilote-daloa", "Daloa", "Bouaké", 0, 5, 3000]
+    ];
+    for (const [id, agencyId, orig, dest, min, max, prix] of tarifsDaloa) {
+      await db.query(
+        `INSERT INTO tarifs (id, agency_id, origin_city, destination_city, weight_min_kg, weight_max_kg, price_fcfa, active, created_at_iso)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE, $8)
+         ON CONFLICT (id) DO NOTHING`,
+        [id, agencyId, orig, dest, min, max, prix, now]
+      );
+    }
+
+    // Période de facturation du mois en cours pour Daloa (Forfait Pro payé) et Bouaké (48/50 colis)
+    const periodeCourante = clePeriode(new Date());
+    await db.query(
+      `INSERT INTO facturation_periodes (agency_id, periode, plan, quota, colis_comptes, colis_depassement,
+         abonnement_fcfa, abonnement_statut, echeance_iso, paye_le_iso, created_at_iso)
+       VALUES ('pilote-daloa', $1, 'pro', 400, 2, 0, 10000, 'paye', $2, $3, $3),
+              ('demo-bouake', $1, 'gratuit', 50, 48, 0, 0, 'sans_frais', NULL, NULL, $3),
+              ('demo-abidjan', $1, 'pro', 400, 4, 0, 10000, 'paye', $2, $3, $3)
+       ON CONFLICT (agency_id, periode) DO NOTHING`,
+      [periodeCourante, calculerEcheance(now), now]
+    );
+
+    await db.query(
+      `INSERT INTO portefeuille_mouvements (id, agency_id, type, montant_fcfa, solde_apres_fcfa, periode, libelle, reference, acteur_nom, created_at_iso)
+       VALUES ('mvt-daloa-init-1', 'pilote-daloa', 'recharge', 15000, 15000, NULL, 'Recharge initiale du portefeuille Daloa', 'MM-DALOA-001', 'Console Shopin30', $1),
+              ('mvt-daloa-init-2', 'pilote-daloa', 'abonnement', -10000, 5000, $2, $3, NULL, 'Console Shopin30', $1)
+       ON CONFLICT (id) DO NOTHING`,
+      [now, periodeCourante, `Abonnement Pro — ${libellePeriode(periodeCourante)}`]
+    );
+
+    // 3 Colis de démonstration pour la Gare Centrale Daloa
+    const colisDaloa = [
+      {
+        id: "colis-daloa-1",
+        code: "CLI-DALOA1",
+        owner: "pilote-daloa",
+        ownerName: "Gare Centrale Daloa (Shopin30)",
+        ownerCity: "Daloa",
+        dest: "demo-abidjan",
+        destName: "Shopin30 Abidjan",
+        destCity: "Abidjan",
+        nature: "Pièces détachées auto",
+        weight: 3.5,
+        price: 3000,
+        orig: "Daloa",
+        destVille: "Abidjan",
+        status: "Enregistré",
+        payStatus: "paye",
+        paid: 3000,
+        sender: { firstName: "Mamadou", lastName: "Coulibaly", phone: "0708133670", cni: "CI00998877" },
+        recipient: { firstName: "Sékou", lastName: "Bamba", phone: "0506182916" },
+        history: [{ status: "Enregistré", date: now, agencyName: "Gare Centrale Daloa (Shopin30)", city: "Daloa", actorName: "Fatou Bamba (Guichet Daloa Commerce)" }]
+      },
+      {
+        id: "colis-daloa-2",
+        code: "CLI-DALOA2",
+        owner: "pilote-daloa",
+        ownerName: "Gare Centrale Daloa (Shopin30)",
+        ownerCity: "Daloa",
+        dest: "demo-bouake",
+        destName: "Agence Bouaké Centre",
+        destCity: "Bouaké",
+        nature: "Marchandises commerçant Lobia",
+        weight: 5.0,
+        price: 3500,
+        orig: "Daloa",
+        destVille: "Bouaké",
+        status: "En transit",
+        payStatus: "paye",
+        paid: 3500,
+        sender: { firstName: "Adjara", lastName: "Koné", phone: "0748606431", cni: "CI11223344" },
+        recipient: { firstName: "Kouassi", lastName: "Yao", phone: "0757771040" },
+        history: [
+          { status: "Enregistré", date: now, agencyName: "Gare Centrale Daloa (Shopin30)", city: "Daloa", actorName: "Fatou Bamba (Guichet Daloa Commerce)" },
+          { status: "Expédié", date: now, agencyName: "Gare Centrale Daloa (Shopin30)", city: "Daloa", actorName: "Fatou Bamba (Guichet Daloa Commerce)" },
+          { status: "En transit", date: now, agencyName: "Gare Centrale Daloa (Shopin30)", city: "Daloa", actorName: "Fatou Bamba (Guichet Daloa Commerce)" }
+        ]
+      },
+      {
+        id: "colis-daloa-3",
+        code: "CLI-DALOA3",
+        owner: "demo-abidjan",
+        ownerName: "Shopin30 Abidjan",
+        ownerCity: "Abidjan",
+        dest: "pilote-daloa",
+        destName: "Gare Centrale Daloa (Shopin30)",
+        destCity: "Daloa",
+        nature: "Colis matériel médical & documents",
+        weight: 2.0,
+        price: 2500,
+        orig: "Abidjan",
+        destVille: "Daloa",
+        status: "Arrivé à l'agence de destination",
+        payStatus: "paye",
+        paid: 2500,
+        sender: { firstName: "Jean", lastName: "Koffi", phone: "0700000001", cni: "CI55667788" },
+        recipient: { firstName: "Drissa", lastName: "Ouattara", phone: "0545511115" },
+        history: [
+          { status: "Enregistré", date: now, agencyName: "Shopin30 Abidjan", city: "Abidjan" },
+          { status: "Expédié", date: now, agencyName: "Shopin30 Abidjan", city: "Abidjan" },
+          { status: "En transit", date: now, agencyName: "Shopin30 Abidjan", city: "Abidjan" },
+          { status: "Arrivé à l'agence de destination", date: now, agencyName: "Gare Centrale Daloa (Shopin30)", city: "Daloa", actorName: "Fatou Bamba (Guichet Daloa Commerce)" }
+        ]
+      }
+    ];
+
+    for (const c of colisDaloa) {
+      await db.query(
+        `INSERT INTO parcels (id, tracking_code, owner_id, owner_agency_name, owner_agency_city,
+           destination_agency_id, destination_agency_name, destination_agency_city,
+           sender, recipient, package_nature, weight_kg, price_fcfa,
+           origin_city, destination_city, status, history, payment_status, paid_amount_fcfa, created_at_iso)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+         ON CONFLICT (id) DO NOTHING`,
+        [
+          c.id, c.code, c.owner, c.ownerName, c.ownerCity,
+          c.dest, c.destName, c.destCity,
+          JSON.stringify(c.sender), JSON.stringify(c.recipient),
+          c.nature, c.weight, c.price, c.orig, c.destVille,
+          c.status, JSON.stringify(c.history), c.payStatus, c.paid, now
+        ]
+      );
+    }
+
+    // Encaissements du jour pour la caisse de Daloa
+    const jour = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Africa/Abidjan", year: "numeric", month: "2-digit", day: "2-digit"
+    }).format(new Date());
+    await db.query(
+      `INSERT INTO encaissements (id, parcel_id, agency_id, agent_id, agent_name, amount_fcfa, mode, date_key, created_at_iso)
+       VALUES ('enc-daloa-1', 'colis-daloa-1', 'pilote-daloa', 'daloa-agent-commerce', 'Fatou Bamba (Guichet Daloa Commerce)', 3000, 'especes', $1, $2),
+              ('enc-daloa-2', 'colis-daloa-2', 'pilote-daloa', 'daloa-agent-commerce', 'Fatou Bamba (Guichet Daloa Commerce)', 3500, 'mobile_money', $1, $2)
+       ON CONFLICT (id) DO NOTHING`,
+      [jour, now]
+    );
+
+    // Carnet clients de Daloa (pour l'auto-complétion instantanée en Mode Guichet Express)
+    await db.query(
+      `INSERT INTO clients (id, agency_id, kind, first_name, last_name, phone, cni, city, notes, created_at_iso, updated_at_iso)
+       VALUES ('cli-daloa-1', 'pilote-daloa', 'expediteur', 'Mamadou', 'Coulibaly', '0708133670', 'CI00998877', 'Daloa', 'Commerçant Quartier Commerce', $1, $1),
+              ('cli-daloa-2', 'pilote-daloa', 'destinataire', 'Sékou', 'Bamba', '0506182916', NULL, 'Abidjan', '', $1, $1),
+              ('cli-daloa-3', 'pilote-daloa', 'expediteur', 'Adjara', 'Koné', '0748606431', 'CI11223344', 'Daloa', 'Marché Lobia', $1, $1)
+       ON CONFLICT (agency_id, kind, phone) DO NOTHING`,
+      [now]
+    );
+  } catch (error) {
+    console.error("[db] assurerComptesOperationnels ignoré :", error?.message);
+  }
+}
+
