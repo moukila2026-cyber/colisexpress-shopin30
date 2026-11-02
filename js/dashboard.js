@@ -165,8 +165,10 @@ function renderForfait(resume, vue, estGerant) {
   if (boutonPlan) {
     boutonPlan.hidden = !estGerant;
     boutonPlan.textContent = resume.plan === "gratuit"
-      ? "⚡ Passer au forfait Pro (500 colis)"
-      : "Changer de forfait";
+      ? "⚡ Passer à Pro (400 colis) ou Réseau (1 000 colis)"
+      : resume.plan === "pro"
+        ? "⚡ Passer au forfait Réseau (1 000 colis)"
+        : "Changer de forfait";
   }
 }
 

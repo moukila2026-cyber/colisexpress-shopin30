@@ -54,11 +54,11 @@ function quotaTexte(quota) {
 }
 
 function renderSynthese() {
-  const { periode, resume, portefeuille, plan, planSuivant } = facturation;
+  const { periode, resume, portefeuille, plan, planSuivant, prixNegocieFCFA } = facturation;
   document.getElementById("planActuel").textContent = libellePlan(plan);
   document.getElementById("planDetail").textContent = planSuivant
     ? `Passage au plan ${libellePlan(planSuivant)} le 1er ${libellePeriode(periodeSuivante(periode.cle))}`
-    : plan === "reseau"
+    : plan === "reseau" && prixNegocieFCFA !== null
       ? `Quota négocié : ${quotaTexte(periode.quota)} colis`
       : `${quotaTexte(periode.quota)} colis inclus par mois`;
   document.getElementById("compteurColis").textContent =
@@ -106,8 +106,10 @@ function renderSynthese() {
     : "";
 }
 
+const RANG_PLAN = { gratuit: 0, pro: 1, reseau: 2 };
+
 function boutonPlan(plan) {
-  const { plan: actuel, planSuivant, peutModifier } = facturation;
+  const { plan: actuel, planSuivant, peutModifier, prixNegocieFCFA } = facturation;
   if (plan.id === actuel) {
     if (planSuivant && peutModifier) {
       return `<button class="button button-outline" type="button" data-plan="${escapeHTML(plan.id)}">Garder le plan ${escapeHTML(plan.label)}</button>`;
@@ -117,30 +119,32 @@ function boutonPlan(plan) {
   if (plan.surDevis) {
     return `<a class="button button-outline" href="${LIEN_DEVIS_RESEAU}" target="_blank" rel="noopener noreferrer">Demander un devis</a>`;
   }
-  if (actuel === "reseau") return '<span class="muted-note">Plan géré par Shopin30</span>';
+  if (actuel === "reseau" && prixNegocieFCFA !== null) return '<span class="muted-note">Plan géré par Shopin30</span>';
   if (planSuivant === plan.id) return '<span class="plan-current">Programmé le mois prochain</span>';
   if (!peutModifier) return '<span class="muted-note">Réservé au gérant</span>';
-  const libelle = plan.id === "pro" ? "Passer au Pro" : "Revenir au Gratuit le mois prochain";
-  return `<button class="button ${plan.id === "pro" ? "button-primary" : "button-outline"}" type="button" data-plan="${escapeHTML(plan.id)}">${libelle}</button>`;
+  const estMontee = (RANG_PLAN[plan.id] ?? 0) > (RANG_PLAN[actuel] ?? 0);
+  const libelle = estMontee ? `Passer au ${plan.label}` : `Revenir au ${plan.label} le mois prochain`;
+  return `<button class="button ${estMontee ? "button-primary" : "button-outline"}" type="button" data-plan="${escapeHTML(plan.id)}">${escapeHTML(libelle)}</button>`;
 }
 
 const AVANTAGES_PLAN = {
   gratuit: [
     "50 colis expédiés inclus chaque mois",
     "Réception de colis 100 % gratuite et illimitée",
-    "30 FCFA / colis supplémentaire sur le portefeuille",
+    "100 FCFA / colis supplémentaire sur le portefeuille",
     "Reçu QR, ticket 58 mm, caisse et bordereaux"
   ],
   pro: [
-    "500 colis expédiés inclus chaque mois (20 FCFA/colis)",
+    "400 colis expédiés inclus chaque mois (25 FCFA/colis)",
     "Activation immédiate en 1 clic (délai de paiement 7 jours)",
     "Comptes multi-agents nominatifs & suivi personnalisé (logo)",
-    "Relevé comptable PDF mensuel & 30 FCFA/colis hors forfait"
+    "Relevé comptable PDF mensuel & 100 FCFA/colis hors forfait"
   ],
   reseau: [
-    "Quota mensuel sur mesure ou illimité négocié",
+    "1 000 colis expédiés inclus chaque mois (15 FCFA/colis)",
+    "Activation immédiate en 1 clic (15 000 FCFA/mois)",
     "Déploiement multi-gares & compagnies de transport",
-    "Accompagnement terrain & support prioritaire Shopin30"
+    "Relevé PDF mensuel, 100 FCFA/colis hors forfait & support prioritaire"
   ]
 };
 
@@ -278,11 +282,14 @@ async function charger() {
 
 async function changerPlan(button) {
   const plan = button.dataset.plan;
-  const confirmation = plan === "pro" && facturation.plan !== "pro"
-    ? "Passer au plan Pro : 10 000 FCFA par mois, 500 colis inclus. L'abonnement de ce mois est prélevé sur le portefeuille dès que le solde le permet (échéance sous 7 jours). Confirmer ?"
-    : plan === "gratuit"
-      ? "Revenir au plan Gratuit au 1er du mois prochain ? Le mois en cours reste au plan actuel."
-      : null;
+  const estMontee = (RANG_PLAN[plan] ?? 0) > (RANG_PLAN[facturation.plan] ?? 0);
+  const confirmation = plan === "pro" && estMontee
+    ? "Passer au plan Pro : 10 000 FCFA par mois, 400 colis inclus (puis 100 FCFA/colis). L'abonnement de ce mois est prélevé sur le portefeuille dès que le solde le permet (échéance sous 7 jours). Confirmer ?"
+    : plan === "reseau" && estMontee
+      ? "Passer au plan Réseau : 15 000 FCFA par mois, 1 000 colis inclus (puis 100 FCFA/colis). L'abonnement de ce mois est prélevé sur le portefeuille dès que le solde le permet (échéance sous 7 jours). Confirmer ?"
+      : !estMontee && plan !== facturation.plan
+        ? `Revenir au plan ${libellePlan(plan)} au 1er du mois prochain ? Le mois en cours reste au plan actuel.`
+        : null;
   if (confirmation && !window.confirm(confirmation)) return;
   setButtonLoading(button, true, "Enregistrement…");
   try {
@@ -291,10 +298,10 @@ async function changerPlan(button) {
     renderAll();
     showToast(
       data.effet === "immediat"
-        ? "Votre agence est passée au plan Pro."
+        ? `Votre agence est passée au plan ${libellePlan(plan)}.`
         : data.effet === "annulation"
           ? "Le changement de plan programmé est annulé."
-          : "Le retour au plan Gratuit est programmé pour le mois prochain."
+          : `Le passage au plan ${libellePlan(plan)} est programmé pour le mois prochain.`
     );
   } catch (error) {
     showToast(errorMessage(error), "error");

@@ -33,16 +33,18 @@ import {
   validerRecharge
 } from "../js/metier-plans.js";
 
-test("catalogue : Gratuit 50 colis + 30 FCFA prépayés, Pro 10 000 FCFA / 500 colis, Réseau sur devis", () => {
+test("catalogue : Gratuit 50 colis + 100 FCFA prépayés, Pro 10 000 FCFA / 400 colis, Réseau 15 000 FCFA / 1 000 colis", () => {
   assert.deepEqual(IDS_PLANS, ["gratuit", "pro", "reseau"]);
   assert.equal(PLANS.gratuit.quotaMensuel, 50);
   assert.equal(PLANS.gratuit.prixMensuelFCFA, 0);
-  assert.equal(PLANS.gratuit.depassementFCFA, 30);
+  assert.equal(PLANS.gratuit.depassementFCFA, 100);
   assert.equal(PLANS.pro.prixMensuelFCFA, 10_000);
-  assert.equal(PLANS.pro.quotaMensuel, 500);
-  assert.equal(PLANS.reseau.surDevis, true);
-  assert.equal(PLANS.reseau.prixMensuelFCFA, null);
-  assert.equal(PRIX_DEPASSEMENT_FCFA, 30);
+  assert.equal(PLANS.pro.quotaMensuel, 400);
+  assert.equal(PLANS.reseau.surDevis, false);
+  assert.equal(PLANS.reseau.prixMensuelFCFA, 15_000);
+  assert.equal(PLANS.reseau.quotaMensuel, 1_000);
+  assert.equal(PLANS.reseau.depassementFCFA, 100);
+  assert.equal(PRIX_DEPASSEMENT_FCFA, 100);
   assert.ok(Object.isFrozen(PLANS) && Object.isFrozen(PLANS.pro), "le catalogue n'est pas modifiable à l'exécution");
 });
 
@@ -59,11 +61,12 @@ test("périodes mensuelles (fuseau d'Abidjan = UTC) : clé, bornes, mois suivant
   assert.equal(DELAI_ECHEANCE_JOURS, 7);
 });
 
-test("conditions d'un plan : Réseau négocié (quota vide = illimité)", () => {
+test("conditions d'un plan : Réseau 1 000 colis / 15 000 FCFA par défaut ou négocié (quota vide = illimité)", () => {
   assert.deepEqual(conditionsPlan({ plan: "gratuit" }), { plan: "gratuit", quota: 50, abonnementFCFA: 0 });
-  assert.deepEqual(conditionsPlan({ plan: "pro" }), { plan: "pro", quota: 500, abonnementFCFA: 10_000 });
+  assert.deepEqual(conditionsPlan({ plan: "pro" }), { plan: "pro", quota: 400, abonnementFCFA: 10_000 });
   assert.deepEqual(conditionsPlan({ plan: "reseau", quotaNegocie: 2000, prixNegocieFCFA: 45_000 }), { plan: "reseau", quota: 2000, abonnementFCFA: 45_000 });
-  assert.deepEqual(conditionsPlan({ plan: "reseau" }), { plan: "reseau", quota: null, abonnementFCFA: 0 });
+  assert.deepEqual(conditionsPlan({ plan: "reseau", quotaNegocie: null, prixNegocieFCFA: 0 }), { plan: "reseau", quota: null, abonnementFCFA: 0 });
+  assert.deepEqual(conditionsPlan({ plan: "reseau" }), { plan: "reseau", quota: 1_000, abonnementFCFA: 15_000 });
   assert.deepEqual(conditionsPlan({ plan: "inconnu" }), { plan: "gratuit", quota: 50, abonnementFCFA: 0 }, "repli prudent sur le Gratuit");
 });
 
@@ -88,27 +91,30 @@ test("quota effectif : un abonnement impayé après échéance ramène au quota 
   assert.equal(quotaEffectif({ quota: 50, now }), 50);
 });
 
-test("décision de création : inclus jusqu'au quota, puis 30 FCFA prépayés ; illimité = toujours inclus", () => {
+test("décision de création : inclus jusqu'au quota, puis 100 FCFA prépayés ; illimité = toujours inclus", () => {
   assert.deepEqual(decisionCreation({ rang: 50, quota: 50 }), { type: "inclus", montantFCFA: 0 });
-  assert.deepEqual(decisionCreation({ rang: 51, quota: 50 }), { type: "depassement", montantFCFA: 30 });
-  assert.deepEqual(decisionCreation({ rang: 501, quota: 500 }), { type: "depassement", montantFCFA: 30 });
+  assert.deepEqual(decisionCreation({ rang: 51, quota: 50 }), { type: "depassement", montantFCFA: 100 });
+  assert.deepEqual(decisionCreation({ rang: 401, quota: 400 }), { type: "depassement", montantFCFA: 100 });
+  assert.deepEqual(decisionCreation({ rang: 1001, quota: 1000 }), { type: "depassement", montantFCFA: 100 });
   assert.deepEqual(decisionCreation({ rang: 100_000, quota: null }), { type: "inclus", montantFCFA: 0 });
   const message = messageQuotaAtteint({ plan: "gratuit", quota: 50, soldeFCFA: 10 });
   assert.match(message, /quota du plan Gratuit est atteint \(50 colis/);
-  assert.match(message, /30 FCFA/);
+  assert.match(message, /100 FCFA/);
   assert.match(message, /solde : 10 FCFA/);
   assert.match(message, /colis déjà enregistrés continuent d'avancer/, "le message rassure : rien n'est bloqué en cours de route");
   assert.match(messageQuotaAtteint({ plan: "pro", quota: 50, enRetard: true }), /impayé après son échéance/);
 });
 
-test("changement de plan par le gérant : Pro immédiat, Gratuit le mois suivant, Réseau sur devis", () => {
+test("changement de plan par le gérant : montée immédiate (Pro / Réseau), descente le mois suivant, contrat négocié protégé", () => {
   assert.deepEqual(validerChangementPlan({ planActuel: "gratuit", planDemande: "pro" }).valeur, { plan: "pro", effet: "immediat" });
+  assert.deepEqual(validerChangementPlan({ planActuel: "gratuit", planDemande: "reseau" }).valeur, { plan: "reseau", effet: "immediat" });
+  assert.deepEqual(validerChangementPlan({ planActuel: "pro", planDemande: "reseau" }).valeur, { plan: "reseau", effet: "immediat" });
   assert.deepEqual(validerChangementPlan({ planActuel: "pro", planDemande: "gratuit" }).valeur, { plan: "gratuit", effet: "periode_suivante" });
+  assert.deepEqual(validerChangementPlan({ planActuel: "reseau", planDemande: "pro" }).valeur, { plan: "pro", effet: "periode_suivante" });
   assert.deepEqual(validerChangementPlan({ planActuel: "pro", planSuivant: "gratuit", planDemande: "pro" }).valeur, { plan: "pro", effet: "annulation" });
   assert.match(validerChangementPlan({ planActuel: "pro", planSuivant: "gratuit", planDemande: "gratuit" }).error, /déjà programmé/);
   assert.match(validerChangementPlan({ planActuel: "gratuit", planDemande: "gratuit" }).error, /déjà au plan Gratuit/);
-  assert.match(validerChangementPlan({ planActuel: "gratuit", planDemande: "reseau" }).error, /sur devis/);
-  assert.match(validerChangementPlan({ planActuel: "reseau", planDemande: "gratuit" }).error, /géré par Shopin30/);
+  assert.match(validerChangementPlan({ planActuel: "reseau", planDemande: "gratuit", prixNegocieFCFA: 45_000 }).error, /géré par Shopin30/);
   assert.match(validerChangementPlan({ planActuel: "gratuit", planDemande: "vip" }).error, /inconnu/);
 });
 
@@ -139,7 +145,7 @@ test("projections : période normalisée, synthèse et échéances à venir", ()
   assert.equal(periode.inclusRestants, 2);
   assert.deepEqual(periode.abonnement, { montantFCFA: 10_000, statut: "du", enRetard: false, echeanceISO: "2026-10-20T00:00:00.000Z", payeLeISO: null });
 
-  const resume = resumeFacturation({ periode, soldeFCFA: 95 });
+  const resume = resumeFacturation({ periode, soldeFCFA: 350 });
   assert.equal(resume.colisPrepayes, 3);
   assert.equal(resume.prochainColis.type, "inclus");
   assert.match(resume.alerte, /Plus que 2 colis inclus/);
@@ -167,10 +173,10 @@ test("compteur temps réel (LOT 10) : libellés, niveaux normal → alerte (80 %
   assert.equal(alerte.recharger, true);
   assert.equal(affichageCompteur({ compteur: 39, quotaEffectif: 50 }).niveau, "normal");
 
-  const horsForfait = affichageCompteur({ compteur: 50, quotaEffectif: 50, soldeFCFA: 900 });
+  const horsForfait = affichageCompteur({ compteur: 50, quotaEffectif: 50, soldeFCFA: 3000 });
   assert.equal(horsForfait.niveau, "danger");
   assert.equal(horsForfait.pourcentage, 100);
-  assert.equal(horsForfait.detail, "Hors forfait : 30 FCFA par colis — votre solde couvre 30 colis");
+  assert.equal(horsForfait.detail, "Hors forfait : 100 FCFA par colis — votre solde couvre 30 colis");
 
   const insuffisant = affichageCompteur({ compteur: 52, quotaEffectif: 50, soldeFCFA: 10 });
   assert.equal(insuffisant.libelle, "Colis ce mois : 52 / 50");
@@ -193,7 +199,7 @@ test("phrase du prochain colis (LOT 10) : inclus, hors forfait débité, refus a
   assert.equal(phraseProchainColis({ compteur: 0, quotaEffectif: 50 }).texte, "Ce colis sera le 1er sur 50 inclus ce mois-ci.");
   assert.equal(phraseProchainColis({ compteur: 45, quotaEffectif: 50 }).niveau, "alerte");
   const debite = phraseProchainColis({ compteur: 50, quotaEffectif: 50, soldeFCFA: 900 });
-  assert.equal(debite.texte, "Ce colis sera hors forfait : 30 FCFA débités du portefeuille (solde après : 870 FCFA).");
+  assert.equal(debite.texte, "Ce colis sera hors forfait : 100 FCFA débités du portefeuille (solde après : 800 FCFA).");
   assert.deepEqual([debite.niveau, debite.bloque], ["alerte", false]);
   const refus = phraseProchainColis({ compteur: 50, quotaEffectif: 50, soldeFCFA: 20 });
   assert.match(refus.texte, /Quota atteint \(50 colis\) et portefeuille insuffisant \(20 FCFA\)/);

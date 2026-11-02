@@ -413,25 +413,25 @@ async function seedDemo(db) {
 
   // LOT 6 — plans et portefeuilles : Abidjan au plan Pro (abonnement du mois
   // réglé depuis le portefeuille, 2 500 FCFA restants : la prochaine échéance
-  // demandera une recharge), Bouaké au plan Gratuit (48/50, 60 FCFA = 2 colis
+  // demandera une recharge), Bouaké au plan Gratuit (48/50, 200 FCFA = 2 colis
   // hors forfait prépayés). Mouvements journalisés comme en production.
   const periodeDemo = clePeriode(new Date(maintenant));
   const debutMoisISO = new Date(debutMois).toISOString();
   const apresOuvertureISO = new Date(Math.min(maintenant, debutMois + 60_000)).toISOString();
   await db.query("UPDATE agencies SET plan = 'pro', portefeuille_fcfa = 2500 WHERE id = 'demo-abidjan'");
-  await db.query("UPDATE agencies SET plan = 'gratuit', portefeuille_fcfa = 60 WHERE id = 'demo-bouake'");
+  await db.query("UPDATE agencies SET plan = 'gratuit', portefeuille_fcfa = 200 WHERE id = 'demo-bouake'");
   const compteurAbidjan = colis.filter((c) => c.owner === "demo-abidjan" && creeCeMois(c)).length;
   await db.query(
     `INSERT INTO facturation_periodes (agency_id, periode, plan, quota, colis_comptes, colis_depassement,
        abonnement_fcfa, abonnement_statut, echeance_iso, paye_le_iso, created_at, created_at_iso)
-     VALUES ('demo-abidjan', $1, 'pro', 500, $2, 0, 10000, 'paye', $3, $4, $5, $6),
+     VALUES ('demo-abidjan', $1, 'pro', 400, $2, 0, 10000, 'paye', $3, $4, $5, $6),
             ('demo-bouake', $1, 'gratuit', 50, $7, 0, 0, 'sans_frais', NULL, NULL, $5, $6)`,
     [periodeDemo, compteurAbidjan, calculerEcheance(debutMoisISO), apresOuvertureISO, debutMoisISO, debutMoisISO, COMPTEUR_BOUAKE]
   );
   const mouvements = [
     ["demo-mvt-1", "demo-abidjan", "recharge", 12500, 12500, null, "Recharge du portefeuille", "MM-DEMO-0001", "Console Shopin30", debutMoisISO],
     ["demo-mvt-2", "demo-abidjan", "abonnement", -10000, 2500, periodeDemo, `Abonnement Pro — ${libellePeriode(periodeDemo)}`, null, null, apresOuvertureISO],
-    ["demo-mvt-3", "demo-bouake", "recharge", 60, 60, null, "Recharge du portefeuille", "MM-DEMO-0002", "Console Shopin30", debutMoisISO]
+    ["demo-mvt-3", "demo-bouake", "recharge", 200, 200, null, "Recharge du portefeuille", "MM-DEMO-0002", "Console Shopin30", debutMoisISO]
   ];
   for (const [id, agence, type, montant, solde, periode, libelle, reference, acteur, date] of mouvements) {
     await db.query(

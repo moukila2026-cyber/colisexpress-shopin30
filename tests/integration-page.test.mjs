@@ -609,11 +609,12 @@ test("le LOT 5 (notifications simulées, journal, deux agences, sans donnée per
 test("le LOT 6 (plans, quotas, portefeuille, console plateforme) est câblé de bout en bout", () => {
   // Règles partagées : les tarifs du cahier des charges.
   const metier = lire("js/metier-plans.js");
-  assert.match(metier, /PRIX_DEPASSEMENT_FCFA = 30/, "dépassement : 30 FCFA par colis");
+  assert.match(metier, /PRIX_DEPASSEMENT_FCFA = 100/, "dépassement : 100 FCFA par colis");
   assert.match(metier, /quotaMensuel: 50/, "Gratuit : 50 colis par mois");
   assert.match(metier, /prixMensuelFCFA: 10_000/, "Pro : 10 000 FCFA par mois");
-  assert.match(metier, /quotaMensuel: 500/, "Pro : 500 colis inclus");
-  assert.match(metier, /surDevis: true/, "Réseau : sur devis");
+  assert.match(metier, /quotaMensuel: 400/, "Pro : 400 colis inclus");
+  assert.match(metier, /prixMensuelFCFA: 15_000/, "Réseau : 15 000 FCFA par mois");
+  assert.match(metier, /quotaMensuel: 1_000/, "Réseau : 1 000 colis inclus");
 
   // Serveur : la facturation n'est consultée qu'à la CRÉATION d'un colis.
   const app = lire("lib/app.js");
@@ -1087,9 +1088,13 @@ test("les forfaits et le parcours de changement d'offre (accueil, inscription, g
   assert.match(indexHtml, /id="forfaits"/, "section #forfaits présente sur index.html");
   assert.match(indexHtml, /id="homePricingGrid"/, "grille #homePricingGrid présente sur index.html");
   assert.match(indexHtml, /50 colis expédiés offerts/, "offre Gratuit 50 colis affichée sur l'accueil");
+  assert.match(indexHtml, /100 FCFA \/ colis/, "hors forfait 100 FCFA/colis affiché sur l'accueil");
   assert.match(indexHtml, /10 000 FCFA/, "offre Pro 10 000 FCFA affichée sur l'accueil");
-  assert.match(indexHtml, /500 colis expédiés inclus/, "quota 500 colis Pro affiché sur l'accueil");
+  assert.match(indexHtml, /400 colis expédiés inclus/, "quota 400 colis Pro affiché sur l'accueil");
+  assert.match(indexHtml, /15 000 FCFA/, "offre Réseau 15 000 FCFA affichée sur l'accueil");
+  assert.match(indexHtml, /1 000 colis expédiés inclus/, "quota 1 000 colis Réseau affiché sur l'accueil");
   assert.match(indexHtml, /inscription\.html\?plan=pro/, "CTA d'inscription directe au forfait Pro depuis l'accueil");
+  assert.match(indexHtml, /inscription\.html\?plan=reseau/, "CTA d'inscription directe au forfait Réseau depuis l'accueil");
 
   // 2. Page d'inscription : sélecteur #agencyPlan pré-rempli via ?plan=pro
   const inscriptionHtml = lire("inscription.html");

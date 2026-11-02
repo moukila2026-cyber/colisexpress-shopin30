@@ -271,15 +271,15 @@ CREATE TABLE IF NOT EXISTS notifications (
 CREATE INDEX IF NOT EXISTS idx_notifications_agency ON notifications (agency_id, created_at);
 
 -- LOT 6 — plans, quotas, portefeuille, console plateforme (additif, idempotent).
--- Plan de l'agence : 'gratuit' (50 colis/mois, puis 30 FCFA prépayés),
--- 'pro' (10 000 FCFA/mois, 500 colis), 'reseau' (sur devis : quota et prix
--- négociés, quota NULL = illimité). `plan_suivant` = retour au Gratuit
--- programmé au début du mois suivant. Le portefeuille ne peut jamais être
--- négatif (contrainte) : les colis hors forfait sont PRÉPAYÉS.
+-- Plan de l'agence : 'gratuit' (50 colis/mois, puis 100 FCFA prépayés),
+-- 'pro' (10 000 FCFA/mois, 400 colis, puis 100 FCFA/colis), 'reseau' (15 000 FCFA/mois,
+-- 1 000 colis, puis 100 FCFA/colis, ou quota/prix négociés, quota NULL = illimité).
+-- `plan_suivant` = changement de plan programmé au début du mois suivant. Le portefeuille
+-- ne peut jamais être négatif (contrainte) : les colis hors forfait sont PRÉPAYÉS.
 ALTER TABLE agencies ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'gratuit'
   CHECK (plan IN ('gratuit', 'pro', 'reseau'));
 ALTER TABLE agencies ADD COLUMN IF NOT EXISTS plan_suivant TEXT
-  CHECK (plan_suivant IS NULL OR plan_suivant IN ('gratuit', 'pro'));
+  CHECK (plan_suivant IS NULL OR plan_suivant IN ('gratuit', 'pro', 'reseau'));
 ALTER TABLE agencies ADD COLUMN IF NOT EXISTS quota_negocie INTEGER;
 ALTER TABLE agencies ADD COLUMN IF NOT EXISTS prix_negocie_fcfa INTEGER;
 ALTER TABLE agencies ADD COLUMN IF NOT EXISTS portefeuille_fcfa INTEGER NOT NULL DEFAULT 0

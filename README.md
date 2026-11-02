@@ -58,8 +58,9 @@ plus aucune dépendance à Firebase.
   simulation si aucun transport ne fonctionne ; page Notifications et panneau
   console avec journal (aucun numéro de téléphone dans les logs)
 - **Plans, quotas et portefeuille (LOT 6)** : plan par agence — **Gratuit**
-  (50 colis/mois, puis 30 FCFA par colis prépayés sur le portefeuille),
-  **Pro** (10 000 FCFA/mois, 500 colis inclus), **Réseau** (sur devis).
+  (50 colis/mois, puis 100 FCFA par colis prépayés sur le portefeuille),
+  **Pro** (10 000 FCFA/mois, 400 colis inclus, puis 100 FCFA/colis),
+  **Réseau** (15 000 FCFA/mois, 1 000 colis inclus, puis 100 FCFA/colis).
   Seule l'agence **expéditrice** est comptée : l'agence de destination ne
   paie jamais. Seule la **création** d'un nouveau colis peut être refusée
   (quota atteint et portefeuille insuffisant) : un solde impayé ne bloque
@@ -93,7 +94,7 @@ plus aucune dépendance à Firebase.
   base pour distinguer Preview et Production)
 - **Compteur de colis en temps réel (LOT 10)** : sur chaque page agence,
   « Colis ce mois : 37 / 50 » avec barre de progression et détail (« reste
-  13 inclus », « hors forfait : 30 FCFA par colis — votre solde couvre N
+  13 inclus », « hors forfait : 100 FCFA par colis — votre solde couvre N
   colis », « illimité ») en trois niveaux (normal, alerte dès 80 %, danger)
   et lien « Recharger » pour le gérant ; carte **Mon forfait** sur le
   tableau de bord ; ligne permanente « Ce colis sera le 38e sur 50 inclus »
@@ -457,10 +458,10 @@ npm test
     l'application tant qu'aucun transport réel n'est configuré.
 18. **Abonnement** : page « Abonnement » — plan actuel, compteur des colis
     enregistrés ce mois (jauge), portefeuille et mouvements, échéances et
-    historique. Le gérant passe au **Pro** (abonnement prélevé sur le
-    portefeuille dès que le solde le permet, échéance à 7 jours) ou revient
-    au **Gratuit** au 1er du mois suivant ; le **Réseau** se demande par
-    devis. Au-delà du quota, chaque colis est prélevé de 30 FCFA à
+    historique. Le gérant passe au **Pro** (400 colis — 10 000 FCFA/mois) ou
+    au **Réseau** (1 000 colis — 15 000 FCFA/mois) avec effet immédiat, ou
+    revient au **Gratuit** au 1er du mois suivant. Au-delà du quota, chaque
+    colis est prélevé de 100 FCFA à
     l'enregistrement ; sans solde, la création est refusée avec un message
     clair (le formulaire « Nouveau colis » prévient avant). En démo :
     connectez-vous avec `bouake@colisexpress.ci` et enregistrez 5 colis.

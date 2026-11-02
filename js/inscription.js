@@ -23,7 +23,7 @@ const prefillPlan = getQueryParam("plan");
 if (prefillName && document.getElementById("agencyName")) document.getElementById("agencyName").value = prefillName;
 if (prefillCity && document.getElementById("agencyCity")) document.getElementById("agencyCity").value = prefillCity;
 if (prefillPhone && document.getElementById("agencyPhone")) document.getElementById("agencyPhone").value = prefillPhone;
-if (prefillPlan && ["gratuit", "pro"].includes(prefillPlan.toLowerCase()) && document.getElementById("agencyPlan")) {
+if (prefillPlan && ["gratuit", "pro", "reseau"].includes(prefillPlan.toLowerCase()) && document.getElementById("agencyPlan")) {
   document.getElementById("agencyPlan").value = prefillPlan.toLowerCase();
 }
 
@@ -37,7 +37,7 @@ form?.addEventListener("submit", async (event) => {
   const phone = normalizeIvorianPhone(values.phone);
   const email = values.email.trim();
   const password = values.password;
-  const plan = values.plan === "pro" ? "pro" : "gratuit";
+  const plan = ["pro", "reseau"].includes(values.plan) ? values.plan : "gratuit";
 
   if (name.length < 2) {
     showPageMessage(message, "Indiquez le nom de votre agence.");
