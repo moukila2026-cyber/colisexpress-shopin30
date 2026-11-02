@@ -2,12 +2,13 @@
  * Plans, quotas, portefeuille et échéances (LOT 6) — règles partagées
  * client/serveur (aucune dépendance : importable par le navigateur et Node).
  *
- * - Gratuit : 50 colis par mois inclus ; au-delà, 30 FCFA par colis,
+ * - Gratuit : 50 colis par mois inclus ; au-delà, 100 FCFA par colis,
  *   PRÉPAYÉS sur le portefeuille de l'agence.
- * - Pro : 10 000 FCFA par mois, 500 colis inclus ; au-delà, même règle
- *   (30 FCFA par colis prépayés).
- * - Réseau : sur devis — quota et montant mensuel négociés, fixés par la
- *   console plateforme (quota vide = illimité).
+ * - Pro : 10 000 FCFA par mois, 400 colis inclus ; au-delà, même règle
+ *   (100 FCFA par colis prépayés).
+ * - Réseau : 15 000 FCFA par mois, 1 000 colis inclus (puis 100 FCFA par
+ *   colis prépayés), ou quota/montant négociés depuis la console plateforme
+ *   (quota vide = illimité).
  *
  * Invariants (appliqués côté serveur, lib/facturation.js + lib/app.js) :
  * - seule l'agence EXPÉDITRICE (celle qui enregistre le colis) est comptée :
@@ -17,7 +18,7 @@
  *   cours — lecture, progression, réception, contrôle, retour restent garantis.
  */
 
-export const PRIX_DEPASSEMENT_FCFA = 30;
+export const PRIX_DEPASSEMENT_FCFA = 100;
 /** Délai de paiement d'un abonnement, à compter de l'ouverture du mois (ou de la souscription). */
 export const DELAI_ECHEANCE_JOURS = 7;
 export const MAX_RECHARGE_FCFA = 1_000_000;
@@ -32,25 +33,25 @@ export const PLANS = Object.freeze({
     quotaMensuel: 50,
     depassementFCFA: PRIX_DEPASSEMENT_FCFA,
     surDevis: false,
-    description: "50 colis par mois inclus, puis 30 FCFA par colis, prépayés sur le portefeuille."
+    description: "50 colis par mois inclus, puis 100 FCFA par colis, prépayés sur le portefeuille."
   }),
   pro: Object.freeze({
     id: "pro",
     label: "Pro",
     prixMensuelFCFA: 10_000,
-    quotaMensuel: 500,
+    quotaMensuel: 400,
     depassementFCFA: PRIX_DEPASSEMENT_FCFA,
     surDevis: false,
-    description: "10 000 FCFA par mois, 500 colis inclus, puis 30 FCFA par colis prépayés."
+    description: "10 000 FCFA par mois, 400 colis inclus, puis 100 FCFA par colis prépayés."
   }),
   reseau: Object.freeze({
     id: "reseau",
     label: "Réseau",
-    prixMensuelFCFA: null,
-    quotaMensuel: null,
+    prixMensuelFCFA: 15_000,
+    quotaMensuel: 1_000,
     depassementFCFA: PRIX_DEPASSEMENT_FCFA,
-    surDevis: true,
-    description: "Sur devis : volume et prix mensuel négociés avec Shopin30 pour les réseaux d'agences."
+    surDevis: false,
+    description: "15 000 FCFA par mois, 1 000 colis inclus, puis 100 FCFA par colis prépayés."
   })
 });
 
@@ -130,14 +131,22 @@ export function calculerEcheance(date = new Date()) {
 
 /**
  * Conditions d'un plan pour une nouvelle période : quota inclus (null =
- * illimité) et montant de l'abonnement mensuel. Réseau : valeurs négociées.
+ * illimité) et montant de l'abonnement mensuel. Réseau : 1 000 colis /
+ * 15 000 FCFA par défaut, ou valeurs négociées fixées par la plateforme.
  */
 export function conditionsPlan({ plan, quotaNegocie = null, prixNegocieFCFA = null } = {}) {
   if (plan === "reseau") {
+    if (quotaNegocie !== null || prixNegocieFCFA !== null) {
+      return {
+        plan: "reseau",
+        quota: Number.isInteger(quotaNegocie) && quotaNegocie > 0 ? quotaNegocie : null,
+        abonnementFCFA: Number.isInteger(prixNegocieFCFA) && prixNegocieFCFA > 0 ? prixNegocieFCFA : 0
+      };
+    }
     return {
       plan: "reseau",
-      quota: Number.isInteger(quotaNegocie) && quotaNegocie > 0 ? quotaNegocie : null,
-      abonnementFCFA: Number.isInteger(prixNegocieFCFA) && prixNegocieFCFA > 0 ? prixNegocieFCFA : 0
+      quota: PLANS.reseau.quotaMensuel,
+      abonnementFCFA: PLANS.reseau.prixMensuelFCFA
     };
   }
   const definition = PLANS[plan] ?? PLANS.gratuit;
@@ -176,7 +185,7 @@ export function quotaEffectif({ quota = null, abonnement = null, now = new Date(
 
 /**
  * Décision pour le `rang`-ième colis enregistré dans la période (1 = premier) :
- * inclus dans le forfait, ou dépassement à 30 FCFA prépayés.
+ * inclus dans le forfait, ou dépassement à 100 FCFA prépayés.
  */
 export function decisionCreation({ rang, quota, depassementFCFA = PRIX_DEPASSEMENT_FCFA }) {
   if (quota === null || quota === undefined || rang <= quota) return { type: "inclus", montantFCFA: 0 };
@@ -193,19 +202,19 @@ export function messageQuotaAtteint({ plan, quota, soldeFCFA = 0, montantFCFA = 
 
 /* ------------------------------ validations ------------------------------ */
 
+const RANG_PLAN = Object.freeze({ gratuit: 0, pro: 1, reseau: 2 });
+
 /**
- * Changement de plan demandé par le gérant : Gratuit ↔ Pro (Réseau = sur
- * devis, fixé par la plateforme). Montée en Pro immédiate (abonnement dû tout
- * de suite, prélevé sur le portefeuille si le solde le permet) ; retour au
- * Gratuit au début du mois suivant (le mois payé reste acquis). Redemander le
- * plan actuel annule un retour programmé.
+ * Changement de plan demandé par le gérant : Gratuit ↔ Pro ↔ Réseau (sauf
+ * contrat Réseau négocié sur mesure par la plateforme). Montée de gamme
+ * (Gratuit → Pro, Gratuit → Réseau, Pro → Réseau) : immédiate (abonnement dû
+ * tout de suite, prélevé sur le portefeuille si le solde le permet) ; descente
+ * de gamme : programmée au début du mois suivant (le mois en cours reste
+ * acquis). Redemander le plan actuel annule un changement programmé.
  */
-export function validerChangementPlan({ planActuel, planSuivant = null, planDemande }) {
+export function validerChangementPlan({ planActuel, planSuivant = null, planDemande, prixNegocieFCFA = null }) {
   if (!estPlan(planDemande)) return { error: "Le plan demandé est inconnu (gratuit, pro ou réseau)." };
-  if (planDemande === "reseau") {
-    return { error: "Le plan Réseau est sur devis : contactez Shopin30 pour le mettre en place." };
-  }
-  if (planActuel === "reseau") {
+  if (planActuel === "reseau" && prixNegocieFCFA !== null) {
     return { error: "Votre plan Réseau est géré par Shopin30 : contactez-nous pour le modifier." };
   }
   if (planDemande === planActuel) {
@@ -215,7 +224,8 @@ export function validerChangementPlan({ planActuel, planSuivant = null, planDema
   if (planSuivant === planDemande) {
     return { error: `Le passage au plan ${libellePlan(planDemande)} est déjà programmé pour le mois prochain.` };
   }
-  return { valeur: { plan: planDemande, effet: planDemande === "pro" ? "immediat" : "periode_suivante" } };
+  const estMontee = (RANG_PLAN[planDemande] ?? 0) > (RANG_PLAN[planActuel] ?? 0);
+  return { valeur: { plan: planDemande, effet: estMontee ? "immediat" : "periode_suivante" } };
 }
 
 function entierOptionnel(value) {

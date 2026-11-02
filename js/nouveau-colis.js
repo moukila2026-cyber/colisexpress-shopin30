@@ -44,7 +44,7 @@ let tarifs = [];
 
 /**
  * LOT 6 — rappel du quota avant l'enregistrement : colis inclus restants,
- * colis hors forfait prépayé (30 FCFA) ou portefeuille insuffisant. Le
+ * colis hors forfait prépayé (100 FCFA) ou portefeuille insuffisant. Le
  * serveur reste seul juge (POST /api/colis) ; ce bandeau n'est qu'informatif.
  */
 function afficherProchainColis(resume) {
@@ -66,7 +66,7 @@ async function rafraichirQuota() {
     notice.hidden = !resume.alerte;
     notice.classList.toggle("notice-danger", Boolean(insuffisant || resume.enRetard));
     notice.innerHTML = resume.alerte
-      ? `${escapeHTML(resume.alerte)} <a class="table-link" href="abonnement.html">Voir l'abonnement</a> · <a class="table-link" href="abonnement.html#plansSection">Passer au forfait Pro (500 colis)</a> · <a class="table-link" href="abonnement.html#recharge">Recharger le portefeuille</a>`
+      ? `${escapeHTML(resume.alerte)} <a class="table-link" href="abonnement.html">Voir l'abonnement</a> · <a class="table-link" href="abonnement.html#plansSection">Passer au forfait Pro (400 colis) ou Réseau (1 000 colis)</a> · <a class="table-link" href="abonnement.html#recharge">Recharger le portefeuille</a>`
       : "";
   } catch {
     notice.hidden = true;

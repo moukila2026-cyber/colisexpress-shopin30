@@ -1839,7 +1839,7 @@ function nouveauColis(clientHttp, destinationAgencyId, i = 0) {
   });
 }
 
-test("abonnement : Gratuit par défaut, 50 colis inclus puis 30 FCFA prépayés, refus net (402) sans solde", async () => {
+test("abonnement : Gratuit par défaut, 50 colis inclus puis 100 FCFA prépayés, refus net (402) sans solde", async () => {
   const a = client();
   const b = client();
   const agenceA = await creerAgence(a, "Agence QuotaA", "Abidjan");
@@ -1858,7 +1858,7 @@ test("abonnement : Gratuit par défaut, 50 colis inclus puis 30 FCFA prépayés,
   assert.equal(premier.status, 201, JSON.stringify(premier.data));
   assert.deepEqual(premier.data.facturation, { periode: initiale.periode.cle, type: "inclus", montantFCFA: 0 });
 
-  // 50 colis déjà enregistrés ce mois-ci : le 51e demande 30 FCFA prépayés.
+  // 50 colis déjà enregistrés ce mois-ci : le 51e demande 100 FCFA prépayés.
   await fixerCompteur(agenceA.id, 50);
   const refuse = await nouveauColis(a, agenceB.id, 1);
   assert.equal(refuse.status, 402);
@@ -1869,13 +1869,13 @@ test("abonnement : Gratuit par défaut, 50 colis inclus puis 30 FCFA prépayés,
   assert.equal((await facturation(a)).periode.compteur, 50, "le rang réservé est rendu");
 
   const { p } = await consolePlateforme();
-  const recharge = await p.post("/api/plateforme/credit", { agencyId: agenceA.id, montantFCFA: 60, reference: "MM-QUOTA-1" });
+  const recharge = await p.post("/api/plateforme/credit", { agencyId: agenceA.id, montantFCFA: 200, reference: "MM-QUOTA-1" });
   assert.equal(recharge.status, 201, JSON.stringify(recharge.data));
-  assert.equal(recharge.data.soldeFCFA, 60);
+  assert.equal(recharge.data.soldeFCFA, 200);
 
   const horsForfait1 = await nouveauColis(a, agenceB.id, 2);
   assert.equal(horsForfait1.status, 201, JSON.stringify(horsForfait1.data));
-  assert.deepEqual(horsForfait1.data.facturation, { periode: initiale.periode.cle, type: "depassement", montantFCFA: 30, soldeApresFCFA: 30 });
+  assert.deepEqual(horsForfait1.data.facturation, { periode: initiale.periode.cle, type: "depassement", montantFCFA: 100, soldeApresFCFA: 100 });
   const horsForfait2 = await nouveauColis(a, agenceB.id, 3);
   assert.equal(horsForfait2.data.facturation.soldeApresFCFA, 0);
   assert.equal((await nouveauColis(a, agenceB.id, 4)).status, 402, "portefeuille vide : refus");
@@ -1885,11 +1885,11 @@ test("abonnement : Gratuit par défaut, 50 colis inclus puis 30 FCFA prépayés,
   assert.equal(etat.periode.depassements, 2);
   assert.equal(etat.portefeuille.soldeFCFA, 0);
   const [m1, m2, m3] = etat.portefeuille.mouvements;
-  assert.deepEqual([m1.type, m1.montantFCFA, m1.soldeApresFCFA], ["depassement", -30, 0]);
+  assert.deepEqual([m1.type, m1.montantFCFA, m1.soldeApresFCFA], ["depassement", -100, 0]);
   assert.equal(m1.libelle, `Colis hors forfait — ${horsForfait2.data.parcel.trackingCode}`);
   assert.equal(m1.parcelId, horsForfait2.data.parcel.id);
-  assert.deepEqual([m2.type, m2.montantFCFA, m2.soldeApresFCFA], ["depassement", -30, 30]);
-  assert.deepEqual([m3.type, m3.montantFCFA, m3.soldeApresFCFA, m3.reference], ["recharge", 60, 60, "MM-QUOTA-1"]);
+  assert.deepEqual([m2.type, m2.montantFCFA, m2.soldeApresFCFA], ["depassement", -100, 100]);
+  assert.deepEqual([m3.type, m3.montantFCFA, m3.soldeApresFCFA, m3.reference], ["recharge", 200, 200, "MM-QUOTA-1"]);
   assert.match(m3.acteurNom, /Console Test/);
 
   // Résumé léger (formulaire « Nouveau colis ») et aucune route de suppression.
@@ -1972,7 +1972,7 @@ test("abonnement Pro : gérant seul, prélèvement automatique, échéance, reto
   assert.equal(pro.status, 200, JSON.stringify(pro.data));
   assert.equal(pro.data.effet, "immediat");
   assert.equal(pro.data.facturation.plan, "pro");
-  assert.equal(pro.data.facturation.periode.quotaEffectif, 500);
+  assert.equal(pro.data.facturation.periode.quotaEffectif, 400);
   assert.equal(pro.data.facturation.periode.abonnement.statut, "paye", "prélevé tout de suite : le solde suffit");
   assert.equal(pro.data.facturation.portefeuille.soldeFCFA, 2000);
   assert.deepEqual(
@@ -1982,7 +1982,6 @@ test("abonnement Pro : gérant seul, prélèvement automatique, échéance, reto
   assert.match(pro.data.facturation.portefeuille.mouvements[0].libelle, /^Abonnement Pro — /);
   assert.equal((await g.post("/api/facturation/abonnement", {})).status, 400, "rien à régler");
   assert.match((await g.post("/api/facturation/plan", { plan: "pro" })).data.error, /déjà au plan Pro/);
-  assert.match((await g.post("/api/facturation/plan", { plan: "reseau" })).data.error, /sur devis/);
 
   // Retour au Gratuit : programmé au mois suivant (le mois payé reste acquis), annulable.
   const retour = await g.post("/api/facturation/plan", { plan: "gratuit" });
@@ -2120,11 +2119,11 @@ test("facturation en concurrence : compteur et portefeuille restent exacts, jama
   const { p } = await consolePlateforme();
   await facturation(a);
   await fixerCompteur(agenceA.id, 50);
-  await p.post("/api/plateforme/credit", { agencyId: agenceA.id, montantFCFA: 90, reference: "MM-CONC-1" });
+  await p.post("/api/plateforme/credit", { agencyId: agenceA.id, montantFCFA: 300, reference: "MM-CONC-1" });
 
   const resultats = await Promise.all([0, 1, 2, 3, 4].map((i) => nouveauColis(a, agenceB.id, 50 + i)));
   const statuts = resultats.map((r) => r.status).sort();
-  assert.deepEqual(statuts, [201, 201, 201, 402, 402], "exactement 3 colis hors forfait prépayés (90 FCFA)");
+  assert.deepEqual(statuts, [201, 201, 201, 402, 402], "exactement 3 colis hors forfait prépayés (300 FCFA)");
   const etat = await facturation(a);
   assert.equal(etat.portefeuille.soldeFCFA, 0);
   assert.equal(etat.periode.compteur, 53);
@@ -2859,7 +2858,7 @@ test("LOT 13 : relevé PDF cloisonné, export console et archive mensuelle idemp
   assert.ok(deuxiemeTache.resultats.relevesDejaArchives >= premiereTache.resultats.relevesArchives);
 });
 
-test("inscription directe avec choix du forfait Pro active immédiatement le quota de 500 colis", async () => {
+test("inscription directe avec choix du forfait Pro (400 colis) ou Réseau (1 000 colis) active immédiatement le quota", async () => {
   const c = client();
   const email = compteUnique("pro-direct");
   const res = await c.post("/api/register", {
@@ -2875,7 +2874,26 @@ test("inscription directe avec choix du forfait Pro active immédiatement le quo
 
   const etat = await facturation(c);
   assert.equal(etat.plan, "pro");
-  assert.equal(etat.periode.quotaEffectif, 500);
+  assert.equal(etat.periode.quotaEffectif, 400);
+  assert.equal(etat.periode.abonnement.montantFCFA, 10_000);
+
+  const c2 = client();
+  const email2 = compteUnique("reseau-direct");
+  const res2 = await c2.post("/api/register", {
+    name: "Agence Daloa Réseau",
+    city: "Daloa",
+    phone: "+225 07 22 33 44 55",
+    email: email2,
+    password: "secret12",
+    plan: "reseau"
+  });
+  assert.equal(res2.status, 201);
+  assert.equal(res2.data.agency.plan, "reseau");
+
+  const etat2 = await facturation(c2);
+  assert.equal(etat2.plan, "reseau");
+  assert.equal(etat2.periode.quotaEffectif, 1_000);
+  assert.equal(etat2.periode.abonnement.montantFCFA, 15_000);
 });
 
 test.after(() => {
