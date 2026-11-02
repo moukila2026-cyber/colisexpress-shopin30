@@ -57,6 +57,48 @@
         <button class="button button-outline" id="refreshConsole" type="button">Actualiser</button>
       </div>
 
+      <div class="easy-guide-tabs plateforme-nav-tabs" id="plateformeTabs" role="tablist" aria-label="Onglets de la console administrateur">
+        <button class="easy-tab-btn is-active" type="button" role="tab" aria-selected="true" data-plateforme-tab="supervision">📊 Supervision du réseau</button>
+        <button class="easy-tab-btn" type="button" role="tab" aria-selected="false" data-plateforme-tab="mode-emploi">❓ Comment utiliser l'espace Administrateur facilement</button>
+      </div>
+
+      <section class="panel-card guide-topic-card" id="adminGuidePanel" hidden aria-labelledby="adminGuideTitle">
+        <div class="panel-title-row">
+          <div>
+            <span class="eyebrow">Guide pas-à-pas Shopin30</span>
+            <h2 id="adminGuideTitle">Comment utiliser l'espace Administrateur facilement</h2>
+            <p class="muted-note">Tout ce que vous pouvez faire dans cette console en 4 gestes simples, sans jamais risquer de bloquer une agence :</p>
+          </div>
+        </div>
+        <div class="easy-steps-grid">
+          <article class="easy-step-card">
+            <span class="easy-step-badge">Action 1 · Forfaits &amp; Gérants</span>
+            <h3>Activer ou adapter le forfait d'une agence</h3>
+            <p>Dans le tableau <strong>« Agences »</strong>, cliquez sur le bouton <strong>Gérer</strong> de l'agence. Choisissez son forfait : <strong>Gratuit</strong> (50 colis + 2 gérants max), <strong>Pro</strong> (10 000 FCFA / 400 colis + 5 gérants max) ou <strong>Réseau</strong> (15 000 FCFA / 1 000 colis ou contrat sur mesure + gérants illimités).</p>
+            <button class="button button-outline button-small" type="button" data-admin-jump="agencesSectionPanel">Aller aux agences →</button>
+          </article>
+          <article class="easy-step-card">
+            <span class="easy-step-badge">Action 2 · Portefeuille FCFA</span>
+            <h3>Créditer le portefeuille d'une agence</h3>
+            <p>Lorsqu'une agence règle par Mobile Money, virement ou espèces, cliquez sur <strong>Gérer</strong> sur sa ligne, saisissez le montant reçu en FCFA et la référence de transaction, puis cliquez sur <strong>Créditer le portefeuille</strong>. Si un abonnement mensuel était dû, il se règle automatiquement !</p>
+            <button class="button button-orange button-small" type="button" data-admin-jump="agencesSectionPanel">Créditer une agence →</button>
+          </article>
+          <article class="easy-step-card">
+            <span class="easy-step-badge">Action 3 · Zéro perte de colis</span>
+            <h3>Suivre les incidents (&gt; 7 j) et les litiges</h3>
+            <p>Les tableaux <strong>« File plateforme »</strong> et <strong>« Litiges »</strong> affichent automatiquement les colis bloqués ou contestés entre deux agences. Vous voyez l'agence expéditrice, l'agence de destination et la note interne pour arbitrer rapidement.</p>
+            <button class="button button-outline button-small" type="button" data-admin-jump="litigesSectionPanel">Voir les incidents &amp; litiges →</button>
+          </article>
+          <article class="easy-step-card">
+            <span class="easy-step-badge">Action 4 · Automatisation &amp; PDF</span>
+            <h3>Relevés comptables PDF &amp; tâche quotidienne</h3>
+            <p>Depuis la fiche <strong>Gérer</strong> d'une agence, téléchargez son <strong>Relevé mensuel PDF</strong> pour n'importe quel mois. Vous pouvez aussi lancer le balayage quotidien (rappels d'échéance et archivage des relevés) en 1 clic avec <strong>Exécuter maintenant</strong>.</p>
+            <button class="button button-outline button-small" type="button" data-admin-jump="tachesQuotidiennesPanel">Voir la tâche quotidienne →</button>
+          </article>
+        </div>
+      </section>
+
+      <div id="plateformeSupervisionContent">
       <section class="stats-grid" aria-label="Indicateurs du réseau">
         <article class="stat-card"><div class="stat-card-top"><small>Agences inscrites</small><span class="stat-icon" aria-hidden="true">⌂</span></div><strong class="stat-number" id="kpiAgences">—</strong><small class="stat-detail" id="kpiAbonnements"></small></article>
         <article class="stat-card"><div class="stat-card-top"><small>Colis enregistrés ce mois</small><span class="stat-icon" aria-hidden="true">▦</span></div><strong class="stat-number" id="kpiColisMois">—</strong><small class="stat-detail" id="kpiColisTotal"></small></article>
@@ -83,7 +125,7 @@
         <div id="transportsNotificationsListe"></div>
       </section>
 
-      <section class="panel-card parcels-panel">
+      <section class="panel-card parcels-panel" id="litigesSectionPanel">
         <div class="panel-title-row"><h2>File plateforme : incidents ouverts depuis plus de 7 jours</h2><span id="fileCount">—</span></div>
         <div id="fileList"></div>
       </section>
@@ -93,7 +135,7 @@
         <div id="litigesList"></div>
       </section>
 
-      <section class="panel-card parcels-panel">
+      <section class="panel-card parcels-panel" id="agencesSectionPanel">
         <div class="panel-title-row"><h2>Agences : plan, compteur du mois, portefeuille</h2><span id="agencesCount">—</span></div>
         <div id="agencesList"></div>
       </section>
@@ -102,6 +144,7 @@
         <div class="panel-title-row"><h2>Volumes du réseau</h2><span id="volumesTotal">—</span></div>
         <div class="volumes-grid" id="volumesList"></div>
       </section>
+      </div>
     </div>
   </main>
 

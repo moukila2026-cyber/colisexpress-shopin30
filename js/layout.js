@@ -9,6 +9,53 @@ import { affichageCompteur } from "./metier-plans.js";
  *  - POST /api/colis renvoie le compteur à jour → mise à jour immédiate ;
  *  - BroadcastChannel : les autres onglets de la même agence sont prévenus.
  */
+const CONSEILS_PAGES = {
+  dashboard: {
+    icone: "👋",
+    texte: "Ici, vous voyez tous vos colis en un coup d'œil. Cliquez sur « ＋ Nouveau colis » pour enregistrer un envoi ou sur « Voir » pour faire avancer un colis.",
+    lien: "guide.html#section-guichet"
+  },
+  nouveau: {
+    icone: "📦",
+    texte: "Remplissez l'expéditeur, le destinataire et le colis, ou cliquez sur « ⚡ Mode guichet express » et sur les puces rapides pour aller 3 fois plus vite.",
+    lien: "guide.html#section-guichet"
+  },
+  colis: {
+    icone: "🚚",
+    texte: "Cliquez sur le bouton orange d'étape (Expédié → En transit → Arrivé → Retiré) pour faire avancer ce colis. Vous pouvez aussi réimprimer le reçu.",
+    lien: "guide.html#section-acheminement"
+  },
+  bordereaux: {
+    icone: "🚌",
+    texte: "Regroupez tous les colis d'un même départ de car sur une fiche unique avec « ＋ Créer un bordereau », puis pointez-les à l'arrivée.",
+    lien: "guide.html#section-acheminement"
+  },
+  clients: {
+    icone: "📇",
+    texte: "Votre carnet d'adresses se remplit tout seul à chaque colis ! Tapez un numéro au guichet pour retrouver le client automatiquement.",
+    lien: "guide.html#section-guichet"
+  },
+  caisse: {
+    icone: "💰",
+    texte: "Suivez l'argent encaissé aujourd'hui (Espèces et Mobile Money). Le soir, comptez votre tiroir et cliquez sur « Clôturer la journée ».",
+    lien: "guide.html#section-caisse"
+  },
+  notifications: {
+    icone: "🔔",
+    texte: "Retrouvez ici toutes les alertes automatiques (incidents, colis arrivés, rappels) envoyées par WhatsApp ou SMS.",
+    lien: "guide.html#section-acheminement"
+  },
+  abonnement: {
+    icone: "⭐",
+    texte: "Changez de forfait en 1 clic (Gratuit 50 colis, Pro 400 colis, Réseau 1 000 colis), rechargez votre portefeuille ou téléchargez vos relevés PDF des 12 mois.",
+    lien: "guide.html#section-caisse"
+  },
+  parametres: {
+    icone: "⚙️",
+    texte: "Pré-remplissez vos tarifs ivoiriens en 1 clic et invitez vos gérants (2 en Gratuit, 5 en Pro, illimité en Réseau) et vos agents par ville.",
+    lien: "guide.html#section-equipe"
+  }
+};
 const INTERVALLE_RESUME_MS = 20000;
 const CANAL_COMPTEUR = "colisexpress-compteur";
 let canal = null;
@@ -66,9 +113,26 @@ export async function initAgencyLayout(agency, activePage) {
       if (existingAction) actionsWrap.append(existingAction);
       desktopHeading.append(actionsWrap);
     }
+    if (activePage !== "guide") {
+      actionsWrap.insertAdjacentHTML(
+        "beforeend",
+        '<a class="button button-ghost button-small desktop-help-button" href="guide.html" title="Ouvrir le mode d\'emploi pas-à-pas">❓ Mode d\'emploi</a>'
+      );
+    }
     actionsWrap.insertAdjacentHTML(
       "beforeend",
       '<button class="button button-outline button-small desktop-logout-button" data-logout type="button" title="Se déconnecter de l\'espace agence">↪ Se déconnecter</button>'
+    );
+  }
+  const conseil = CONSEILS_PAGES[activePage];
+  if (conseil && desktopHeading && !document.querySelector(".page-easy-tip")) {
+    desktopHeading.insertAdjacentHTML(
+      "afterend",
+      `<div class="page-easy-tip" role="note">
+        <span class="page-easy-tip-icon" aria-hidden="true">${conseil.icone}</span>
+        <p class="page-easy-tip-text"><strong>Astuce simple :</strong> ${escapeHTML(conseil.texte)}</p>
+        <a class="page-easy-tip-link" href="${escapeHTML(conseil.lien)}">Voir comment faire →</a>
+      </div>`
     );
   }
   document.querySelectorAll("[data-logout]").forEach((button) => {
@@ -249,6 +313,7 @@ export function agencySidebar() {
         <a href="notifications.html" data-nav="notifications"><span aria-hidden="true">✉</span> Notifications <b class="nav-badge" data-notif-count hidden></b></a>
         <a href="abonnement.html" data-nav="abonnement"><span aria-hidden="true">◎</span> Abonnement</a>
         <a href="parametres.html" data-nav="parametres"><span aria-hidden="true">⚙</span> Paramètres</a>
+        <a href="guide.html" data-nav="guide"><span aria-hidden="true">❓</span> Mode d'emploi</a>
       </nav>
       <div class="sidebar-footer">
         <a class="public-link" href="index.html"><span aria-hidden="true">↗</span> Voir le site public</a>

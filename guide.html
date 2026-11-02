@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Mode d'emploi pas-à-pas de l'espace de gestion COLIS EXPRESS.">
+  <title>Mode d'emploi — COLIS EXPRESS</title>
+  <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body class="agency-page">
+  <div class="app-shell">
+    <div id="sidebarMount"></div>
+    <main class="agency-main">
+      <div id="topbarMount"></div>
+      <div class="agency-content">
+        <div class="page-banner" aria-hidden="true"><img src="assets/img/agence-tri.jpg" alt="" width="1408" height="768" loading="lazy"></div>
+        <header class="desktop-page-heading">
+          <div>
+            <h1>Mode d'emploi facile</h1>
+            <p>Tout comprendre en un coup d'œil pour piloter <strong data-agency-name>votre agence</strong> sans jamais être bloqué.</p>
+          </div>
+          <a class="button button-orange" href="nouveau-colis.html">＋ Nouveau colis</a>
+        </header>
+
+        <div class="page-message" id="pageMessage" hidden role="alert"></div>
+
+        <section class="panel-card guide-checklist-panel" aria-labelledby="checklistTitle">
+          <div class="panel-title-row">
+            <div>
+              <h2 id="checklistTitle">🚀 Démarrage rapide de votre agence (4 étapes)</h2>
+              <p class="muted-note">Voici où en est votre agence aujourd'hui. Cliquez sur une étape pour l'accomplir immédiatement :</p>
+            </div>
+            <span class="plan-badge plan-badge-pro" id="checklistProgressBadge">Vérification…</span>
+          </div>
+          <div class="guide-checklist-grid" id="guideChecklistGrid">
+            <div class="loading-state">Vérification de votre configuration…</div>
+          </div>
+        </section>
+
+        <section class="panel-card guide-filter-panel" aria-label="Rechercher dans le mode d'emploi">
+          <div class="guide-search-row">
+            <div class="field" style="flex:1;">
+              <label for="guideSearchInput">Que cherchez-vous à faire aujourd'hui ?</label>
+              <input id="guideSearchInput" name="guideSearch" type="search" placeholder="Ex. imprimer un ticket 58 mm, inviter un gérant à Bouaké, clôturer la caisse, télécharger le PDF…">
+            </div>
+          </div>
+          <div class="easy-guide-tabs guide-category-tabs" id="guideFilterTabs" role="tablist" aria-label="Catégories du guide">
+            <button class="easy-tab-btn is-active" type="button" data-guide-filter="tout">✨ Tout voir</button>
+            <button class="easy-tab-btn" type="button" data-guide-filter="guichet">📦 1. Guichet &amp; Colis</button>
+            <button class="easy-tab-btn" type="button" data-guide-filter="acheminement">🚌 2. Bordereaux &amp; Arrivées</button>
+            <button class="easy-tab-btn" type="button" data-guide-filter="caisse">💰 3. Caisse &amp; Abonnement</button>
+            <button class="easy-tab-btn" type="button" data-guide-filter="equipe">👥 4. Gérants &amp; Points CI</button>
+          </div>
+        </section>
+
+        <div id="guideSectionsContainer" class="guide-sections-stack">
+          <section class="panel-card guide-topic-card" id="section-guichet" data-guide-category="guichet">
+            <div class="panel-title-row">
+              <div>
+                <span class="eyebrow">Étape 1 · Au comptoir</span>
+                <h2>📦 Enregistrer un colis et remettre le reçu en 30 secondes</h2>
+              </div>
+              <a class="button button-orange button-small" href="nouveau-colis.html">＋ Aller au guichet</a>
+            </div>
+            <div class="easy-steps-grid">
+              <article class="easy-step-card">
+                <span class="easy-step-badge">Geste 1</span>
+                <h3>Activez le « Mode guichet express ⚡ »</h3>
+                <p>En haut de la page <strong>Nouveau colis</strong>, cliquez sur le bouton <strong>⚡ Mode guichet express</strong>. Si le client est déjà venu, tapez son numéro de téléphone : son nom et sa CNI se remplissent tout seuls !</p>
+              </article>
+              <article class="easy-step-card">
+                <span class="easy-step-badge">Geste 2</span>
+                <h3>Cliquez sur les puces rapides</h3>
+                <p>Plus besoin de tout taper au clavier : cliquez directement sur <strong>Colis</strong>, <strong>Documents</strong> ou <strong>Sac de riz</strong>, puis sur le poids (<strong>1 kg, 2 kg, 5 kg…</strong>) et la ville d'arrivée (<strong>Abidjan, Bouaké, San-Pédro…</strong>).</p>
+              </article>
+              <article class="easy-step-card">
+                <span class="easy-step-badge">Geste 3</span>
+                <h3>Encaissez et imprimez en 1 clic</h3>
+                <p>Choisissez si le colis est <strong>Payé en totalité</strong>, en <strong>Avance partielle</strong> ou <strong>Payable à la livraison</strong>. Cliquez sur <strong>Enregistrer</strong> : le reçu avec QR code s'ouvre. Vous pouvez l'imprimer en <strong>ticket 58 mm</strong>, en A4 ou l'envoyer sur <strong>WhatsApp</strong>.</p>
+              </article>
+            </div>
+          </section>
+
+          <section class="panel-card guide-topic-card" id="section-acheminement" data-guide-category="acheminement">
+            <div class="panel-title-row">
+              <div>
+                <span class="eyebrow">Étape 2 · Départ car &amp; arrivée</span>
+                <h2>🚌 Bordereaux de route, réception et zéro perte de colis</h2>
+              </div>
+              <a class="button button-primary button-small" href="bordereaux.html">＋ Créer un bordereau</a>
+            </div>
+            <div class="easy-steps-grid">
+              <article class="easy-step-card">
+                <span class="easy-step-badge">Geste 1</span>
+                <h3>Créez un bordereau quand le car charge</h3>
+                <p>Dans l'onglet <strong>Bordereaux</strong>, cliquez sur <strong>« ＋ Créer un bordereau »</strong>, cochez les colis qui montent dans le car et indiquez le nom du chauffeur ou l'immatriculation. Imprimez la fiche manifeste.</p>
+              </article>
+              <article class="easy-step-card">
+                <span class="easy-step-badge">Geste 2</span>
+                <h3>Pointez les colis à l'arrivée du car</h3>
+                <p>À l'arrivée, l'agence ou le point de réception ouvre le bordereau et coche chaque colis reçu (<strong>Reçu / Manquant / Endommagé</strong>). S'il manque un colis, un <strong>incident</strong> est ouvert automatiquement pour alerter les deux gares.</p>
+              </article>
+              <article class="easy-step-card">
+                <span class="easy-step-badge">Geste 3</span>
+                <h3>Remettez le colis contre pièce d'identité</h3>
+                <p>Sur la fiche du colis arrivé, encaissez le reste dû s'il y en a un, puis cliquez sur <strong>Valider le retrait</strong> en notant le nom et le numéro de CNI de la personne qui récupère le colis.</p>
+              </article>
+            </div>
+          </section>
+
+          <section class="panel-card guide-topic-card" id="section-caisse" data-guide-category="caisse">
+            <div class="panel-title-row">
+              <div>
+                <span class="eyebrow">Étape 3 · Argent &amp; facturation</span>
+                <h2>💰 Caisse du jour, Forfaits &amp; Relevés PDF des 12 mois</h2>
+              </div>
+              <div class="forfait-actions">
+                <a class="button button-outline button-small" href="caisse.html">Ouvrir la Caisse</a>
+                <a class="button button-orange button-small" href="abonnement.html">Voir l'Abonnement</a>
+              </div>
+            </div>
+            <div class="easy-steps-grid">
+              <article class="easy-step-card">
+                <span class="easy-step-badge">Caisse du soir</span>
+                <h3>Clôturez votre caisse en 10 secondes</h3>
+                <p>Chaque paiement au guichet s'ajoute tout seul dans l'onglet <strong>Caisse</strong> (séparé entre <em>Espèces</em> et <em>Mobile Money</em>). En fin de journée, comptez l'argent réel du tiroir, tapez le total et validez la clôture.</p>
+              </article>
+              <article class="easy-step-card">
+                <span class="easy-step-badge">Forfaits souples</span>
+                <h3>Changez de forfait ou rechargez à 100 FCFA/colis</h3>
+                <p>Vous démarrez avec <strong>50 colis offerts/mois</strong>. Besoin de plus ? Passez en 1 clic au forfait <strong>Pro (10 000 FCFA / 400 colis)</strong> ou <strong>Réseau (15 000 FCFA / 1 000 colis)</strong>, ou rechargez votre portefeuille pour continuer à <strong>100 FCFA / colis</strong>.</p>
+              </article>
+              <article class="easy-step-card">
+                <span class="easy-step-badge">Comptabilité</span>
+                <h3>Téléchargez vos relevés PDF sur les 12 mois</h3>
+                <p>Dans l'onglet <strong>Abonnement → Relevé mensuel PDF</strong>, choisissez n'importe quel mois de l'année (Janvier à Décembre) et l'année souhaitée pour télécharger votre relevé comptable officiel en PDF.</p>
+              </article>
+            </div>
+          </section>
+
+          <section class="panel-card guide-topic-card" id="section-equipe" data-guide-category="equipe">
+            <div class="panel-title-row">
+              <div>
+                <span class="eyebrow">Étape 4 · Multi-villes en Côte d'Ivoire</span>
+                <h2>👥 Gérants par forfait (2 / 5 / illimité) &amp; Points centralisés</h2>
+              </div>
+              <a class="button button-primary button-small" href="parametres.html">Gérer mon équipe &amp; mes points</a>
+            </div>
+            <div class="easy-steps-grid">
+              <article class="easy-step-card">
+                <span class="easy-step-badge">Quotas de gérants</span>
+                <h3>Combien de gérants pouvez-vous inviter ?</h3>
+                <p>Le créateur de l'agence peut inviter des <strong>Gérants</strong> pour superviser ses points en Côte d'Ivoire selon son forfait : <strong>2 gérants max en Gratuit</strong>, <strong>5 gérants max en Pro</strong>, et <strong>gérants illimités en Réseau</strong>. Les comptes <em>Agents</em> de guichet sont illimités sur tous les forfaits.</p>
+              </article>
+              <article class="easy-step-card">
+                <span class="easy-step-badge">Points en CI</span>
+                <h3>Affectez chaque gérant ou agent à sa ville</h3>
+                <p>Dans <em>Paramètres → Équipe de l'agence</em>, indiquez la ville du point (<strong>Abidjan, Bouaké, San-Pédro, Daloa, Korhogo, Yamoussoukro, Man…</strong>) lors de l'invitation. Vos points apparaissent automatiquement dans le formulaire <strong>Nouveau colis</strong>.</p>
+              </article>
+              <article class="easy-step-card">
+                <span class="easy-step-badge">Zéro fraude</span>
+                <h3>Tout est centralisé et protégé</h3>
+                <p>Que le colis parte d'Abidjan vers votre propre point de Bouaké ou vers une agence partenaire, le quota, le portefeuille et la caisse sont <strong>centralisés sous votre agence</strong>. Aucun dépassement non autorisé ni perte de colis n'est possible.</p>
+              </article>
+            </div>
+          </section>
+        </div>
+
+        <div class="empty-state" id="guideNoResult" hidden>
+          <h3>Aucun conseil ne correspond à votre recherche</h3>
+          <p>Essayez un mot plus simple comme « colis », « bordereau », « caisse », « gérant » ou « tarif ».</p>
+          <button class="button button-outline" id="resetGuideSearch" type="button">Afficher tout le mode d'emploi</button>
+        </div>
+      </div>
+    </main>
+  </div>
+  <script type="module" src="js/guide.js"></script>
+</body>
+</html>

@@ -30,6 +30,7 @@ const entrees = {
   "bordereau.html": "js/bordereau-public.js",
   "notifications.html": "js/notifications.js",
   "abonnement.html": "js/abonnement.js",
+  "guide.html": "js/guide.js",
   "plateforme.html": "js/plateforme.js",
   "paiement-simulation.html": "js/paiement-simulation.js"
 };
@@ -1144,6 +1145,20 @@ test("les forfaits et le parcours de changement d'offre (accueil, inscription, g
     errorMessage(new Error("Solde insuffisant pour enregistrer ce colis hors forfait.")),
     "Solde insuffisant pour enregistrer ce colis hors forfait."
   );
+
+  // 6. Mode d'emploi facile sur la landing page, l'espace agence (guide.html) et la console admin (plateforme.html)
+  assert.match(indexHtml, /href="#guide-facile"/, "lien Mode d'emploi facile dans la navigation publique");
+  assert.match(indexHtml, /id="easyGuideTabs"/, "onglets interactifs du mode d'emploi sur la landing page");
+  assert.match(layoutJs, /href="guide\.html"/, "lien Mode d'emploi dans la barre latérale et l'en-tête agence");
+
+  const guideHtml = lire("guide.html");
+  for (const id of ["guideChecklistGrid", "guideSearchInput", "guideFilterTabs", "section-guichet", "section-acheminement", "section-caisse", "section-equipe"]) {
+    assert.ok(guideHtml.includes(`id="${id}"`), `guide.html expose #${id}`);
+  }
+
+  const plateformeHtml = lire("plateforme.html");
+  assert.match(plateformeHtml, /id="plateformeTabs"/, "onglets de navigation dans la console administrateur");
+  assert.match(plateformeHtml, /id="adminGuidePanel"/, "panneau Mode d'emploi dans la console administrateur");
 });
 
 

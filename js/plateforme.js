@@ -510,6 +510,33 @@ function boot() {
   document.getElementById("planForm").addEventListener("submit", appliquerPlan);
   document.getElementById("creditForm").addEventListener("submit", crediter);
   document.getElementById("telechargerReleveConsole").addEventListener("click", telechargerReleveConsole);
+
+  const activerOngletPlateforme = (cible) => {
+    const guidePanel = document.getElementById("adminGuidePanel");
+    const supervisionContent = document.getElementById("plateformeSupervisionContent");
+    document.querySelectorAll("[data-plateforme-tab]").forEach((btn) => {
+      const actif = btn.dataset.plateformeTab === cible;
+      btn.classList.toggle("is-active", actif);
+      btn.setAttribute("aria-selected", actif ? "true" : "false");
+    });
+    if (guidePanel) guidePanel.hidden = cible !== "mode-emploi";
+    if (supervisionContent) supervisionContent.hidden = cible === "mode-emploi";
+  };
+
+  document.getElementById("plateformeTabs")?.addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-plateforme-tab]");
+    if (!btn) return;
+    activerOngletPlateforme(btn.dataset.plateformeTab);
+  });
+
+  document.getElementById("adminGuidePanel")?.addEventListener("click", (event) => {
+    const jump = event.target.closest("[data-admin-jump]");
+    if (!jump) return;
+    const sectionId = jump.dataset.adminJump;
+    activerOngletPlateforme("supervision");
+    const targetEl = document.getElementById(sectionId);
+    targetEl?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
   // LOT 10 — compteurs des agences rafraîchis toutes les 30 s (onglet visible, aucune fenêtre ouverte).
   window.setInterval(() => {
     if (vue && document.visibilityState === "visible" && modal.hidden) charger({ silencieux: true });

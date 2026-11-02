@@ -1427,5 +1427,247 @@ dd { margin: 4px 0 0; color: var(--ink); overflow-wrap: anywhere; font-size: .88
   font-weight: 700;
 }
 
+/* Mode d'emploi pas-à-pas (Landing page + Espace Agence + Console Admin) */
+.easy-guide-section {
+  background: linear-gradient(180deg, #f3faf6 0%, #ffffff 100%);
+  border-radius: 20px;
+  border: 1px solid var(--line);
+}
+.easy-guide-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.easy-tab-btn {
+  padding: 11px 18px;
+  border-radius: 999px;
+  border: 1.5px solid var(--line);
+  background: #fff;
+  color: var(--green-950);
+  font-weight: 800;
+  font-size: .9rem;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease, color .15s ease, transform .12s ease;
+}
+.easy-tab-btn:hover {
+  border-color: var(--green-800);
+  background: var(--green-50);
+}
+.easy-tab-btn.is-active {
+  background: var(--green-900);
+  border-color: var(--green-900);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(7, 59, 49, .18);
+}
+.easy-steps-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 16px;
+}
+.easy-step-card {
+  padding: 18px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-top: 4px solid var(--orange);
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  box-shadow: 0 4px 14px rgba(10, 46, 36, .04);
+}
+.easy-step-badge {
+  display: inline-flex;
+  align-self: start;
+  justify-self: start;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--green-100);
+  color: var(--green-900);
+  font-size: .75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.easy-step-card h3 {
+  margin: 0;
+  font-size: 1.02rem;
+  color: var(--green-950);
+}
+.easy-step-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: .88rem;
+  line-height: 1.5;
+}
+.easy-guide-cta {
+  margin-top: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+/* Bandeau d'astuce contextuelle en haut de chaque page agence */
+.page-easy-tip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin-bottom: 16px;
+  padding: 11px 16px;
+  border-radius: 12px;
+  background: #f4fbf7;
+  border: 1px solid #cde6d8;
+  border-left: 4px solid var(--green-800);
+}
+.page-easy-tip-icon {
+  font-size: 1.2rem;
+  line-height: 1;
+}
+.page-easy-tip-text {
+  margin: 0;
+  flex: 1 1 280px;
+  font-size: .86rem;
+  color: var(--green-950);
+  line-height: 1.45;
+}
+.page-easy-tip-link {
+  font-size: .82rem;
+  font-weight: 800;
+  color: var(--orange);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.page-easy-tip-link:hover {
+  text-decoration: underline;
+}
+
+/* Lanceur d'actions rapides sur le Tableau de bord */
+.quick-launcher-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(215px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+.quick-launcher-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1.5px solid var(--line);
+  background: #fff;
+  text-decoration: none;
+  color: var(--green-950);
+  transition: border-color .15s ease, transform .12s ease, box-shadow .15s ease;
+}
+.quick-launcher-item:hover {
+  border-color: var(--orange);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(10, 46, 36, .08);
+}
+.quick-launcher-step {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--green-900);
+  color: #fff;
+  font-weight: 800;
+  font-size: .84rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.quick-launcher-item strong {
+  display: block;
+  font-size: .92rem;
+  margin-bottom: 3px;
+}
+.quick-launcher-item small {
+  display: block;
+  color: var(--muted);
+  font-size: .78rem;
+  line-height: 1.38;
+}
+
+/* Checklist et sections de guide.html */
+.guide-checklist-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+.guide-check-card {
+  padding: 15px;
+  border-radius: 12px;
+  border: 1.5px solid var(--line);
+  background: #fff;
+  display: grid;
+  align-content: space-between;
+  gap: 10px;
+}
+.guide-check-card.is-done {
+  border-color: #9ad4b6;
+  background: #f6fcf9;
+}
+.guide-check-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.guide-check-step {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--orange);
+  color: #fff;
+  font-weight: 800;
+  font-size: .82rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.guide-check-card.is-done .guide-check-step {
+  background: var(--green-800);
+}
+.guide-check-head strong {
+  flex: 1;
+  font-size: .9rem;
+  color: var(--green-950);
+}
+.guide-check-status {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: .7rem;
+  font-weight: 800;
+  background: #fff3e6;
+  color: #b44d00;
+}
+.guide-check-card.is-done .guide-check-status {
+  background: var(--green-100);
+  color: var(--green-900);
+}
+.guide-check-card p {
+  margin: 0;
+  font-size: .82rem;
+  color: var(--muted);
+  line-height: 1.42;
+}
+.guide-sections-stack {
+  display: grid;
+  gap: 18px;
+}
+.guide-category-tabs {
+  margin-top: 14px;
+  margin-bottom: 0;
+}
+.plateforme-nav-tabs {
+  margin: 14px 0 18px;
+}
+
+
 
 
