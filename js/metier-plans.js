@@ -31,27 +31,30 @@ export const PLANS = Object.freeze({
     label: "Gratuit",
     prixMensuelFCFA: 0,
     quotaMensuel: 50,
+    quotaGerants: 2,
     depassementFCFA: PRIX_DEPASSEMENT_FCFA,
     surDevis: false,
-    description: "50 colis par mois inclus, puis 100 FCFA par colis, prépayés sur le portefeuille."
+    description: "50 colis par mois inclus, jusqu'à 2 gérants invités, puis 100 FCFA par colis prépayés sur le portefeuille."
   }),
   pro: Object.freeze({
     id: "pro",
     label: "Pro",
     prixMensuelFCFA: 10_000,
     quotaMensuel: 400,
+    quotaGerants: 5,
     depassementFCFA: PRIX_DEPASSEMENT_FCFA,
     surDevis: false,
-    description: "10 000 FCFA par mois, 400 colis inclus, puis 100 FCFA par colis prépayés."
+    description: "10 000 FCFA par mois, 400 colis inclus, jusqu'à 5 gérants invités, puis 100 FCFA par colis prépayés."
   }),
   reseau: Object.freeze({
     id: "reseau",
     label: "Réseau",
     prixMensuelFCFA: 15_000,
     quotaMensuel: 1_000,
+    quotaGerants: null,
     depassementFCFA: PRIX_DEPASSEMENT_FCFA,
     surDevis: false,
-    description: "15 000 FCFA par mois, 1 000 colis inclus, puis 100 FCFA par colis prépayés."
+    description: "15 000 FCFA par mois, 1 000 colis inclus, gérants illimités, puis 100 FCFA par colis prépayés."
   })
 });
 
@@ -198,6 +201,69 @@ export function messageQuotaAtteint({ plan, quota, soldeFCFA = 0, montantFCFA = 
     ? `L'abonnement ${libellePlan(plan)} est impayé après son échéance : le quota est ramené à ${quota} colis ce mois-ci.`
     : `Le quota du plan ${libellePlan(plan)} est atteint (${quota} colis ce mois-ci).`;
   return `${raison} Chaque colis supplémentaire coûte ${montantFCFA} FCFA, prépayés sur le portefeuille (solde : ${formatNombre(soldeFCFA)} FCFA). Rechargez le portefeuille ou changez de plan depuis la page Abonnement. Les colis déjà enregistrés continuent d'avancer normalement.`;
+}
+
+/**
+ * Plafond de gérants invités d'un plan : 2 pour Gratuit, 5 pour Pro, null (illimité) pour Réseau.
+ */
+export function quotaGerantsPlan(plan = "gratuit") {
+  if (!estPlan(plan)) return PLANS.gratuit.quotaGerants;
+  return PLANS[plan].quotaGerants;
+}
+
+/**
+ * Plafond effectif de gérants invités : ramené à 2 (plan Gratuit) si
+ * l'abonnement mensuel est impayé après son échéance.
+ */
+export function quotaGerantsEffectif({ plan = "gratuit", abonnement = null, now = new Date() } = {}) {
+  const enRetard = abonnement ? etatAbonnement({ ...abonnement, now }).enRetard : false;
+  if (enRetard) return PLANS.gratuit.quotaGerants;
+  return quotaGerantsPlan(plan);
+}
+
+/** Message français lorsque le plafond de gérants invités du forfait est atteint. */
+export function messageQuotaGerantsAtteint({ plan = "gratuit", quotaGerants = 2, enRetard = false } = {}) {
+  if (enRetard) {
+    return `L'abonnement ${libellePlan(plan)} est impayé après son échéance : la limite est ramenée à ${quotaGerants} gérants invités (forfait Gratuit). Réglez l'abonnement ou changez de forfait depuis la page Abonnement.`;
+  }
+  if (plan === "gratuit") {
+    return `Limite atteinte : le forfait Gratuit autorise au maximum ${quotaGerants} gérants invités. Passez au forfait Pro (jusqu'à 5 gérants) ou au forfait Réseau (nombre de gérants illimité) depuis la page Abonnement.`;
+  }
+  if (plan === "pro") {
+    return `Limite atteinte : le forfait Pro autorise au maximum ${quotaGerants} gérants invités. Passez au forfait Réseau (nombre de gérants illimité) depuis la page Abonnement.`;
+  }
+  return `Limite atteinte : votre forfait ${libellePlan(plan)} autorise au maximum ${quotaGerants} gérants invités. Changez de forfait depuis la page Abonnement.`;
+}
+
+/**
+ * Vérifie si l'agence peut ajouter ou réactiver un gérant supplémentaire selon son forfait.
+ */
+export function peutInviterGerant({ plan = "gratuit", gerantsActifs = 0, abonnement = null, now = new Date() } = {}) {
+  const actifs = Math.max(0, Number(gerantsActifs) || 0);
+  const enRetard = Boolean(abonnement && etatAbonnement({ ...abonnement, now }).enRetard);
+  const maxGerants = quotaGerantsEffectif({ plan, abonnement, now });
+  if (maxGerants === null) {
+    return { ok: true, plan, gerantsActifs: actifs, quotaGerants: null, restants: null, enRetard: false };
+  }
+  if (actifs >= maxGerants) {
+    return {
+      ok: false,
+      plan,
+      gerantsActifs: actifs,
+      quotaGerants: maxGerants,
+      restants: 0,
+      enRetard,
+      error: messageQuotaGerantsAtteint({ plan, quotaGerants: maxGerants, enRetard })
+    };
+  }
+  return {
+    ok: true,
+    plan,
+    gerantsActifs: actifs,
+    quotaGerants: maxGerants,
+    restants: Math.max(0, maxGerants - actifs),
+    enRetard
+  };
 }
 
 /* ------------------------------ validations ------------------------------ */

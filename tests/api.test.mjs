@@ -2896,6 +2896,168 @@ test("inscription directe avec choix du forfait Pro (400 colis) ou Réseau (1 00
   assert.equal(etat2.periode.abonnement.montantFCFA, 15_000);
 });
 
+test("invitation de gérants par forfait (2 Gratuit, 5 Pro, illimité Réseau) et centralisation multi-points en Côte d'Ivoire", async () => {
+  const fondateur = client();
+  const agency = await creerAgence(fondateur, "Trans-Ivoire MultiPoints", "Abidjan");
+
+  // 1. Forfait Gratuit : le créateur de l'agence peut inviter jusqu'à 2 gérants
+  const g1 = await fondateur.post("/api/agents", {
+    name: "Gérant Point Bouaké",
+    email: compteUnique("gerant-bke"),
+    phone: "0701010101",
+    password: "secret12",
+    role: "gerant",
+    city: "Bouaké"
+  });
+  assert.equal(g1.status, 201, JSON.stringify(g1.data));
+  assert.equal(g1.data.agent.role, "gerant");
+  assert.equal(g1.data.agent.city, "Bouaké");
+  assert.equal(g1.data.quotaGerants.gerantsActifs, 1);
+  assert.equal(g1.data.quotaGerants.quotaGerants, 2);
+
+  const g2 = await fondateur.post("/api/agents", {
+    name: "Gérant Point Korhogo",
+    email: compteUnique("gerant-krg"),
+    phone: "0702020202",
+    password: "secret12",
+    role: "gerant",
+    city: "Korhogo"
+  });
+  assert.equal(g2.status, 201);
+  assert.equal(g2.data.quotaGerants.gerantsActifs, 2);
+  assert.equal(g2.data.quotaGerants.peutInviterGerant, false);
+
+  // 3e gérant sur le forfait Gratuit : refusé (403, aucun dépassement autorisé)
+  const g3Refuse = await fondateur.post("/api/agents", {
+    name: "Gérant Surnombre Gratuit",
+    email: compteUnique("gerant-refus"),
+    phone: "0703030303",
+    password: "secret12",
+    role: "gerant",
+    city: "San-Pédro"
+  });
+  assert.equal(g3Refuse.status, 403);
+  assert.equal(g3Refuse.data.quotaGerantsAtteint, true);
+  assert.match(g3Refuse.data.error, /2 gérants invités/);
+
+  // Un agent normal reste invitable sans limite
+  const agentGuichet = await fondateur.post("/api/agents", {
+    name: "Agent Guichet Bouaké",
+    email: compteUnique("agent-bke"),
+    phone: "0704040404",
+    password: "secret12",
+    role: "agent",
+    city: "Bouaké"
+  });
+  assert.equal(agentGuichet.status, 201);
+
+  // Tentative de promouvoir l'agent en gérant alors que le quota 2/2 est atteint : refusée (403)
+  const promoRefusee = await fondateur.patch(`/api/agents/${agentGuichet.data.agent.id}`, { role: "gerant" });
+  assert.equal(promoRefusee.status, 403);
+
+  // Un gérant invité se connecte, mais ne peut ni inviter ni désactiver un autre gérant (seul le fondateur le peut)
+  const sessionG1 = client();
+  const loginG1 = await sessionG1.post("/api/login", { email: g1.data.agent.email, password: "secret12" });
+  assert.equal(loginG1.status, 200);
+  assert.equal(loginG1.data.member.role, "gerant");
+  assert.equal(loginG1.data.member.isOwner, false);
+  assert.equal(loginG1.data.member.city, "Bouaké");
+
+  const tentativeGerantParInvite = await sessionG1.post("/api/agents", {
+    name: "Autre Gérant",
+    email: compteUnique("gerant-interdit"),
+    password: "secret12",
+    role: "gerant"
+  });
+  assert.equal(tentativeGerantParInvite.status, 403);
+  const tentativeDesactivGerantParInvite = await sessionG1.patch(`/api/agents/${g2.data.agent.id}`, { active: false });
+  assert.equal(tentativeDesactivGerantParInvite.status, 403);
+
+  // 2. Passage au forfait Pro : autorise jusqu'à 5 gérants invités
+  const passagePro = await fondateur.post("/api/facturation/plan", { plan: "pro" });
+  assert.equal(passagePro.status, 200);
+
+  for (const [idx, ville] of [[3, "San-Pédro"], [4, "Yamoussoukro"], [5, "Daloa"]]) {
+    const resG = await fondateur.post("/api/agents", {
+      name: `Gérant Point ${ville}`,
+      email: compteUnique(`gerant-pro-${idx}`),
+      password: "secret12",
+      role: "gerant",
+      city: ville
+    });
+    assert.equal(resG.status, 201, `5 gérants max sur Pro (gérant #${idx})`);
+  }
+
+  // 6e gérant sur le forfait Pro : refusé (403)
+  const g6Refuse = await fondateur.post("/api/agents", {
+    name: "Gérant Surnombre Pro",
+    email: compteUnique("gerant-pro-6"),
+    password: "secret12",
+    role: "gerant",
+    city: "Man"
+  });
+  assert.equal(g6Refuse.status, 403);
+  assert.match(g6Refuse.data.error, /5 gérants invités/);
+
+  // Tentative de redescendre au plan Gratuit avec 5 gérants actifs : refusée tant que les gérants en surnombre sont actifs
+  const retourGratuitRefuse = await fondateur.post("/api/facturation/plan", { plan: "gratuit" });
+  assert.equal(retourGratuitRefuse.status, 400);
+  assert.match(retourGratuitRefuse.data.error, /5 gérants invités actifs/);
+
+  // 3. Passage au forfait Réseau : nombre de gérants illimité
+  const passageReseau = await fondateur.post("/api/facturation/plan", { plan: "reseau" });
+  assert.equal(passageReseau.status, 200);
+
+  const g6Reseau = await fondateur.post("/api/agents", {
+    name: "Gérant Point Man",
+    email: compteUnique("gerant-reseau-6"),
+    password: "secret12",
+    role: "gerant",
+    city: "Man"
+  });
+  assert.equal(g6Reseau.status, 201);
+  assert.equal(g6Reseau.data.quotaGerants.quotaGerants, null);
+
+  // 4. Envoi et réception centralisés entre deux points de la même agence en Côte d'Ivoire (Abidjan -> Bouaké)
+  const annuaire = await fondateur.get("/api/agences");
+  assert.equal(annuaire.status, 200);
+  assert.ok(annuaire.data.myPoints.includes("Abidjan") && annuaire.data.myPoints.includes("Bouaké"));
+
+  const colisInterPoints = await fondateur.post("/api/colis", {
+    agencyNotRegistered: false,
+    payment: { status: "partiel", paidAmountFCFA: 1500, mode: "especes" },
+    values: valeurs({
+      originCity: "Abidjan",
+      destinationCity: "Bouaké",
+      destinationAgencyId: `point:${agency.id}:Bouaké`,
+      priceFCFA: "3500"
+    })
+  });
+  assert.equal(colisInterPoints.status, 201, JSON.stringify(colisInterPoints.data));
+  const parcelId = colisInterPoints.data.parcel.id;
+  assert.equal(colisInterPoints.data.parcel.ownerId, agency.id);
+  assert.equal(colisInterPoints.data.parcel.destinationAgencyId, agency.id);
+  assert.equal(colisInterPoints.data.parcel.destinationCity, "Bouaké");
+
+  // Progression complète jusqu'à Bouaké et encaissement du solde par le gérant du point de Bouaké
+  assert.equal((await fondateur.post(`/api/colis/${parcelId}/progress`, {})).data.parcel.status, "Expédié");
+  assert.equal((await fondateur.post(`/api/colis/${parcelId}/progress`, {})).data.parcel.status, "En transit");
+  assert.equal((await sessionG1.post(`/api/colis/${parcelId}/progress`, {})).data.parcel.status, "Arrivé à l'agence de destination");
+
+  const encaissementSolde = await sessionG1.post(`/api/colis/${parcelId}/encaisser`, {
+    amountFCFA: 2000,
+    mode: "mobile_money"
+  });
+  assert.equal(encaissementSolde.status, 201);
+  assert.equal(encaissementSolde.data.parcel.paymentStatus, "regle");
+
+  const retraitFinal = await sessionG1.post(`/api/colis/${parcelId}/progress`, {
+    collectedBy: { name: "Ibrahim Kone", cni: "CI99887766" }
+  });
+  assert.equal(retraitFinal.status, 200);
+  assert.equal(retraitFinal.data.parcel.status, "Retiré");
+});
+
 test.after(() => {
   server.close();
 });

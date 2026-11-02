@@ -130,20 +130,20 @@ function boutonPlan(plan) {
 const AVANTAGES_PLAN = {
   gratuit: [
     "50 colis expédiés inclus chaque mois",
+    "Jusqu'à 2 gérants invités (multi-points en CI) & agents illimités",
     "Réception de colis 100 % gratuite et illimitée",
-    "100 FCFA / colis supplémentaire sur le portefeuille",
-    "Reçu QR, ticket 58 mm, caisse et bordereaux"
+    "100 FCFA / colis supplémentaire sur le portefeuille"
   ],
   pro: [
     "400 colis expédiés inclus chaque mois (25 FCFA/colis)",
+    "Jusqu'à 5 gérants invités (5 points en CI) & agents illimités",
     "Activation immédiate en 1 clic (délai de paiement 7 jours)",
-    "Comptes multi-agents nominatifs & suivi personnalisé (logo)",
-    "Relevé comptable PDF mensuel & 100 FCFA/colis hors forfait"
+    "Suivi personnalisé (logo), relevé PDF & 100 FCFA/colis hors forfait"
   ],
   reseau: [
     "1 000 colis expédiés inclus chaque mois (15 FCFA/colis)",
+    "Nombre de gérants & points illimité dans toute la Côte d'Ivoire",
     "Activation immédiate en 1 clic (15 000 FCFA/mois)",
-    "Déploiement multi-gares & compagnies de transport",
     "Relevé PDF mensuel, 100 FCFA/colis hors forfait & support prioritaire"
   ]
 };

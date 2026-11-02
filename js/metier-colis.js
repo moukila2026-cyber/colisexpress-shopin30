@@ -149,7 +149,32 @@ export function resoudreDestination({ values, agencies = [], currentAgencyId = n
     };
   }
 
-  const agency = agencies.find((item) => item.id === textePropre(values.destinationAgencyId));
+  const destId = textePropre(values.destinationAgencyId);
+  if (destId.startsWith("point:")) {
+    const [, pointAgencyId, ...villeParts] = destId.split(":");
+    const pointCity = textePropre(villeParts.join(":")) || textePropre(values.destinationCity);
+    const agency = agencies.find((item) => item.id === (pointAgencyId || currentAgencyId));
+    if (!agency || (currentAgencyId && agency.id !== currentAgencyId)) {
+      return { ok: false, error: "Ce point de réception interne n'appartient pas à votre agence." };
+    }
+    if (!dansLimite(pointCity, VILLE)) {
+      return { ok: false, error: "Indiquez la ville du point de réception de votre agence (2 à 60 caractères)." };
+    }
+    const originCity = textePropre(values.originCity);
+    if (originCity && originCity.toLowerCase() === pointCity.toLowerCase()) {
+      return { ok: false, error: "Le point de réception de votre agence doit être dans une ville différente de la ville de départ." };
+    }
+    return {
+      ok: true,
+      destination: {
+        destinationAgencyId: agency.id,
+        destinationAgencyName: `${textePropre(agency.name)} (${pointCity})`,
+        destinationAgencyCity: pointCity
+      }
+    };
+  }
+
+  const agency = agencies.find((item) => item.id === destId);
   if (!agency) {
     return { ok: false, error: "L'agence de destination choisie n'est plus disponible. Actualisez la page." };
   }

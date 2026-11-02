@@ -51,12 +51,15 @@ CREATE TABLE IF NOT EXISTS agents (
   name           TEXT NOT NULL,
   email          TEXT UNIQUE NOT NULL,
   phone          TEXT,
+  city           TEXT NOT NULL DEFAULT '',
   password_hash  TEXT NOT NULL,
   role           TEXT NOT NULL DEFAULT 'agent' CHECK (role IN ('gerant', 'agent')),
   active         BOOLEAN NOT NULL DEFAULT TRUE,
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   created_at_iso TEXT NOT NULL
 );
+
+ALTER TABLE agents ADD COLUMN IF NOT EXISTS city TEXT NOT NULL DEFAULT '';
 
 CREATE INDEX IF NOT EXISTS idx_agents_agency ON agents (agency_id);
 
