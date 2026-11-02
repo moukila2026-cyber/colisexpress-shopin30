@@ -81,12 +81,15 @@
         </section>
 
         <section class="panel-card parcels-panel" id="relevesPanel">
-          <div class="panel-title-row"><h2>Relevé mensuel PDF</h2></div>
-          <p class="muted-note">Téléchargez le récapitulatif des colis, encaissements, hors forfait, abonnement et mouvements de votre portefeuille. Aucun nom ni téléphone de client n'y figure.</p>
-          <form id="releveForm" class="filter-grid" autocomplete="off">
-            <div class="field"><label for="relevePeriode">Mois du relevé</label><select id="relevePeriode" name="periode"></select></div>
-            <div class="filter-actions"><button class="button button-primary" id="telechargerReleveButton" type="submit">Télécharger le PDF</button></div>
+          <div class="panel-title-row"><h2>Relevé mensuel PDF</h2><span class="muted-note">12 mois de l'année · Sélection par mois ou année</span></div>
+          <p class="muted-note">Choisissez le mois et l'année souhaités (ou cliquez directement sur l'un des 12 mois ci-dessous) pour télécharger le récapitulatif PDF des colis, encaissements, hors forfait, abonnement et mouvements de votre portefeuille. Aucun nom ni téléphone de client n'y figure.</p>
+          <form id="releveForm" class="filter-grid releve-selector-grid" autocomplete="off">
+            <div class="field"><label for="releveMois">Mois</label><select id="releveMois" name="mois"></select></div>
+            <div class="field"><label for="releveAnnee">Année</label><select id="releveAnnee" name="annee"></select></div>
+            <div class="field"><label for="relevePeriode">Période sélectionnée</label><select id="relevePeriode" name="periode"></select></div>
+            <div class="filter-actions"><button class="button button-primary" id="telechargerReleveButton" type="submit">⬇ Télécharger le PDF</button></div>
           </form>
+          <div class="releve-months-grid" id="releveMonthsGrid" aria-label="Les 12 mois de l'année sélectionnée"></div>
         </section>
       </div>
     </main>

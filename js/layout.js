@@ -56,6 +56,21 @@ export async function initAgencyLayout(agency, activePage) {
     if (link.dataset.nav === activePage) link.classList.add("nav-active");
     link.addEventListener("click", closeMenu);
   });
+  const desktopHeading = document.querySelector(".desktop-page-heading");
+  if (desktopHeading && !desktopHeading.querySelector("[data-logout]")) {
+    let actionsWrap = desktopHeading.querySelector(".heading-actions");
+    if (!actionsWrap) {
+      actionsWrap = document.createElement("div");
+      actionsWrap.className = "heading-actions";
+      const existingAction = [...desktopHeading.children].find((el) => el.tagName !== "DIV");
+      if (existingAction) actionsWrap.append(existingAction);
+      desktopHeading.append(actionsWrap);
+    }
+    actionsWrap.insertAdjacentHTML(
+      "beforeend",
+      '<button class="button button-outline button-small desktop-logout-button" data-logout type="button" title="Se déconnecter de l\'espace agence">↪ Se déconnecter</button>'
+    );
+  }
   document.querySelectorAll("[data-logout]").forEach((button) => {
     button.addEventListener("click", logout);
   });
@@ -212,6 +227,7 @@ export function agencySidebar() {
           <small data-agency-city>—</small>
           <small class="member-line" data-member-label hidden></small>
         </div>
+        <button class="sidebar-quick-logout" data-logout type="button" title="Se déconnecter" aria-label="Se déconnecter">↪</button>
       </div>
       <div class="compteur-colis" data-compteur data-niveau="normal" hidden role="status">
         <strong data-compteur-libelle>Colis ce mois : —</strong>
@@ -242,6 +258,6 @@ export function mobileAgencyHeader(title, actionHtml = "") {
     <button class="icon-button menu-button" data-menu-toggle type="button" aria-label="Ouvrir le menu">☰</button>
     <div class="topbar-title"><small>COLIS EXPRESS</small><strong>${escapeHTML(title)}</strong></div>
     <a class="compteur-court" data-compteur-court data-niveau="normal" href="abonnement.html" hidden aria-label="Colis ce mois"></a>
-    <div class="topbar-action">${actionHtml}</div>
+    <div class="topbar-action">${actionHtml}<button class="button button-small button-outline topbar-logout" data-logout type="button" title="Se déconnecter" aria-label="Se déconnecter">↪ <span>Sortir</span></button></div>
   </header>`;
 }
