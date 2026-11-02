@@ -172,10 +172,26 @@ export function setButtonLoading(button, loading, loadingLabel = "Chargement…"
   }
 }
 
+const MOTIFS_TECHNIQUES_NAVIGATEUR = /is not a function|is not iterable|Cannot read prop|undefined is not an object|null is not an object|Unexpected token|SyntaxError|ReferenceError|TypeError|RangeError/i;
+const MOTIFS_RESEAU_NAVIGATEUR = /Failed to fetch|NetworkError|Load failed|fetch failed|Network request failed/i;
+
 export function errorMessage(error) {
+  const texte = typeof error?.message === "string" ? error.message.trim() : "";
+  if (texte && MOTIFS_RESEAU_NAVIGATEUR.test(texte)) {
+    return "Connexion momentanément interrompue. Vérifiez votre accès internet et réessayez.";
+  }
+  if (
+    error instanceof TypeError ||
+    error instanceof ReferenceError ||
+    error instanceof SyntaxError ||
+    error instanceof RangeError ||
+    (texte && MOTIFS_TECHNIQUES_NAVIGATEUR.test(texte))
+  ) {
+    return "L'opération n'a pas pu aboutir automatiquement. Actualisez la page et réessayez.";
+  }
   // L'API renvoie déjà un message français prêt à afficher dans `error`.
-  if (error?.message && typeof error.message === "string" && error.message.trim()) {
-    return error.message;
+  if (texte) {
+    return texte;
   }
   return "Une erreur inattendue est survenue. Réessayez, et si le problème persiste, contactez l'équipe COLIS EXPRESS.";
 }
